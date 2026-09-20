@@ -193,6 +193,20 @@ service cloud.firestore {
     }
     
     // ================================
+    // Subscription Requests Collection (订阅激活请求)
+    // ================================
+    match /subscription_requests/{requestId} {
+      // 读取：仅管理员
+      allow read: if isAdmin();
+
+      // 创建：管理员可以提交订阅请求
+      allow create: if isAdmin();
+
+      // 更新/删除：仅管理员
+      allow update, delete: if isAdmin();
+    }
+
+    // ================================
     // Transactions Collection (财务记录)
     // ================================
     match /transactions/{transactionId} {

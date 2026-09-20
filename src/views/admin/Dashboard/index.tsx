@@ -822,7 +822,7 @@ const AdminDashboard: React.FC = () => {
         adminNotes: values.adminNotes || '',
         paymentMethod: 'manual',
         requestType: isUpgrade ? 'upgrade' : 'renewal',
-        previousPlanId: isUpgrade ? currentPlanId : undefined
+        ...(isUpgrade && currentPlanId ? { previousPlanId: currentPlanId } : {})
       }
 
       // 检查平台 Billplz 是否启用
