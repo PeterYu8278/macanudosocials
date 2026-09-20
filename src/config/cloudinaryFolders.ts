@@ -3,9 +3,9 @@ import { CLOUDINARY_FOLDERS, type CloudinaryFolderName } from '../types/cloudina
 
 export const UPLOAD_CONFIG = {
   // 基础配置
-  CLOUD_NAME: 'dy2zb1n41',
-  UPLOAD_PRESET: 'jep-cigar',
-  BASE_FOLDER: 'jep-cigar',
+  CLOUD_NAME: 'kcwja8y0',
+  UPLOAD_PRESET: 'macanudo_socials',
+  BASE_FOLDER: 'macanudo_socials',
   
   // 文件夹配置
   FOLDERS: CLOUDINARY_FOLDERS,
@@ -78,7 +78,7 @@ export function getUploadConfig(folderName: CloudinaryFolderName) {
 }
 
 // 生成完整的文件夹路径
-// 注意：由于上传预设的 Asset folder 设置为 'jep-cigar'，
+// 注意：由于上传预设的 Asset folder 设置为 'macanudo_socials'，
 // 我们使用 public_id 参数来覆盖 Asset folder 设置，确保文件存储在正确的子文件夹中
 export function getFullFolderPath(folderName: CloudinaryFolderName): string {
   const folderConfig = (UPLOAD_CONFIG.FOLDER_CONFIGS as any)[folderName];
