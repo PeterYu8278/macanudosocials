@@ -1,6 +1,15 @@
 {
   "indexes": [
     {
+      "collectionGroup": "membershipFeeRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" },
+        { "fieldPath": "deductedAt", "order": "DESCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "visitSessions",
       "queryScope": "COLLECTION",
       "fields": [
