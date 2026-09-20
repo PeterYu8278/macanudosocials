@@ -22,9 +22,9 @@ service cloud.firestore {
       return isSignedIn() && getUserData().role == role;
     }
     
-    // 检查是否为管理员
+    // 检查是否为管理员（包括 superAdmin 和 developer）
     function isAdmin() {
-      return hasRole('admin');
+      return isSignedIn() && getUserData().role in ['admin', 'superAdmin', 'developer'];
     }
     
     // 检查是否为 VIP 会员
@@ -258,6 +258,17 @@ service cloud.firestore {
       allow create, update, delete: if isAdmin();
     }
     
+    // ================================
+    // Feature Visibility Collection
+    // ================================
+    match /feature_visibility/{configId} {
+      // 读取：所有已认证用户可查看功能可见性配置
+      allow read: if isSignedIn();
+
+      // 创建/更新/删除：仅管理员
+      allow create, update, delete: if isAdmin();
+    }
+
     // ================================
     // App Config Collection (应用配置)
     // ================================
