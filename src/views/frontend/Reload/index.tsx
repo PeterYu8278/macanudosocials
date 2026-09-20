@@ -336,7 +336,8 @@ const ReloadPage: React.FC = () => {
                   style={{ width: '100%', height: 44 }}
                   className="gold-select"
                   popupClassName="gold-select-dropdown"
-                  disabled={loading}
+                  disabled={loading || stores.length <= 1}
+                  open={stores.length <= 1 ? false : undefined}
                   options={stores.map(s => ({ value: s.id, label: s.name }))}
                 />
               </div>

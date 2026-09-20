@@ -1007,7 +1007,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
             popupClassName="gold-select-dropdown"
             placeholder={t('visitTimer.pleaseSelectStore')}
             options={stores.map(s => ({ value: s.id, label: s.name }))}
-            disabled={loading}
+            disabled={loading || stores.length <= 1}
+            open={stores.length <= 1 ? false : undefined}
           />
         </div>
 
