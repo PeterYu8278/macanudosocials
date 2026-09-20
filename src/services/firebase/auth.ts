@@ -80,27 +80,13 @@ export const registerUser = async (
     
     // 标准化邮箱（转小写并去除空格）
     const normalizedEmail = email.toLowerCase().trim()
-    
-    // ✅ 检查邮箱是否已在 Firestore 中使用
-    const emailQuery = query(collection(db, 'users'), where('email', '==', normalizedEmail), limit(1))
-    const emailSnap = await getDocs(emailQuery)
-    if (!emailSnap.empty) {
-      return { success: false, error: new Error('该邮箱已被注册'), code: 'email-already-in-use' } as { success: false; error: Error; code?: string }
-    }
-    
-    // 标准化手机号为 E.164 格式
+
+    // 标准化手机号为 E.164 格式（在创建账号前验证格式）
     const normalizedPhone = normalizePhoneNumber(phone)
     if (!normalizedPhone) {
       return { success: false, error: new Error('手机号格式无效'), code: 'invalid-phone' } as { success: false; error: Error; code?: string }
     }
-    
-    // 检查手机号是否已被使用
-    const phoneQuery = query(collection(db, 'users'), where('profile.phone', '==', normalizedPhone), limit(1))
-    const phoneSnap = await getDocs(phoneQuery)
-    if (!phoneSnap.empty) {
-      return { success: false, error: new Error('该手机号已被注册'), code: 'phone-already-in-use' } as { success: false; error: Error; code?: string }
-    }
-    
+
     // 验证引荐码（如果提供）
     let referrer: any = null;
     if (referralCode) {
