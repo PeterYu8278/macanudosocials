@@ -15,7 +15,7 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocFromCache, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromCache, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc, waitForPendingWrites } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
@@ -99,10 +99,13 @@ export const registerUser = async (
     
     const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
     const user = userCredential.user;
-    
+
+    // 强制刷新 token，确保 Firestore 写入时 auth token 已就绪
+    await user.getIdToken(true);
+
     // 更新用户显示名称
     await updateProfile(user, { displayName });
-    
+
     // 生成会员编号（基于 userId hash）
     const memberId = await generateMemberId(user.uid);
     
@@ -141,6 +144,8 @@ export const registerUser = async (
     };
     
     await setDoc(doc(db, 'users', user.uid), userData);
+    // 等待数据真正写入服务器，而非仅写入本地缓存
+    await waitForPendingWrites(db);
     
     // ✅ 如果有引荐人，更新引荐人的数据（不再赠送积分）
     if (referrer) {
