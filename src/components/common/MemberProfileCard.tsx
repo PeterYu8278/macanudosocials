@@ -73,39 +73,15 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
     loadPointsConfig()
   }, [])
 
-  // 实时监听会员有效期（membershipFeeRecords 变化时自动更新）
+  // 当 user 数据变化时重新获取会员有效期
+  // auth store 已有 onSnapshot 监听 users/{uid}，user 对象变化会触发此 effect
   useEffect(() => {
     if (!user?.id) {
       setMembershipPeriod(null)
       return
     }
-
-    const q = query(
-      collection(db, GLOBAL_COLLECTIONS.MEMBERSHIP_FEE_RECORDS),
-      where('userId', '==', user.id),
-      where('status', '==', 'paid'),
-      orderBy('deductedAt', 'desc'),
-      limit(1)
-    )
-
-    const unsubscribe: Unsubscribe = onSnapshot(q, (snapshot) => {
-      if (snapshot.empty) {
-        setMembershipPeriod(null)
-        return
-      }
-      const data = snapshot.docs[0].data()
-      const deductedAt: Date = data.deductedAt?.toDate?.() ?? new Date(data.deductedAt)
-      const startDate = new Date(deductedAt)
-      const endDate = new Date(startDate)
-      endDate.setFullYear(endDate.getFullYear() + 1)
-      setMembershipPeriod({ startDate, endDate })
-    }, () => {
-      // 权限错误时降级为单次读取
-      getUserMembershipPeriod(user.id).then(setMembershipPeriod)
-    })
-
-    return () => unsubscribe()
-  }, [user?.id])
+    getUserMembershipPeriod(user.id).then(setMembershipPeriod)
+  }, [user?.id, user?.status, user?.membership?.level, user?.updatedAt])
 
   // Use onSnapshot to monitor user check-in status in real-time
   useEffect(() => {
