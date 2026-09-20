@@ -144,7 +144,7 @@ export const getAppConfig = async (): Promise<AppConfig | null> => {
       id: docSnap.id,
       logoUrl: data.logoUrl || undefined,
       appName: data.appName || undefined,
-      hideFooter: data.hideFooter ?? false,
+      hideFooter: data.hideFooter ?? true,
       colorTheme: data.colorTheme ? {
         primaryButton: data.colorTheme.primaryButton || DEFAULT_COLOR_THEME.primaryButton,
         secondaryButton: data.colorTheme.secondaryButton || DEFAULT_COLOR_THEME.secondaryButton,
@@ -250,7 +250,7 @@ export const getAppConfig = async (): Promise<AppConfig | null> => {
             id: docSnap.id,
             logoUrl: data.logoUrl || undefined,
             appName: data.appName || undefined,
-            hideFooter: data.hideFooter ?? false,
+            hideFooter: data.hideFooter ?? true,
             colorTheme: data.colorTheme ? {
               primaryButton: data.colorTheme.primaryButton || DEFAULT_COLOR_THEME.primaryButton,
               secondaryButton: data.colorTheme.secondaryButton || DEFAULT_COLOR_THEME.secondaryButton,
@@ -415,7 +415,7 @@ export const resetAppConfig = async (
     const defaultConfig: Partial<Pick<AppConfig, 'logoUrl' | 'appName' | 'hideFooter' | 'colorTheme'>> = {
       logoUrl: 'https://res.cloudinary.com/dy2zb1n41/image/upload/jep-cigar/brands/JEP_Logo_White_1763310931359_s1pkcz8y617',
       appName: 'Cigar Club',
-      hideFooter: false,
+      hideFooter: true,
       colorTheme: DEFAULT_COLOR_THEME,
     };
 
