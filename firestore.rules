@@ -171,9 +171,9 @@ service cloud.firestore {
       // 读取：用户可以查看自己的充值记录，管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // 创建：活跃会员和管理员可以提交充值申请
-      allow create: if isActiveMember() && isActiveUser();
-      
+      // 创建：活跃会员可以提交充值申请；管理员/开发者绕过状态检查
+      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
+
       // 更新：仅管理员可以审核充值
       allow update: if isAdmin();
       
