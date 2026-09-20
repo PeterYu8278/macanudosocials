@@ -664,19 +664,25 @@ export interface VisitSession {
   }>;
   
   // 费用结算
-  pointsDeducted?: number;  // 扣除的积分
-  pointsRecordId?: string;  // 关联的积分记录ID
-  
+  pointsDeducted?: number;  // 扣除的积分（checkout 时记录总扣除量）
+  pointsRecordId?: string;  // 关联的积分记录ID（checkout 汇总记录）
+
+  // 实时扣费（Annual Membership）
+  realtimeDeductionsEnabled?: boolean; // true = 使用实时阶梯扣费，checkout 不再重复扣
+  realtimePointsDeducted?: number;     // 实时已扣积分累计
+  nextDeductionAt?: Date;              // 下次扣费时间点
+  deductionCount?: number;             // 已执行扣费次数（1=仅初始1h，2=初始+第一个0.5h …）
+
   // 兑换订单关联
   orderId?: string;         // 关联的兑换订单ID（金额为0）
   outboundOrderId?: string; // 关联的出库订单ID
-  
+
   // 状态
   status: 'pending' | 'completed' | 'expired'; // expired = 忘记check-out后自动结算
-  
+
   // 签到类型
   checkInType?: 'membership' | 'daypass';
-  
+
   // 特殊标记
   isFirstVisitAfterRenewal?: boolean; // 续费后首次驻店（不扣费）
   

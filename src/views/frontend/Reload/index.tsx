@@ -1,17 +1,17 @@
 // 用户充值页面
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Typography, Space, message, Spin, Tag, Modal, App, Select } from 'antd';
+import React, { useState } from 'react';
+import { Card, Button, Typography, Space, message, Spin, Tag, App } from 'antd';
 import { WalletOutlined, ReloadOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
 import { createReloadRecord, getUserReloadRecords, getUserPendingReloadRecord, cancelReloadRecord } from '../../../services/firebase/reload';
-import { getAllStores } from '../../../services/firebase/stores';
 import { getAppConfig } from '../../../services/firebase/appConfig';
 import { createBill } from '../../../services/billplz';
 import { useNavigate } from 'react-router-dom';
-import type { ReloadRecord, Store, AppConfig } from '../../../types';
+import type { ReloadRecord, AppConfig } from '../../../types';
 import dayjs from 'dayjs';
-import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
+import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { useTranslation } from 'react-i18next';
+import StoreSelect from '../../../components/common/StoreSelect';
 
 const { Title, Text } = Typography;
 
@@ -25,17 +25,6 @@ const ReloadPage: React.FC = () => {
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
   const amountOptions = [100, 200, 300, 500, 1000];
-
-  // stores
-  const { data: allStores } = useFirestoreQuery(getAllStores);
-  const stores = allStores.filter(s => s.status === 'active');
-
-  // 初始化默认选中第一家门店
-  useEffect(() => {
-    if (stores.length > 0 && !selectedStoreId) {
-      setSelectedStoreId(stores[0].id);
-    }
-  }, [stores, selectedStoreId]);
 
   // 支付配置
   const { data: appConfig } = useFirestoreDoc(getAppConfig);
@@ -330,15 +319,11 @@ const ReloadPage: React.FC = () => {
                 <Text style={{ color: '#c0c0c0', display: 'block', marginBottom: 8, fontSize: 14 }}>
                   {t('reload.selectStore')}
                 </Text>
-                <Select
+                <StoreSelect
                   value={selectedStoreId}
-                  onChange={setSelectedStoreId}
-                  style={{ width: '100%', height: 44 }}
-                  className="gold-select"
-                  popupClassName="gold-select-dropdown"
-                  disabled={loading || stores.length <= 1}
-                  open={stores.length <= 1 ? false : undefined}
-                  options={stores.map(s => ({ value: s.id, label: s.name }))}
+                  onChange={(id) => setSelectedStoreId(id)}
+                  disabled={loading}
+                  placeholder={t('reload.selectStore')}
                 />
               </div>
 

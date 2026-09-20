@@ -3,14 +3,13 @@ import React, { useState, useEffect } from 'react';
 import { Card, Typography, Space, message, Image, App, Modal, List, Tag, Row, Col } from 'antd';
 import { ClockCircleOutlined, GiftOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
-import { getPendingVisitSession } from '../../services/firebase/visitSessions';
+import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord } from '../../services/firebase/redemption';
 import { createMembershipFeeRecord, deductMembershipFee, getUserMembershipPeriod } from '../../services/firebase/membershipFee';
-import { Select } from 'antd';
 import { getUserData } from '../../services/firebase/auth';
-import { getAllStores } from '../../services/firebase/stores';
+import StoreSelect from '../common/StoreSelect';
 import { useNavigate } from 'react-router-dom';
-import type { VisitSession, AppConfig, Store } from '../../types';
+import type { VisitSession, AppConfig } from '../../types';
 import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -47,7 +46,6 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [selectedAccess, setSelectedAccess] = useState<'membership' | 'daypass' | null>(null);
   const [redemptionHistory, setRedemptionHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
-  const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
   const [selectedStoreName, setSelectedStoreName] = useState<string>('');
   const [dailyRedemptions, setDailyRedemptions] = useState<any[]>([]);
@@ -124,6 +122,16 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       const session = await getPendingVisitSession(user.id);
       setCurrentSession(session);
       setLastCheckIn(user.membership?.lastCheckInAt || null);
+
+      // 实时扣费：检查是否到了下一个扣费时间点
+      if (session?.realtimeDeductionsEnabled && session.nextDeductionAt && session.id) {
+        const now = new Date();
+        if (now >= new Date(session.nextDeductionAt)) {
+          processSessionRealtimeDeduction(session.id, user.id).catch(e =>
+            console.error('[VisitTimerRedemption] 实时扣费失败', e)
+          );
+        }
+      }
     };
 
     loadSession();
@@ -193,28 +201,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     loadAppConfig();
   }, []);
 
-  // 加载门店列表
+  // 当前会话存在时，优先使用会话中记录的门店
   useEffect(() => {
-    const fetchStores = async () => {
-      try {
-        const data = await getAllStores();
-        const activeStores = data.filter(s => s.status === 'active');
-        setStores(activeStores);
-        if (activeStores.length > 0) {
-          // 如果当前已有会话，优先选择会话中的门店
-          if (currentSession?.storeId) {
-            setSelectedStoreId(currentSession.storeId);
-            setSelectedStoreName(currentSession.storeName || '');
-          } else {
-            setSelectedStoreId(activeStores[0].id);
-            setSelectedStoreName(activeStores[0].name);
-          }
-        }
-      } catch (error) {
-        console.error('加载门店失败:', error);
-      }
-    };
-    fetchStores();
+    if (currentSession?.storeId) {
+      setSelectedStoreId(currentSession.storeId);
+      setSelectedStoreName(currentSession.storeName || '');
+    }
   }, [currentSession?.storeId]);
 
   // 加载兑换数据和时长数据
@@ -995,20 +987,14 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         {/* 门店选择 */}
         <div style={{ marginBottom: 16 }}>
           <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 14, marginBottom: 8 }}>{t('visitTimer.selectStore')}</div>
-          <Select
+          <StoreSelect
             value={selectedStoreId}
-            onChange={(val) => {
-              setSelectedStoreId(val);
-              const store = stores.find(s => s.id === val);
-              if (store) setSelectedStoreName(store.name);
+            onChange={(id, name) => {
+              setSelectedStoreId(id);
+              setSelectedStoreName(name);
             }}
-            style={{ width: '100%', height: 44 }}
-            className="gold-select"
-            popupClassName="gold-select-dropdown"
+            disabled={loading}
             placeholder={t('visitTimer.pleaseSelectStore')}
-            options={stores.map(s => ({ value: s.id, label: s.name }))}
-            disabled={loading || stores.length <= 1}
-            open={stores.length <= 1 ? false : undefined}
           />
         </div>
 

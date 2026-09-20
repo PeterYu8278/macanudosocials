@@ -110,7 +110,7 @@ export const getUserRedemptionLimits = async (userId: string): Promise<{
     // 每50小时增加限额（totalLimit +50，无上限；每日上限保持基础设定，取消小时数加成）
     const intervals = Math.floor(totalVisitHours / 50);
     const dailyLimitBonus = 0;
-    const totalLimitBonus = intervals * 50;
+    const totalLimitBonus = intervals * 25;
 
     const finalLimits = {
       dailyLimit: baseDailyLimit + dailyLimitBonus,

@@ -76,9 +76,12 @@ const StoreManagement: React.FC = () => {
   );
 
   const handleAdd = () => {
-    // Check store quota
-    const maxStores = appConfig?.subscription?.quota?.maxStores || 1;
-    if (stores.length >= maxStores) {
+    // Check store quota against plan definition (falls back to stored quota)
+    const activePlanDef = appConfig?.subscription?.plans?.find(
+      (p: any) => p.id === (appConfig?.subscription?.planId || appConfig?.subscription?.plan)
+    );
+    const maxStores = activePlanDef?.maxStores ?? appConfig?.subscription?.quota?.maxStores ?? 1;
+    if (activeCount >= maxStores) {
       message.error(t('storeManagement.limitReached', { max: maxStores }));
       return;
     }
@@ -131,7 +134,10 @@ const StoreManagement: React.FC = () => {
   };
 
   const activeCount = stores.filter(s => s.status === 'active').length;
-  const maxStores = appConfig?.subscription?.quota?.maxStores || 1;
+  const activePlanDef = appConfig?.subscription?.plans?.find(
+    (p: any) => p.id === (appConfig?.subscription?.planId || appConfig?.subscription?.plan)
+  );
+  const maxStores = activePlanDef?.maxStores ?? appConfig?.subscription?.quota?.maxStores ?? 1;
 
   return (
     <div style={{ padding: isMobile ? '12px 12px' : '12px 16px', maxWidth: 1200, margin: '0 auto' }}>
@@ -186,7 +192,7 @@ const StoreManagement: React.FC = () => {
         {[
           { label: t('storeManagement.total'), value: stores.length, color: '#FDE08D', icon: <ShopOutlined /> },
           { label: t('storeManagement.active'), value: activeCount, color: '#52c41a', icon: <CheckCircleOutlined /> },
-          { label: t('storeManagement.quota'), value: `${stores.length}/${maxStores}`, color: stores.length >= maxStores ? '#ff4d4f' : '#C48D3A', icon: <EnvironmentOutlined /> }
+          { label: t('storeManagement.quota'), value: `${activeCount}/${maxStores}`, color: activeCount >= maxStores ? '#ff4d4f' : '#C48D3A', icon: <EnvironmentOutlined /> }
         ].map((stat) => (
           <div key={stat.label} style={{
             background: 'rgba(255,255,255,0.03)',

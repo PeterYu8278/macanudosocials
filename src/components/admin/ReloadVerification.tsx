@@ -11,6 +11,7 @@ import { getAllStores } from '../../services/firebase/stores';
 import { getAllUsers } from '../../services/firebase/firestore';
 import { useAuthStore } from '../../store/modules';
 import type { ReloadRecord, Store, User } from '../../types';
+import StoreSelect from '../common/StoreSelect';
 
 interface ReloadVerificationProps {
   onRefresh?: () => void;
@@ -874,12 +875,9 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               name="storeId"
               label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.store')}</span>}
             >
-              <Select
+              <StoreSelect
                 placeholder="-"
                 allowClear
-                options={stores.map(s => ({ label: s.name, value: s.id }))}
-                className="gold-select"
-                popupClassName="gold-select-dropdown"
               />
             </Form.Item>
 

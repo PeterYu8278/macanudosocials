@@ -150,7 +150,7 @@ export const SubscriptionSettings: React.FC = () => {
         else if (data.role === 'admin') admins++;
       });
 
-      setCounts({ stores: stores.length, superAdmins, admins });
+      setCounts({ stores: stores.filter((s: any) => s.status === 'active').length, superAdmins, admins });
     } catch (error) {
       console.error('Failed to load counts:', error);
     }
