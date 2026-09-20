@@ -506,11 +506,20 @@ export const SubscriptionSettings: React.FC = () => {
                   title={<span style={{ color: '#FDE08D' }}>{t('subscriptionSettings.currentAccountQuotas')}</span>}
                   style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid rgba(255,255,255,0.1)' }}
                 >
+                  {(() => {
+                    // Derive quotas from the active plan definition first, fall back to stored quota field
+                    const activePlanDef = appConfig?.subscription?.plans?.find(
+                      (p: any) => p.id === (appConfig?.subscription?.planId || appConfig?.subscription?.plan)
+                    );
+                    const effectiveMaxStores = activePlanDef?.maxStores ?? appConfig?.subscription?.quota?.maxStores ?? 1;
+                    const effectiveMaxSuperAdmins = activePlanDef?.maxSuperAdmins ?? appConfig?.subscription?.quota?.maxSuperAdmins ?? 1;
+                    const effectiveMaxAdmins = activePlanDef?.maxAdmins ?? appConfig?.subscription?.quota?.maxAdmins ?? 3;
+                    return (
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
                     {[
-                      { label: t('subscriptionSettings.maxStores'), count: counts.stores, max: appConfig?.subscription?.quota?.maxStores || 1 },
-                      { label: t('subscriptionSettings.maxSuperAdmins'), count: counts.superAdmins, max: appConfig?.subscription?.quota?.maxSuperAdmins || 1 },
-                      { label: t('subscriptionSettings.maxAdmins'), count: counts.admins, max: appConfig?.subscription?.quota?.maxAdmins || 3 }
+                      { label: t('subscriptionSettings.maxStores'), count: counts.stores, max: effectiveMaxStores },
+                      { label: t('subscriptionSettings.maxSuperAdmins'), count: counts.superAdmins, max: effectiveMaxSuperAdmins },
+                      { label: t('subscriptionSettings.maxAdmins'), count: counts.admins, max: effectiveMaxAdmins }
                     ].map(item => (
                       <div key={item.label}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 8, color: '#ccc' }}>
@@ -538,6 +547,8 @@ export const SubscriptionSettings: React.FC = () => {
                       </div>
                     ))}
                   </div>
+                    );
+                  })()}
                 </Card>
               </div>
 
