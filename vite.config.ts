@@ -142,6 +142,12 @@ export default defineConfig({
   server: {
     port: parseInt(process.env.PORT || '3000'),
     open: true,
+    proxy: {
+      '/.netlify/functions': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+      }
+    },
     headers: {
       'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
       'Cross-Origin-Embedder-Policy': 'unsafe-none',

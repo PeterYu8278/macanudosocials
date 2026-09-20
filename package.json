@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "netlify": "netlify dev",
+    "functions": "netlify functions:serve --port 8888",
     "build": "node scripts/inject-sw-config.js && tsc && vite build",
     "build:fast": "node scripts/inject-sw-config.js && vite build",
     "preview": "vite preview",

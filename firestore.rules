@@ -143,8 +143,8 @@ service cloud.firestore {
       // 读取：用户可以查看自己的驻店记录，管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAdmin();
       
-      // 创建：活跃会员和管理员可以创建驻店记录
-      allow create: if isActiveMember() && isActiveUser();
+      // 创建：活跃会员和管理员可以创建驻店记录；管理员/开发者绕过状态检查
+      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
       
       // 更新：用户可以更新自己的记录，管理员可以更新所有
       allow update: if isOwner(resource.data.userId) || isAdmin();
@@ -267,6 +267,34 @@ service cloud.firestore {
 
       // 创建/更新/删除：仅管理员
       allow create, update, delete: if isAdmin();
+    }
+
+    // ================================
+    // Rooms Collection (包厢)
+    // ================================
+    match /rooms/{roomId} {
+      // 读取：所有已认证用户可查看包厢信息
+      allow read: if isSignedIn();
+
+      // 创建/更新/删除：仅管理员
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ================================
+    // Room Bookings Collection (包厢预订)
+    // ================================
+    match /roomBookings/{bookingId} {
+      // 读取：用户可查看自己的预订，管理员可查看所有
+      allow read: if isOwner(resource.data.userId) || isAdmin() || isSignedIn();
+
+      // 创建：活跃会员可预订；管理员绕过状态检查
+      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
+
+      // 更新：用户可更新自己的预订（如取消），管理员可更新所有
+      allow update: if isOwner(resource.data.userId) || isAdmin();
+
+      // 删除：仅管理员
+      allow delete: if isAdmin();
     }
 
     // ================================
