@@ -1,6 +1,6 @@
 // 认证状态管理
 import { create } from 'zustand'
-import { onAuthStateChange, getUserData, convertFirestoreTimestamps, findUserByEmail } from '../../services/firebase/auth'
+import { onAuthStateChange, getUserData, convertFirestoreTimestamps, findUserByEmail, createMissingUserDocument } from '../../services/firebase/auth'
 import type { User, UserRole, Permission } from '../../types'
 import { hasPermission } from '../../config/permissions'
 import { initializePushNotifications } from '../../services/firebase/messaging'
@@ -209,6 +209,15 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                   }
                 }
                 
+                // 补救: Firebase Auth 存在但 Firestore 文档缺失，自动创建
+                if (!userData) {
+                  console.warn('[Auth Store] ⚠️ 检测到孤立 Auth 用户，尝试补救创建 Firestore 文档');
+                  userData = await createMissingUserDocument(firebaseUser);
+                  if (userData) {
+                    firestoreUserId = userData.id;
+                  }
+                }
+
                 // 保存 firestoreUserId 到 sessionStorage
                 if (firestoreUserId) {
                   sessionStorage.setItem(SESSION_STORAGE_KEYS.FIRESTORE_USER_ID, firestoreUserId);
@@ -216,7 +225,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               }
             }
           }
-          
+
           if (userData) {
             setUser(userData)
             setFirebaseUser(firebaseUser)

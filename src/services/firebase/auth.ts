@@ -15,7 +15,7 @@ import {
   sendPasswordResetEmail
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocFromCache, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc, waitForPendingWrites } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromCache, getDocFromServer, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc, waitForPendingWrites } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
@@ -143,9 +143,18 @@ export const registerUser = async (
       updatedAt: new Date(),
     };
     
-    await setDoc(doc(db, 'users', user.uid), userData);
+    const userDocRef = doc(db, 'users', user.uid);
+    await setDoc(userDocRef, userData);
     // 等待数据真正写入服务器，而非仅写入本地缓存
     await waitForPendingWrites(db);
+
+    // 验证文档已写入服务器（waitForPendingWrites 在冷连接时可能在服务器确认前就 resolve）
+    const serverDoc = await getDocFromServer(userDocRef);
+    if (!serverDoc.exists()) {
+      // 重试一次写入
+      await setDoc(userDocRef, userData);
+      await waitForPendingWrites(db);
+    }
     
     // ✅ 如果有引荐人，更新引荐人的数据（不再赠送积分）
     if (referrer) {
@@ -905,6 +914,64 @@ export const getUserData = async (uid: string, useCache: boolean = true): Promis
       return null;
     }
     console.error('[Auth Service] ❌ getUserData 错误:', error);
+    return null;
+  }
+};
+
+/**
+ * 为已有 Firebase Auth 账号但缺少 Firestore 文档的用户创建补救文档
+ * 在 onAuthStateChanged 中当 getUserData 返回 null 时调用
+ */
+export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Promise<User | null> => {
+  try {
+    const userDocRef = doc(db, 'users', firebaseUser.uid);
+
+    // Double-check: 从服务器读取确认文档真的不存在
+    const serverDoc = await getDocFromServer(userDocRef);
+    if (serverDoc.exists()) {
+      const rawData = serverDoc.data();
+      const data = convertFirestoreTimestamps(rawData);
+      return { id: firebaseUser.uid, ...data } as User;
+    }
+
+    const memberId = await generateMemberId(firebaseUser.uid);
+    const email = (firebaseUser.email || '').toLowerCase().trim();
+    const displayName = firebaseUser.displayName || email.split('@')[0];
+
+    const userData: Omit<User, 'id'> = {
+      email,
+      displayName,
+      role: 'guest',
+      status: 'inactive',
+      memberId,
+      profile: { phone: '' },
+      preferences: { locale: 'zh', notifications: true },
+      membership: {
+        level: 'bronze',
+        joinDate: new Date(),
+        lastActive: new Date(),
+        points: 0,
+        referralPoints: 0,
+      },
+      referral: {
+        referredBy: null,
+        referredByUserId: null,
+        referralDate: null,
+        referrals: [],
+        totalReferred: 0,
+        activeReferrals: 0,
+      },
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    await setDoc(userDocRef, userData);
+    await waitForPendingWrites(db);
+
+    console.info('[Auth Service] ✅ 补救创建 Firestore 用户文档:', firebaseUser.uid);
+    return { id: firebaseUser.uid, ...userData } as User;
+  } catch (error) {
+    console.error('[Auth Service] ❌ 补救创建用户文档失败:', error);
     return null;
   }
 };
