@@ -259,6 +259,17 @@ service cloud.firestore {
     }
     
     // ================================
+    // Stores Collection (门店)
+    // ================================
+    match /stores/{storeId} {
+      // 读取：所有已认证用户可查看门店信息
+      allow read: if isSignedIn();
+
+      // 创建/更新/删除：仅管理员
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ================================
     // Feature Visibility Collection
     // ================================
     match /feature_visibility/{configId} {
