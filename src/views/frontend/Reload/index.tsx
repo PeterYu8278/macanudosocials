@@ -418,7 +418,7 @@ const ReloadPage: React.FC = () => {
                     e.currentTarget.style.transform = 'translateY(0)';
                   }}
                 >
-                  {t('reload.confirmReloadBtn', { selectedAmount })} {paymentConfig?.billplz?.enabled ? t('reload.onlinePaymentLabel') : ''}
+                  {t('reload.confirmReloadBtn', { amount: selectedAmount })} {paymentConfig?.billplz?.enabled ? t('reload.onlinePaymentLabel') : ''}
                 </Button>
               )}
 
