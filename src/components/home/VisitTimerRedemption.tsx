@@ -993,7 +993,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         </div>
 
         {/* 门店选择 */}
-        <div style={{ marginBottom: 16 }}>
+        <div className="dark-theme-form" style={{ marginBottom: 16 }}>
           <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 14, marginBottom: 8 }}>{t('visitTimer.selectStore')}</div>
           <Select
             value={selectedStoreId}

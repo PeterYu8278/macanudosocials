@@ -326,7 +326,7 @@ const ReloadPage: React.FC = () => {
           ) : (
             <>
               {/* 门店选择 */}
-              <div style={{ marginBottom: 24 }}>
+              <div className="dark-theme-form" style={{ marginBottom: 24 }}>
                 <Text style={{ color: '#c0c0c0', display: 'block', marginBottom: 8, fontSize: 14 }}>
                   {t('reload.selectStore')}
                 </Text>
