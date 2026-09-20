@@ -47,7 +47,6 @@ const StoreManagement = lazy(() => import('./views/admin/StoreManagement'))
 const AdminReports = lazy(() => import('./views/admin/Reports'))
 
 // --- 认证页面 (Lazy Loaded) ---
-const Login = lazy(() => import('./views/auth/Login'))
 const Register = lazy(() => import('./views/auth/Register'))
 const CompleteProfile = lazy(() => import('./views/auth/CompleteProfile'))
 
@@ -97,11 +96,11 @@ const AppContent: React.FC = () => {
   }, [])
 
   // 无需 padding 的页面（基础认证页面 + 商城页面 + 未登录首页 Landing）
-  const noPaddingPages = ['/login', '/register', '/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
+  const noPaddingPages = ['/register', '/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
   const needsPadding = !noPaddingPages.includes(location.pathname)
 
   // 认证页面（不显示 header/footer，且需要居中显示）
-  const authPages = ['/login', '/register', '/auth/complete-profile']
+  const authPages = ['/register', '/auth/complete-profile']
   const isAuthPage = authPages.includes(location.pathname)
   const shouldCenter = isAuthPage
   const isLandingPage = !user && location.pathname === '/'
@@ -300,7 +299,7 @@ const AppContent: React.FC = () => {
               <Suspense fallback={<PageLoading />}>
                 <Routes>
                   {/* 认证路由 */}
-                  <Route path="/login" element={<Login />} />
+                  <Route path="/login" element={<Navigate to="/" replace />} />
                   <Route path="/register" element={<Register />} />
                   <Route path="/auth/complete-profile" element={<CompleteProfile />} />
 

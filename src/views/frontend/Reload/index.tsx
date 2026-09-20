@@ -64,7 +64,7 @@ const ReloadPage: React.FC = () => {
   const handleReload = async (amount: number) => {
     if (!user?.id) {
       message.warning(t('auth.pleaseLogin'));
-      navigate('/login');
+      navigate('/');
       return;
     }
 

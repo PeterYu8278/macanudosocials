@@ -100,7 +100,7 @@ const CompleteProfile: React.FC = () => {
       }
       
       if (!currentUser) {
-        navigate('/login', { replace: true })
+        navigate('/', { replace: true })
         return
       }
       
@@ -141,7 +141,7 @@ const CompleteProfile: React.FC = () => {
     
     if (!currentUser) {
       message.error(t('auth.userNotFoundRelogin'))
-      navigate('/login')
+      navigate('/')
       return
     }
 
@@ -218,7 +218,7 @@ const CompleteProfile: React.FC = () => {
     try {
       await signOut(auth)
       message.info(t('auth.loggedOut'))
-      navigate('/login', { replace: true })
+      navigate('/', { replace: true })
     } catch (error) {
       message.error(t('auth.signOutFailed'))
     }

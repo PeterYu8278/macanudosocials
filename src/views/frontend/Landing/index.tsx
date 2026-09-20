@@ -1014,7 +1014,7 @@ const Landing: React.FC = () => {
                 </Form.Item>
 
                 <div style={{ textAlign: 'right', marginBottom: '24px' }}>
-                  <a onClick={() => navigate('/login')} style={{ color: '#ffd700', fontSize: '14px', cursor: 'pointer' }}>
+                  <a onClick={() => navigate('/')} style={{ color: '#ffd700', fontSize: '14px', cursor: 'pointer' }}>
                     {t('auth.resetPassword')}
                   </a>
                 </div>

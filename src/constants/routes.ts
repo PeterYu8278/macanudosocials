@@ -4,7 +4,7 @@
 
 // 认证路由
 export const AUTH_ROUTES = {
-  LOGIN: '/login',
+  LOGIN: '/',
   REGISTER: '/register',
   FORGOT_PASSWORD: '/forgot-password',
   RESET_PASSWORD: '/reset-password'

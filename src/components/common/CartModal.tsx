@@ -148,7 +148,7 @@ export const CartModal: React.FC<CartModalProps> = ({
     // 验证登录
     if (!user) {
       message.warning(t('profile.notLoggedIn'))
-      navigate('/login')
+      navigate('/')
       return
     }
 

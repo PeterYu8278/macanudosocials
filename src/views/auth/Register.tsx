@@ -477,7 +477,7 @@ const Register: React.FC = () => {
               {t('auth.alreadyHaveAccount')}{' '}
               <Button 
                 type="link" 
-                onClick={() => navigate('/login')}
+                onClick={() => navigate('/')}
                 style={{
                   background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
                   WebkitBackgroundClip: 'text',

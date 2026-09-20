@@ -92,7 +92,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
   // 需要认证但未登录
   if (requireAuth && !user) {
-    return <Navigate to="/login" state={{ from: location }} replace />
+    return <Navigate to="/" replace />
   }
 
   // 已登录但资料不完整（缺少名字、电邮或手机号）
