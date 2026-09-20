@@ -237,24 +237,29 @@ service cloud.firestore {
     }
     
     // ================================
-    // Points Config Collection
+    // Config Collection (积分/年费等配置，实际路径 config/{docId})
     // ================================
-    match /pointsConfig/{configId} {
-      // 读取：所有已认证用户都可以查看积分规则
+    match /config/{configId} {
+      // 读取：所有已认证用户都可以查看配置
       allow read: if isSignedIn();
-      
+
       // 创建/更新/删除：仅管理员
       allow create, update, delete: if isAdmin();
     }
-    
+
     // ================================
-    // Membership Fee Config Collection
+    // Points Config Collection (保留向后兼容)
+    // ================================
+    match /pointsConfig/{configId} {
+      allow read: if isSignedIn();
+      allow create, update, delete: if isAdmin();
+    }
+
+    // ================================
+    // Membership Fee Config Collection (保留向后兼容)
     // ================================
     match /membershipFeeConfig/{configId} {
-      // 读取：所有已认证用户都可以查看年费规则
       allow read: if isSignedIn();
-      
-      // 创建/更新/删除：仅管理员
       allow create, update, delete: if isAdmin();
     }
     
