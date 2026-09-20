@@ -53,9 +53,9 @@ export const createReloadRecord = async (
       requestedAmount,
       pointsEquivalent,
       status: 'pending',
-      storeId,
-      billplzId,
-      adminNotes: billplzId ? `Billplz Online Reload (ID: ${billplzId})` : undefined,
+      ...(storeId !== undefined && { storeId }),
+      ...(billplzId !== undefined && { billplzId }),
+      ...(billplzId && { adminNotes: `Billplz Online Reload (ID: ${billplzId})` }),
       createdAt: new Date(),
       updatedAt: new Date()
     };
