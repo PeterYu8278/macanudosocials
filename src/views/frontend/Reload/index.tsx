@@ -326,7 +326,7 @@ const ReloadPage: React.FC = () => {
           ) : (
             <>
               {/* 门店选择 */}
-              <div className="dark-theme-form" style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 24 }}>
                 <Text style={{ color: '#c0c0c0', display: 'block', marginBottom: 8, fontSize: 14 }}>
                   {t('reload.selectStore')}
                 </Text>
@@ -334,6 +334,8 @@ const ReloadPage: React.FC = () => {
                   value={selectedStoreId}
                   onChange={setSelectedStoreId}
                   style={{ width: '100%', height: 44 }}
+                  className="gold-select"
+                  popupClassName="gold-select-dropdown"
                   disabled={loading}
                   options={stores.map(s => ({ value: s.id, label: s.name }))}
                 />

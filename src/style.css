@@ -332,6 +332,49 @@ a:hover {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
+/* 前台页面门店下拉选择器 - 金色醒目风格 */
+.gold-select .ant-select-selector {
+  background: rgba(253, 224, 141, 0.08) !important;
+  border: 1.5px solid rgba(253, 224, 141, 0.5) !important;
+  border-radius: 10px !important;
+  color: #FDE08D !important;
+}
+.gold-select .ant-select-selector:hover {
+  border-color: rgba(253, 224, 141, 0.8) !important;
+  background: rgba(253, 224, 141, 0.12) !important;
+}
+.gold-select.ant-select-focused .ant-select-selector {
+  border-color: #FDE08D !important;
+  box-shadow: 0 0 0 2px rgba(253, 224, 141, 0.2) !important;
+}
+.gold-select .ant-select-selection-item {
+  color: #FDE08D !important;
+  font-weight: 600 !important;
+}
+.gold-select .ant-select-selection-placeholder {
+  color: rgba(253, 224, 141, 0.4) !important;
+}
+.gold-select .ant-select-arrow {
+  color: #FDE08D !important;
+}
+.gold-select-dropdown .ant-select-item {
+  color: #f8f8f8;
+  background: transparent;
+}
+.gold-select-dropdown .ant-select-item-option-active {
+  background: rgba(253, 224, 141, 0.1) !important;
+}
+.gold-select-dropdown .ant-select-item-option-selected {
+  background: rgba(253, 224, 141, 0.15) !important;
+  color: #FDE08D !important;
+  font-weight: 600;
+}
+.gold-select-dropdown {
+  background: #1e1e1e !important;
+  border: 1px solid rgba(253, 224, 141, 0.2) !important;
+  border-radius: 10px !important;
+}
+
 .cigar-button-primary:hover {
   transform: translateY(-1px);
   box-shadow: 0 6px 20px rgba(255, 215, 0, 0.25);

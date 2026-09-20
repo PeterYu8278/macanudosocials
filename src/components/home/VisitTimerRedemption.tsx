@@ -993,7 +993,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         </div>
 
         {/* 门店选择 */}
-        <div className="dark-theme-form" style={{ marginBottom: 16 }}>
+        <div style={{ marginBottom: 16 }}>
           <div style={{ color: 'rgba(255, 255, 255, 0.6)', fontSize: 14, marginBottom: 8 }}>{t('visitTimer.selectStore')}</div>
           <Select
             value={selectedStoreId}
@@ -1003,6 +1003,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               if (store) setSelectedStoreName(store.name);
             }}
             style={{ width: '100%', height: 44 }}
+            className="gold-select"
+            popupClassName="gold-select-dropdown"
             placeholder={t('visitTimer.pleaseSelectStore')}
             options={stores.map(s => ({ value: s.id, label: s.name }))}
             disabled={loading}
