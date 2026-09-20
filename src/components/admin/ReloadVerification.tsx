@@ -1,14 +1,16 @@
 // 充值验证组件
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Space, Tag, Modal, Form, Input, message, Upload, Image, Select, Spin } from 'antd';
-import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined } from '@ant-design/icons';
-import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord } from '../../services/firebase/reload';
+import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, message, Upload, Image, Select, Spin, Checkbox } from 'antd';
+import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
 import { processPendingMembershipFees } from '../../services/firebase/scheduledJobs';
 import dayjs from 'dayjs';
 import { uploadFile } from '../../services/cloudinary/create';
 import { getAllStores } from '../../services/firebase/stores';
-import type { ReloadRecord, Store } from '../../types';
+import { getAllUsers } from '../../services/firebase/firestore';
+import { useAuthStore } from '../../store/modules';
+import type { ReloadRecord, Store, User } from '../../types';
 
 interface ReloadVerificationProps {
   onRefresh?: () => void;
@@ -20,18 +22,24 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all');
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [manualCreateVisible, setManualCreateVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<ReloadRecord | null>(null);
   const [form] = Form.useForm();
   const [rejectForm] = Form.useForm();
+  const [manualForm] = Form.useForm();
   const [uploading, setUploading] = useState(false);
+  const [manualSubmitting, setManualSubmitting] = useState(false);
   const [proofUrl, setProofUrl] = useState<string>('');
   const [stores, setStores] = useState<Store[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const { t, i18n } = useTranslation();
+  const { isSuperAdmin, user: currentUser } = useAuthStore();
   const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
 
   useEffect(() => {
     loadRecords();
     loadStores();
+    if (isSuperAdmin) loadUsers();
   }, [statusFilter]);
 
   const loadStores = async () => {
@@ -40,6 +48,15 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       setStores(storeList);
     } catch (error) {
       console.error('加载门店列表失败:', error);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const userList = await getAllUsers();
+      setUsers(userList);
+    } catch (error) {
+      console.error('加载用户列表失败:', error);
     }
   };
 
@@ -154,6 +171,50 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       }
     } catch (error: any) {
       message.error(error.message || t('pointsConfig.reloadVerification.rejectFailed'));
+    }
+  };
+
+  const onManualCreateSubmit = async (values: any) => {
+    setManualSubmitting(true);
+    try {
+      const selectedUser = users.find(u => u.id === values.userId);
+      const result = await createReloadRecord(
+        values.userId,
+        values.amount,
+        selectedUser?.displayName,
+        values.storeId,
+        undefined
+      );
+
+      if (!result.success || !result.recordId) {
+        message.error(result.error || t('pointsConfig.reloadVerification.manualCreateFailed'));
+        return;
+      }
+
+      if (values.autoVerify) {
+        const verifyResult = await verifyReloadRecord(
+          result.recordId,
+          currentUser?.id || 'admin',
+          undefined,
+          values.notes || `手动充值 by ${currentUser?.displayName || 'admin'}`
+        );
+        if (!verifyResult.success) {
+          message.warning('已创建充值记录，但自动验证失败：' + verifyResult.error);
+        } else {
+          message.success(t('pointsConfig.reloadVerification.manualCreateSuccess'));
+        }
+      } else {
+        message.success(t('pointsConfig.reloadVerification.manualCreateSuccess'));
+      }
+
+      setManualCreateVisible(false);
+      manualForm.resetFields();
+      loadRecords();
+      onRefresh?.();
+    } catch (error: any) {
+      message.error(error.message || t('pointsConfig.reloadVerification.manualCreateFailed'));
+    } finally {
+      setManualSubmitting(false);
     }
   };
 
@@ -312,7 +373,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
 
   return (
     <>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
         <Select
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
@@ -325,17 +386,37 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
           ]}
           className="points-config-form"
         />
-        <Button 
-          onClick={loadRecords} 
-          loading={loading}
-          style={{
-            background: 'rgba(255, 255, 255, 0.1)',
-            border: '1px solid rgba(255, 255, 255, 0.2)',
-            color: '#FFFFFF'
-          }}
-        >
-          {t('common.refresh')}
-        </Button>
+        <Space>
+          {isSuperAdmin && (
+            <Button
+              icon={<PlusOutlined />}
+              onClick={() => {
+                manualForm.resetFields();
+                manualForm.setFieldValue('autoVerify', true);
+                setManualCreateVisible(true);
+              }}
+              style={{
+                background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+                border: 'none',
+                color: '#111',
+                fontWeight: 700
+              }}
+            >
+              {t('pointsConfig.reloadVerification.manualCreate')}
+            </Button>
+          )}
+          <Button
+            onClick={loadRecords}
+            loading={loading}
+            style={{
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#FFFFFF'
+            }}
+          >
+            {t('common.refresh')}
+          </Button>
+        </Space>
       </div>
       {!isMobile ? (
         <div className="points-config-form">
@@ -699,6 +780,132 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
           </Form>
         )}
       </Modal>
+
+      {/* 手动创建充值 Modal（仅 superAdmin/developer） */}
+      {isSuperAdmin && (
+        <Modal
+          title={<span style={{ color: '#FFFFFF' }}>{t('pointsConfig.reloadVerification.manualCreateTitle')}</span>}
+          open={manualCreateVisible}
+          onCancel={() => {
+            setManualCreateVisible(false);
+            manualForm.resetFields();
+          }}
+          onOk={() => manualForm.submit()}
+          confirmLoading={manualSubmitting}
+          okText={t('pointsConfig.reloadVerification.manualCreateSubmit')}
+          okButtonProps={{
+            style: {
+              background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+              border: 'none',
+              color: '#111',
+              fontWeight: 700
+            }
+          }}
+          cancelButtonProps={{
+            style: {
+              background: 'rgba(255, 255, 255, 0.1)',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              color: '#FFFFFF'
+            }
+          }}
+          width={520}
+          styles={{
+            content: {
+              background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)',
+              border: '1px solid rgba(244, 175, 37, 0.6)'
+            },
+            header: {
+              background: 'transparent',
+              borderBottom: '1px solid rgba(244, 175, 37, 0.6)'
+            },
+            body: { background: 'transparent' },
+            footer: {
+              background: 'transparent',
+              borderTop: '1px solid rgba(244, 175, 37, 0.6)'
+            }
+          }}
+        >
+          <Form
+            form={manualForm}
+            layout="vertical"
+            onFinish={onManualCreateSubmit}
+            className="points-config-form"
+            initialValues={{ autoVerify: true }}
+          >
+            <Form.Item
+              name="userId"
+              label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.manualCreateUserLabel')}</span>}
+              rules={[{ required: true, message: t('pointsConfig.reloadVerification.manualCreateUserRequired') }]}
+            >
+              <Select
+                showSearch
+                placeholder={t('pointsConfig.reloadVerification.manualCreateUserPlaceholder')}
+                optionFilterProp="label"
+                options={users.map(u => ({
+                  label: `${u.displayName || u.email} (${u.role})`,
+                  value: u.id
+                }))}
+                className="gold-select"
+                popupClassName="gold-select-dropdown"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="amount"
+              label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.manualCreateAmountLabel')}</span>}
+              rules={[
+                { required: true, message: t('pointsConfig.reloadVerification.manualCreateAmountRequired') },
+                { type: 'number', min: 1, message: t('pointsConfig.reloadVerification.manualCreateAmountMin') }
+              ]}
+            >
+              <InputNumber
+                min={1}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: '#FFFFFF'
+                }}
+                prefix="RM"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="storeId"
+              label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.store')}</span>}
+            >
+              <Select
+                placeholder="-"
+                allowClear
+                options={stores.map(s => ({ label: s.name, value: s.id }))}
+                className="gold-select"
+                popupClassName="gold-select-dropdown"
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="notes"
+              label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.manualCreateNotesLabel')}</span>}
+            >
+              <Input.TextArea
+                rows={3}
+                placeholder={t('pointsConfig.reloadVerification.manualCreateNotesPlaceholder')}
+                style={{
+                  background: 'rgba(255,255,255,0.1)',
+                  border: '1px solid rgba(255,255,255,0.2)',
+                  color: '#FFFFFF'
+                }}
+              />
+            </Form.Item>
+
+            <Form.Item name="autoVerify" valuePropName="checked">
+              <Checkbox style={{ color: 'rgba(255,255,255,0.85)' }}>
+                {t('pointsConfig.reloadVerification.manualCreateAutoVerify')}
+              </Checkbox>
+            </Form.Item>
+          </Form>
+        </Modal>
+      )}
     </>
   );
 };

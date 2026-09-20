@@ -2086,7 +2086,21 @@
       "notesPlaceholder": "输入验证备注...",
       "rejectReasonPlaceholder": "输入拒绝原因...",
       "rejectReasonRequired": "请输入拒绝原因",
-      "pointsEquivalent": "= {{points}} 积分"
+      "pointsEquivalent": "= {{points}} 积分",
+      "manualCreate": "手动创建充值",
+      "manualCreateTitle": "手动创建充值记录",
+      "manualCreateSuccess": "手动充值已创建并验证成功",
+      "manualCreateFailed": "手动创建充值失败",
+      "manualCreateUserLabel": "会员",
+      "manualCreateUserPlaceholder": "搜索会员...",
+      "manualCreateUserRequired": "请选择会员",
+      "manualCreateAmountLabel": "金额（RM）",
+      "manualCreateAmountRequired": "请输入充值金额",
+      "manualCreateAmountMin": "金额必须大于 0",
+      "manualCreateNotesLabel": "备注（可选）",
+      "manualCreateNotesPlaceholder": "输入备注...",
+      "manualCreateAutoVerify": "立即自动验证",
+      "manualCreateSubmit": "创建"
     }
   },
   "performance": {

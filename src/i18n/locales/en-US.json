@@ -2086,7 +2086,21 @@
       "notesPlaceholder": "Enter verification notes...",
       "rejectReasonPlaceholder": "Enter rejection reason...",
       "rejectReasonRequired": "Please enter rejection reason",
-      "pointsEquivalent": "= {{points}} Points"
+      "pointsEquivalent": "= {{points}} Points",
+      "manualCreate": "Manual Reload",
+      "manualCreateTitle": "Create Manual Reload",
+      "manualCreateSuccess": "Manual reload created and verified successfully",
+      "manualCreateFailed": "Failed to create manual reload",
+      "manualCreateUserLabel": "Member",
+      "manualCreateUserPlaceholder": "Search member...",
+      "manualCreateUserRequired": "Please select a member",
+      "manualCreateAmountLabel": "Amount (RM)",
+      "manualCreateAmountRequired": "Please enter amount",
+      "manualCreateAmountMin": "Amount must be greater than 0",
+      "manualCreateNotesLabel": "Notes (Optional)",
+      "manualCreateNotesPlaceholder": "Enter notes...",
+      "manualCreateAutoVerify": "Auto-verify immediately",
+      "manualCreateSubmit": "Create"
     }
   },
   "performance": {
