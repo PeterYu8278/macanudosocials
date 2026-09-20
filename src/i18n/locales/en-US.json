@@ -2394,10 +2394,10 @@
   "reload": {
     "pendingReloadExists": "You already have a pending reload request. Please wait for admin verification before submitting a new one.",
     "pleaseSelectStore": "Please select a store",
-    "reloadRequestSubmitted": "Reload request submitted ({{amount}} RM), waiting for admin verification",
+    "reloadRequestSubmitted": "Reload request submitted (RM {{amount}}), waiting for admin verification",
     "submitReloadFailed": "Failed to submit reload request",
     "confirmCancelTitle": "Confirm Cancel Reload Request",
-    "confirmCancelContent": "Are you sure you want to cancel the reload request of {{amount}} RM? This cannot be undone.",
+    "confirmCancelContent": "Are you sure you want to cancel the reload request of RM {{amount}}? This cannot be undone.",
     "confirmCancel": "Confirm Cancel",
     "reloadCancelled": "Reload request cancelled",
     "cancelReloadFailed": "Failed to cancel reload request",
@@ -2411,7 +2411,7 @@
     "verificationNote1": "* Points will be credited automatically after admin verification",
     "verificationNote2": "* After verification you may submit a new reload request",
     "selectStore": "Select Store for Reload:",
-    "confirmReloadBtn": "Confirm Reload {{amount}} RM",
+    "confirmReloadBtn": "Confirm Reload RM {{amount}}",
     "onlinePaymentLabel": "(Online Payment)",
     "submitNote": "* Please wait for admin verification after submitting a reload request"
   },

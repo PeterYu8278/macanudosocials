@@ -265,7 +265,7 @@ const ReloadPage: React.FC = () => {
               <div style={{ marginBottom: 16 }}>
                 <Text style={{ color: '#c0c0c0', fontSize: 16, display: 'block', marginBottom: 8 }}>
                   {t('reload.reloadAmount')} <Text strong style={{ color: '#FFD700', fontSize: 20 }}>
-                    {pendingRecord.requestedAmount} RM
+                    RM {pendingRecord.requestedAmount}
                   </Text>
                 </Text>
                 <Text style={{ color: '#c0c0c0', fontSize: 14, display: 'block', marginBottom: 8 }}>
@@ -378,7 +378,7 @@ const ReloadPage: React.FC = () => {
                       }
                     }}
                   >
-                    {amount} RM
+                    RM {amount}
                     {selectedAmount === amount && (
                       <Text style={{ marginLeft: 8, fontSize: 14, color: '#111' }}>
                         = {amount} {t('visitTimer.points')}

@@ -2394,10 +2394,10 @@
   "reload": {
     "pendingReloadExists": "您已有待验证的充值请求，请等待管理员处理后再提交新的请求",
     "pleaseSelectStore": "请选择门店",
-    "reloadRequestSubmitted": "充值请求已提交（{{amount}} RM），等待管理员验证",
+    "reloadRequestSubmitted": "充值请求已提交（RM {{amount}}），等待管理员验证",
     "submitReloadFailed": "提交充值请求失败",
     "confirmCancelTitle": "确认撤销充值请求",
-    "confirmCancelContent": "确定要撤销 {{amount}} RM 的充值请求吗？撤销后将无法恢复。",
+    "confirmCancelContent": "确定要撤销 RM {{amount}} 的充值请求吗？撤销后将无法恢复。",
     "confirmCancel": "确认撤销",
     "reloadCancelled": "充值请求已撤销",
     "cancelReloadFailed": "撤销充值请求失败",
@@ -2411,7 +2411,7 @@
     "verificationNote1": "* 请等待管理员验证后，积分将自动到账",
     "verificationNote2": "* 验证完成后，您可以提交新的充值请求",
     "selectStore": "选择充值门店:",
-    "confirmReloadBtn": "确认充值 {{amount}} RM",
+    "confirmReloadBtn": "确认充值 RM {{amount}}",
     "onlinePaymentLabel": "(在线支付)",
     "submitNote": "* 充值请求提交后，请等待管理员验证到账"
   },
