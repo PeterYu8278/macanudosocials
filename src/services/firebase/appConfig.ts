@@ -58,13 +58,21 @@ const DEFAULT_COLOR_THEME: ColorThemeConfig = {
 
 const CONFIG_ID = 'default';
 
+const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
+  Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`appConfig timeout after ${ms}ms`)), ms)
+    ),
+  ]);
+
 /**
  * 获取应用配置
  */
 export const getAppConfig = async (): Promise<AppConfig | null> => {
   try {
     const docRef = doc(db, GLOBAL_COLLECTIONS.APP_CONFIG, CONFIG_ID);
-    let docSnap = await getDoc(docRef);
+    let docSnap = await withTimeout(getDoc(docRef), 3000);
 
     // 如果文档不存在，尝试从缓存读取（可能是离线状态）
     if (!docSnap.exists()) {
