@@ -2,7 +2,7 @@
  * Billplz 支付功能测试组件
  */
 import React, { useState } from 'react';
-import { Card, Form, Input, Button, Space, message, Typography, Divider, Tag, Descriptions, Badge } from 'antd';
+import { Card, Form, Input, Button, Space, App, Typography, Divider, Tag, Descriptions, Badge } from 'antd';
 import { CreditCardOutlined, SearchOutlined, CheckCircleOutlined, CloseCircleOutlined, SyncOutlined, LinkOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { createBill, getBillStatus, type BillplzBillResponse } from '../../services/billplz';
@@ -22,6 +22,7 @@ interface PaymentTesterProps {
 
 const PaymentTester: React.FC<PaymentTesterProps> = ({ paymentConfig, isPlatform = false }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [createForm] = Form.useForm();
   const [statusForm] = Form.useForm();
   const [loading, setLoading] = useState(false);

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, message } from 'antd'
+import { Button, App } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -54,6 +54,7 @@ const BatchDeleteButton: React.FC<BatchDeleteButtonProps> = ({
   itemTypeName = '项目'
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
 
   const handleBatchDelete = async () => {
     

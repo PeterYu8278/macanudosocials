@@ -1,6 +1,6 @@
 // 登录页面
 import React, { useState, useEffect, useRef } from 'react'
-import { Form, Input, Button, Card, Typography, Space, message, Divider, Spin, Modal } from 'antd'
+import { Form, Input, Button, Card, Typography, Space, App, Divider, Spin, Modal } from 'antd'
 import { UserOutlined, LockOutlined, GoogleOutlined, LoadingOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { loginWithEmailOrPhone, loginWithGoogle, handleGoogleRedirectResult, sendPasswordResetEmailFor, resetPasswordByPhone } from '../../services/firebase/auth'
@@ -13,6 +13,7 @@ import type { AppConfig } from '../../types'
 const { Title, Text } = Typography
 
 const Login: React.FC = () => {
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [loginError, setLoginError] = useState<string>('')
   const [pullDistance, setPullDistance] = useState(0)

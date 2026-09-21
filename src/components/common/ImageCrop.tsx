@@ -1,6 +1,6 @@
 // 图片裁剪组件
 import React, { useState, useRef, useCallback } from 'react'
-import { Button, Modal, message } from 'antd'
+import { Button, Modal, App } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { CheckOutlined, CloseOutlined } from '@ant-design/icons'
 import ReactCrop, { centerCrop, makeAspectCrop } from 'react-image-crop'
@@ -35,6 +35,7 @@ const ImageCrop: React.FC<ImageCropProps> = ({
   originalFileType
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const modalTitle = title ?? t('common.imageCrop')
   const [crop, setCrop] = useState<Crop>()
   const [completedCrop, setCompletedCrop] = useState<PixelCrop>()

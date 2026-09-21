@@ -10,7 +10,7 @@ import { signOut } from 'firebase/auth'
 import { auth } from '../config/firebase'
 import { AUTH_ROUTES } from '../constants/routes'
 import type { User, UserRole } from '../types'
-import { message } from 'antd'
+import { App } from 'antd'
 import i18n from '../i18n'
 
 /**
@@ -80,6 +80,7 @@ export interface UseAuthReturn {
  * ```
  */
 export const useAuth = (): UseAuthReturn => {
+  const { message } = App.useApp()
   const navigate = useNavigate()
   
   const {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { message, Modal, Spin, Tag, Button, Select, Slider } from 'antd';
+import { App, Modal, Spin, Tag, Button, Select, Slider } from 'antd';
 import { CalendarOutlined, ClockCircleOutlined, CheckCircleOutlined, EnvironmentOutlined } from '@ant-design/icons';
 import { getActiveRooms, getBookingsByDate, createBooking, type Room, type RoomBooking } from '../../services/firebase/rooms';
 import { getAllStores } from '../../services/firebase/stores';
@@ -14,6 +14,7 @@ interface RoomBookingSectionProps {
 
 export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const { user } = useAuthStore();
   const [rooms, setRooms] = useState<Room[]>([]);
   const [stores, setStores] = useState<Store[]>([]);

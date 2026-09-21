@@ -1,6 +1,6 @@
 // 引荐关系图组件
 import React, { useMemo, useState, useEffect } from 'react'
-import { Card, Space, Input, Select, Button, Typography, Spin, message, Tag, Dropdown } from 'antd'
+import { Card, Space, Input, Select, Button, Typography, Spin, App, Tag, Dropdown } from 'antd'
 import { SearchOutlined, UserOutlined, ExpandOutlined, ShrinkOutlined, ReloadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { User } from '../../types'
@@ -24,6 +24,7 @@ interface ReferralTreeViewProps {
 
 export const ReferralTreeView: React.FC<ReferralTreeViewProps> = ({ users: propUsers }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [users, setUsers] = useState<User[]>(propUsers || [])
   const [loading, setLoading] = useState(!propUsers)
   const [searchKeyword, setSearchKeyword] = useState('')

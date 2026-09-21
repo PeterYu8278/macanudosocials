@@ -1,6 +1,6 @@
 // 用户管理页面
 import React, { useEffect, useMemo, useState } from 'react'
-import { Table, Button, Tag, Space, Typography, Input, Select, message, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber } from 'antd'
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined } from '@ant-design/icons'
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
@@ -46,7 +46,7 @@ const glassmorphismInputStyle = {
 
 const AdminUsers: React.FC = () => {
   const { t, i18n } = useTranslation()
-  const { modal } = App.useApp() // 使用 App.useApp() 获取 modal 实例以支持 React 19
+  const { modal, message } = App.useApp() // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const { user: currentUser } = useAuthStore()
   const canManageDiscount = currentUser?.role === 'developer' || currentUser?.role === 'superAdmin'
 

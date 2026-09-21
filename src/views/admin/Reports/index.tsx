@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Card, Button, Row, Col, Typography, Space, message, DatePicker, Tag, Divider, Tabs } from 'antd'
+import { Card, Button, Row, Col, Typography, Space, App, DatePicker, Tag, Divider, Tabs } from 'antd'
 import { 
   FileExcelOutlined, 
   TeamOutlined, 
@@ -30,6 +30,7 @@ const { RangePicker } = DatePicker
 
 const AdminReports: React.FC = () => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { user } = useAuthStore()
   const [exporting, setExporting] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState('export')

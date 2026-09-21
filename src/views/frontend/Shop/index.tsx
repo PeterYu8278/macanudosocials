@@ -1,7 +1,7 @@
 // 商品导航页面
 import React, { useEffect, useState, useRef } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
-import { Input, Slider, Button, Typography, Modal, Tag, Radio, Divider, message, Select } from 'antd'
+import { Input, Slider, Button, Typography, Modal, Tag, Radio, Divider, App, Select } from 'antd'
 import { SearchOutlined, ArrowLeftOutlined, ReloadOutlined } from '@ant-design/icons'
 import type { Cigar, Brand, Event } from '../../../types'
 import { getCigars, getBrands, getUpcomingEvents } from '../../../services/firebase/firestore'
@@ -22,6 +22,7 @@ const DEFAULT_CIGAR_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhla
 
 const Shop: React.FC = () => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const navigate = useNavigate()
   const { data: cigars = [], loading: cigarsLoading } = useFirestoreQuery(() => getCigars({ limit: 100 }))
   const { data: brands = [], loading: brandsLoading } = useFirestoreQuery(() => getBrands({ limit: 200 }))

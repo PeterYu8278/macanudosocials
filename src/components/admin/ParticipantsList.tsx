@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react'
-import { Spin, Select, InputNumber, Button, Modal, message, Tag } from 'antd'
+import { Spin, Select, InputNumber, Button, App, Modal, Tag } from 'antd'
 import { CheckCircleOutlined, UserOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons'
 import type { User, Cigar, Event, Order, Transaction } from '../../types'
 import { updateDocument, COLLECTIONS, unregisterFromEvent, getAllOrders, getAllTransactions } from '../../services/firebase/firestore'
@@ -28,6 +28,7 @@ const ParticipantsList: React.FC<ParticipantsListProps> = ({
 }) => {
   const { t, i18n } = useTranslation()
   const lang = i18n.language?.startsWith('zh') ? 'zh' : 'en'
+  const { message } = App.useApp()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
   const [orders, setOrders] = useState<Order[]>([])
   const [transactions, setTransactions] = useState<Transaction[]>([])

@@ -1,7 +1,7 @@
 // 充值验证组件
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, message, Upload, Image, Select, Spin, Checkbox } from 'antd';
+import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App } from 'antd';
 import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
 import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
 import { processPendingMembershipFees } from '../../services/firebase/scheduledJobs';
@@ -18,6 +18,7 @@ interface ReloadVerificationProps {
 }
 
 export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefresh }) => {
+  const { message } = App.useApp();
   const [loading, setLoading] = useState(false);
   const [records, setRecords] = useState<ReloadRecord[]>([]);
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all');

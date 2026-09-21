@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Modal, Typography, Space, Progress, message } from 'antd';
+import { Modal, Typography, Space, Progress, App } from 'antd';
 import { GiftOutlined, InfoCircleOutlined, UserAddOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
@@ -30,6 +30,7 @@ export const MysteryGiftBanner: React.FC<MysteryGiftBannerProps> = ({ style }) =
   const navigate = useNavigate();
   const { user } = useAuth();
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [showModal, setShowModal] = useState(false);
   const [referrals, setReferrals] = useState(0);

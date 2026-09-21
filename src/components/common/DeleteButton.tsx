@@ -1,5 +1,5 @@
 import React from 'react'
-import { Button, message } from 'antd'
+import { Button, App } from 'antd'
 import { DeleteOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 
@@ -54,6 +54,7 @@ const DeleteButton: React.FC<DeleteButtonProps> = ({
   loading = false
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
 
   const handleDelete = async () => {
     

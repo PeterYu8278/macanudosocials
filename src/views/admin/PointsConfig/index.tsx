@@ -1,7 +1,7 @@
 // 积分配置管理页面
 import React, { useState, useEffect } from 'react';
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
-import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, message, Spin, Tabs, Table, Tag, DatePicker, Select, Modal } from 'antd';
+import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal } from 'antd';
 import { SaveOutlined, ReloadOutlined, HistoryOutlined, SettingOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { getPointsConfig, updatePointsConfig, getDefaultPointsConfig } from '../../../services/firebase/pointsConfig';
 import { getAllPointsRecords } from '../../../services/firebase/pointsRecords';
@@ -22,6 +22,7 @@ const { Title, Text } = Typography;
 
 const PointsConfigPage: React.FC = () => {
   const { user, isSuperAdmin } = useAuthStore();
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);

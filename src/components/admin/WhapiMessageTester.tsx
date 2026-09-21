@@ -3,7 +3,7 @@
  */
 import React, { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Card, Form, Input, Button, Space, message, Typography, Divider, Tag, Switch, Radio } from 'antd';
+import { Card, Form, Input, Button, Space, App, Typography, Divider, Tag, Switch, Radio } from 'antd';
 import { SendOutlined, CheckCircleOutlined, CloseCircleOutlined, ReloadOutlined } from '@ant-design/icons';
 import { sendTextMessage, sendEventReminder, sendVipExpiryReminder, sendPasswordReset, checkWhapiHealth, formatPhoneNumber } from '../../services/whapi';
 import type { SendMessageResponse } from '../../types/whapi';
@@ -23,6 +23,7 @@ interface WhapiMessageTesterProps {
 
 const WhapiMessageTester: React.FC<WhapiMessageTesterProps> = ({ whapiConfig }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [healthStatus, setHealthStatus] = useState<{ success: boolean; error?: string; data?: any } | null>(null);

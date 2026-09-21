@@ -1,7 +1,7 @@
 // 路由权限保护组件
 import React, { useEffect, useState } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Spin, Result, Button, message } from 'antd'
+import { Spin, Result, Button, App } from 'antd'
 import { useAuthStore } from '../../store/modules/auth'
 import type { UserRole } from '../../types'
 import { canAccessRoute } from '../../config/permissions'
@@ -24,6 +24,7 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const location = useLocation()
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [featureVisible, setFeatureVisible] = useState<boolean | null>(null)
   const [checkingFeature, setCheckingFeature] = useState(false)
 

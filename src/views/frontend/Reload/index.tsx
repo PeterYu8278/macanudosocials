@@ -1,6 +1,6 @@
 // 用户充值页面
 import React, { useState } from 'react';
-import { Card, Button, Typography, Space, message, Spin, Tag, App } from 'antd';
+import { Card, Button, Typography, Space, Spin, Tag, App } from 'antd';
 import { WalletOutlined, ReloadOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
 import { createReloadRecord, getUserReloadRecords, getUserPendingReloadRecord, cancelReloadRecord } from '../../../services/firebase/reload';
@@ -19,7 +19,7 @@ const ReloadPage: React.FC = () => {
   const { t } = useTranslation();
   const { user } = useAuthStore();
   const navigate = useNavigate();
-  const { modal } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
+  const { modal, message } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const [loading, setLoading] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');

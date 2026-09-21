@@ -1,6 +1,6 @@
 // Cloudinary 测试组件
 import React, { useState } from 'react'
-import { Button, Card, message, Space, Typography } from 'antd'
+import { Button, Card, App, Space, Typography } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { UploadOutlined, CheckCircleOutlined } from '@ant-design/icons'
 import { useCloudinary } from '../../hooks/useCloudinary'
@@ -11,6 +11,7 @@ const { Title, Text } = Typography
 const CloudinaryTest: React.FC = () => {
   const { upload, uploading, error } = useCloudinary()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [testImageUrl, setTestImageUrl] = useState<string | null>(null)
   const [testResult, setTestResult] = useState<string | null>(null)
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, Switch, message, Typography, Popconfirm, Tabs, DatePicker, Spin } from 'antd';
+import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Select, Switch, App, Typography, Popconfirm, Tabs, DatePicker, Spin } from 'antd';
 import { PlusOutlined, EditOutlined, DeleteOutlined, CalendarOutlined, AppstoreOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { getAllRooms, createRoom, updateRoom, deleteRoom, Room, getBookingsByDate, getAllBookings, cancelBooking, RoomBooking, checkInBooking } from '../../services/firebase/rooms';
 import { getAllStores } from '../../services/firebase/stores';
@@ -21,6 +21,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
   hideViewBookings = false
 }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' ? window.innerWidth < 768 : false);
   const [rooms, setRooms] = useState<Room[]>([]);
 

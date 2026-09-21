@@ -1,6 +1,6 @@
 import React from 'react'
 import dayjs from 'dayjs'
-import { Button, Tag, Input, message } from 'antd'
+import { Button, Tag, Input, App } from 'antd'
 import { ArrowLeftOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import type { Order, User, Cigar, Transaction } from '../../../types'
@@ -33,6 +33,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
   transactions
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const theme = getModalTheme(true) // 使用暗色主题
 
   // 安全日期转换函数

@@ -1,7 +1,7 @@
 // 功能管理页面
 import React, { useState, useEffect } from 'react';
 import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
-import { Card, Switch, Button, Space, Typography, message, Spin, Tabs, Input, Checkbox, Form, Divider, Alert, Select, Modal, Table } from 'antd';
+import { Card, Switch, Button, Space, Typography, App, Spin, Tabs, Input, Checkbox, Form, Divider, Alert, Select, Modal, Table } from 'antd';
 const { TextArea } = Input;
 import { SaveOutlined, ReloadOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, SettingOutlined, CopyOutlined, DownloadOutlined, FileTextOutlined, RocketOutlined, CheckCircleOutlined, LoadingOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
@@ -87,6 +87,7 @@ const DEFAULT_COLOR_THEME: ColorThemeConfig = {
 const FeatureManagement: React.FC = () => {
   const { user } = useAuthStore();
   const { t, i18n } = useTranslation();
+  const { message } = App.useApp();
   const { data: config, loading, refresh: refreshConfig } = useFirestoreDoc(getFeatureVisibilityConfig);
   const { data: rawAppConfig, refresh: refreshAppConfig } = useFirestoreDoc(getAppConfig);
   const [saving, setSaving] = useState(false);

@@ -1,5 +1,5 @@
 import React, { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { Button, Spin, Card, Typography, Space, message, Tag, Divider, Upload, AutoComplete, Image, Modal, Input } from 'antd';
+import { Button, Spin, Card, Typography, Space, App, Tag, Divider, Upload, AutoComplete, Image, Modal, Input } from 'antd';
 import { CameraOutlined, ReloadOutlined, ThunderboltFilled, ThunderboltOutlined, LoadingOutlined, UploadOutlined, SwapOutlined, EditOutlined, DownloadOutlined, ShareAltOutlined, SearchOutlined } from '@ant-design/icons';
 import Webcam from 'react-webcam';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +18,7 @@ const { Title, Text, Paragraph } = Typography;
 
 export const AICigarScanner: React.FC = () => {
     const { t } = useTranslation();
+    const { message } = App.useApp();
     const { user } = useAuthStore();
     const webcamRef = useRef<Webcam>(null);
     const streamRef = useRef<MediaStream | null>(null);

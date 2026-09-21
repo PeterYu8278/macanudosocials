@@ -1,6 +1,6 @@
 // 注册页面
 import React, { useState, useEffect, useRef } from 'react'
-import { Form, Input, Button, Card, Typography, Space, message, Spin } from 'antd'
+import { Form, Input, Button, Card, Typography, Space, App, Spin } from 'antd'
 import { UserOutlined, LockOutlined, MailOutlined, LoadingOutlined, GiftOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { registerUser } from '../../services/firebase/auth'
@@ -13,6 +13,7 @@ import type { AppConfig } from '../../types'
 const { Title, Text } = Typography
 
 const Register: React.FC = () => {
+  const { message } = App.useApp()
   const [loading, setLoading] = useState(false)
   const [pullDistance, setPullDistance] = useState(0)
   const [isRefreshing, setIsRefreshing] = useState(false)
@@ -407,21 +408,15 @@ const Register: React.FC = () => {
               rules={[
                 {
                   validator: async (_, value) => {
-                    // 如果没有输入引荐码，跳过验证（可选字段）
                     if (!value || value.trim() === '') {
                       return Promise.resolve();
                     }
-                    
-                    // ✅ 只验证引荐码是否存在（不验证格式）
                     const normalized = value.trim().toUpperCase();
-                    
                     try {
                       const result = await getUserByMemberId(normalized);
                       if (!result.success) {
                         return Promise.reject(new Error(result.error || t('auth.referralCodeNotFound')));
                       }
-                      
-                      // 验证成功
                       return Promise.resolve();
                     } catch (error) {
                       return Promise.reject(new Error(t('auth.referralCodeVerifyFailed')));

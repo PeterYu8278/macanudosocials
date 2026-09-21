@@ -1,6 +1,6 @@
 // QR码扫描组件 - 用于管理员check-in/check-out
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Modal, Button, message, Space, Typography } from 'antd';
+import { Modal, Button, App, Space, Typography } from 'antd';
 import { QrcodeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 import { createVisitSession, completeVisitSession, getPendingVisitSession } from '../../services/firebase/visitSessions';
@@ -24,6 +24,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStoppingRef = useRef<boolean>(false);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const { message } = App.useApp();
   const [processing, setProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);

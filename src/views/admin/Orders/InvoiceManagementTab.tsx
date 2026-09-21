@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react'
 import dayjs from 'dayjs'
-import { Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, message, Popconfirm, Drawer } from 'antd'
+import { Button, DatePicker, Form, Input, Modal, Select, Space, Table, Tag, App, Popconfirm, Drawer } from 'antd'
 import type { ColumnsType } from 'antd/es/table'
 import { useTranslation } from 'react-i18next'
 import type { AppConfig, Cigar, Order, OrderInvoiceMeta, User, Transaction } from '@/types'
@@ -79,6 +79,7 @@ export const InvoiceManagementTab: React.FC<InvoiceManagementTabProps> = ({
   onViewOrder,
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { user } = useAuthStore()
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
 

@@ -1,6 +1,6 @@
 // 活动页面
 import React, { useMemo, useState } from 'react'
-import { Typography, Button, Empty, Spin, message } from 'antd'
+import { Typography, Button, Empty, Spin, App } from 'antd'
 import { CalendarOutlined, TeamOutlined, RightOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 
@@ -23,6 +23,7 @@ const toDateOrNull = (value: any): Date | null => {
 const Events: React.FC = () => {
   const { user } = useAuthStore()
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const isMobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 991px)').matches : false
   const { data: allEvents, loading, error, refresh } = useFirestoreQuery(getEvents)
   const events = (allEvents ?? []).filter(event =>

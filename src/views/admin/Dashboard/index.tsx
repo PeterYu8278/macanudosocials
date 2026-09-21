@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
-import { Typography, Button, message, Spin, Modal, Form, Select, Input, Alert, Drawer } from 'antd'
+import { Typography, Button, App, Spin, Modal, Form, Select, Input, Alert, Drawer } from 'antd'
 import { ReloadOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
@@ -557,6 +557,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { user, isSuperAdmin } = useAuthStore()
   const startOfMonth = useMemo(() => {
     const now = new Date()

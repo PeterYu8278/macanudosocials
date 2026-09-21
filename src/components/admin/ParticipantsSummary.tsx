@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react'
-import { InputNumber, message } from 'antd'
+import { InputNumber, App } from 'antd'
 import type { Event, Cigar } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { updateDocument, COLLECTIONS } from '../../services/firebase/firestore'
@@ -20,6 +20,7 @@ const ParticipantsSummary: React.FC<ParticipantsSummaryProps> = ({
   onEventUpdate
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [feeCostSaving, setFeeCostSaving] = useState(false)
   
   // 获取活动费用成本

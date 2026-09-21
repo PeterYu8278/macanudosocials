@@ -1,7 +1,7 @@
 // 订单管理页面
 import React, { useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { Table, Space, Input, Select, DatePicker, message, Modal, Tabs, Button, Drawer } from 'antd'
+import { Table, Space, Input, Select, DatePicker, App, Modal, Tabs, Button, Drawer } from 'antd'
 import { SearchOutlined, CheckOutlined, ClockCircleOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
 import BatchDeleteButton from '../../../components/common/BatchDeleteButton'
 import CreateButton from '../../../components/common/CreateButton'
@@ -30,6 +30,7 @@ const { Option } = Select
 
 const AdminOrders: React.FC = () => {
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const { isSuperAdmin, user: authUser } = useAuthStore()
   const [mainTab, setMainTab] = useState<'orders' | 'invoices'>('orders')
   const [orders, setOrders] = useState<Order[]>([])

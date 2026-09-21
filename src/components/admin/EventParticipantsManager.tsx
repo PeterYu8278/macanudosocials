@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { Space, Select, Button, message, Modal, Form, Input } from 'antd'
+import { Space, Select, Button, App, Modal, Form, Input } from 'antd'
 import { CheckCircleOutlined, DownloadOutlined, PlusOutlined } from '@ant-design/icons'
 import type { Event, User, Cigar } from '../../types'
 import ParticipantsList from './ParticipantsList'
@@ -29,6 +29,7 @@ const EventParticipantsManager: React.FC<EventParticipantsManagerProps> = ({
   getCigarCostById
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [manualAddValue, setManualAddValue] = useState<string>('')
   const [manualAddLoading, setManualAddLoading] = useState(false)
   const [participantsLoading, setParticipantsLoading] = useState(false)

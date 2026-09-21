@@ -4,7 +4,7 @@
  */
 
 import { useState, useCallback } from 'react'
-import { Form, message } from 'antd'
+import { Form, App } from 'antd'
 import type { FormInstance } from 'antd'
 
 /**
@@ -121,6 +121,7 @@ export function useForm<T = any>(config: UseFormConfig<T> = {}): UseFormReturn<T
     showErrorMessage = true
   } = config
 
+  const { message } = App.useApp()
   // 创建表单实例
   const [form] = Form.useForm<T>()
 

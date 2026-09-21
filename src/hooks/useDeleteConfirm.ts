@@ -1,7 +1,7 @@
 // 替代约 15 个视图中重复的 Modal.confirm 删除确认模式
 
 import { useCallback } from 'react'
-import { Modal, message } from 'antd'
+import { Modal, App } from 'antd'
 import i18n from '../i18n'
 
 interface UseDeleteConfirmOptions {
@@ -31,6 +31,7 @@ export function useDeleteConfirm(
   onConfirm: (id: string) => Promise<{ success: boolean; error?: unknown }>,
   options: UseDeleteConfirmOptions = {}
 ): UseDeleteConfirmResult {
+  const { message } = App.useApp()
   const {
     title = i18n.t('common.confirmDelete'),
     content = i18n.t('common.irreversibleConfirm'),

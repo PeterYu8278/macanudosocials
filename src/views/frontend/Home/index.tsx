@@ -1,7 +1,7 @@
 // 首页组件 - Cigar Club黑金主题
 import React, { useEffect, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
-import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, message } from 'antd'
+import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, App } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
@@ -58,6 +58,7 @@ const usePrefersReducedMotion = () => {
 const Home: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { user } = useAuthStore()
   const isMobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 991px)').matches : false
   const prefersReducedMotion = usePrefersReducedMotion()

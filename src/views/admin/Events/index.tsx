@@ -1,9 +1,10 @@
 // 活动管理页面
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { Table, Button, Tag, Space, Typography, Input, Select, DatePicker, message, Modal, Form, InputNumber, Switch, Dropdown, Checkbox, Upload, Spin, Descriptions, Progress, Tabs, Row, Col } from 'antd'
-import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, DownloadOutlined, UploadOutlined, UserOutlined, CheckCircleOutlined } from '@ant-design/icons'
+import { Table, Button, Tag, Space, Typography, Input, Select, DatePicker, App, Modal, Form, InputNumber, Switch, Dropdown, Checkbox, Upload, Spin, Descriptions, Progress, Tabs, Row, Col } from 'antd'
+import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, DownloadOutlined, UploadOutlined, UserOutlined, CheckCircleOutlined, NotificationOutlined, CalendarOutlined } from '@ant-design/icons'
 import type { Event, User, Cigar, Transaction } from '../../../types'
+import AnnouncementsAdmin from '../../../components/admin/AnnouncementsAdmin'
 import { getEvents, createDocument, updateDocument, deleteDocument, COLLECTIONS, getUsers, registerForEvent, unregisterFromEvent, getCigars, createOrdersFromEventAllocations, getAllOrders, getUsersByIds, getEventById, getAllTransactions } from '../../../services/firebase/firestore'
 import ParticipantsList from '../../../components/admin/ParticipantsList'
 import ParticipantsSummary from '../../../components/admin/ParticipantsSummary'
@@ -54,9 +55,13 @@ const STATUS_TRANSITIONS: Record<EventStatus, EventStatus[]> = {
 
 const AdminEvents: React.FC = () => {
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const lang = i18n.language?.startsWith('zh') ? 'zh' : 'en'
   const { user: currentUser, isSuperAdmin } = useAuthStore()
-  
+
+  // Page-level tab: events | announcements
+  const [pageTab, setPageTab] = useState<'events' | 'announcements'>('events')
+
   // Loading states (for form submit / delete operations)
   const [loading, setLoading] = useState(false)
   const [participantsLoading, setParticipantsLoading] = useState(false)
@@ -820,14 +825,34 @@ const AdminEvents: React.FC = () => {
   const columns = columnsAll.filter(c => visibleCols[c.key as string] !== false)
 
   return (
-    <div
-      style={{
-        height: isMobile ? '90vh' : 'auto',
-        display: 'flex',
-        flexDirection: 'column',
-        overflow: isMobile ? 'hidden' : 'visible'
-      }}
-    >
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      {/* Page-level tab switcher */}
+      <Tabs
+        activeKey={pageTab}
+        onChange={k => setPageTab(k as 'events' | 'announcements')}
+        style={{ marginBottom: 0 }}
+        items={[
+          {
+            key: 'events',
+            label: <span><CalendarOutlined /> {t('navigation.events', { defaultValue: 'Events' })}</span>,
+          },
+          {
+            key: 'announcements',
+            label: <span><NotificationOutlined /> {t('announcements.management', { defaultValue: 'Announcements' })}</span>,
+          },
+        ]}
+      />
+
+      {pageTab === 'announcements' && <AnnouncementsAdmin />}
+
+      <div
+        style={{
+          height: isMobile ? '90vh' : 'auto',
+          display: pageTab === 'events' ? 'flex' : 'none',
+          flexDirection: 'column',
+          overflow: isMobile ? 'hidden' : 'visible'
+        }}
+      >
       <Modal open={orderSyncing} footer={null} closable={false} maskClosable={false} centered>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <Spin />
@@ -1699,6 +1724,7 @@ const AdminEvents: React.FC = () => {
       >
         {t('common.confirmDeleteEvent')} {deleting?.title}？{t('common.thisOperationCannotBeUndone')}
       </Modal>
+      </div>
     </div>
   )
 }

@@ -1,6 +1,6 @@
 // Common User Profile View Component
 import React, { useMemo, useState, useEffect } from 'react'
-import { Row, Col, Card, Typography, Tag, Button, Space, Spin, message } from 'antd'
+import { Row, Col, Card, Typography, Tag, Button, Space, Spin, App } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
@@ -45,6 +45,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   onLogout
 }) => {
   const { t, i18n } = useTranslation()
+  const { message } = App.useApp()
   const { user: authUser } = useAuthStore()
   const navigate = useNavigate()
   const [user, setUser] = useState<User | null>(propUser || null)

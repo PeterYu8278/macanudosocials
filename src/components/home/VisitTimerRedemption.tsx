@@ -1,6 +1,6 @@
 // 合并后的驻店计时器和兑换模块组件
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Space, message, Image, App, Modal, List, Tag, Row, Col } from 'antd';
+import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 'antd';
 import { ClockCircleOutlined, GiftOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
@@ -24,7 +24,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const { user, setUser } = useAuthStore();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { modal } = App.useApp();
+  const { modal, message } = App.useApp();
   const [currentSession, setCurrentSession] = useState<VisitSession | null>(null);
   const [duration, setDuration] = useState<string>('00:00:00');
   const [lastCheckIn, setLastCheckIn] = useState<Date | null>(null);

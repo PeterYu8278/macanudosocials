@@ -1,6 +1,6 @@
 // 兑换模块组件
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Button, Space, Progress, message } from 'antd';
+import { Card, Typography, Button, Space, Progress, App } from 'antd';
 import { GiftOutlined, ShoppingCartOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession } from '../../services/firebase/visitSessions';
@@ -17,6 +17,7 @@ interface RedemptionModuleProps {
 
 export const RedemptionModule: React.FC<RedemptionModuleProps> = ({ style }) => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const { user } = useAuthStore();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);

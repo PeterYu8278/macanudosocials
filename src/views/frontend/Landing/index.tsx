@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react'
-import { Button, Row, Col, Typography, Space, message, Modal, Form, Input, Divider } from 'antd'
+import { Button, Row, Col, Typography, Space, App, Modal, Form, Input, Divider } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -55,6 +55,7 @@ const usePrefersReducedMotion = () => {
 const Landing: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const prefersReducedMotion = usePrefersReducedMotion()
   const { data: brands = [] } = useFirestoreQuery(
     async () => {

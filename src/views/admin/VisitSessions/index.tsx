@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useState, useMemo } from 'react';
-import { Card, Table, Button, Space, Tag, Modal, message, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs } from 'antd';
+import { Card, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs } from 'antd';
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, LoginOutlined, LogoutOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -31,7 +31,7 @@ const { Search } = Input;
 const VisitSessionsPage: React.FC = () => {
   const { t } = useTranslation();
   const { user, isSuperAdmin } = useAuthStore();
-  const { modal } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
+  const { modal, message } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const [form] = Form.useForm();
   const [searchUserId, setSearchUserId] = useState<string>('');
 

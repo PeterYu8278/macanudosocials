@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Form, Switch, Select, DatePicker, Button, message, Spin, Alert, Tabs, Input, InputNumber, Space, Table, Tag } from 'antd';
+import { Card, Form, Switch, Select, DatePicker, Button, App, Spin, Alert, Tabs, Input, InputNumber, Space, Table, Tag } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
@@ -117,6 +117,7 @@ const fetchRequests = async (): Promise<SubscriptionRequest[]> => {
 
 export const SubscriptionSettings: React.FC = () => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

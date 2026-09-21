@@ -1,7 +1,7 @@
 // Shared Member Avatar/Member Card Component
 import React, { useState, useEffect, useRef } from 'react'
 import { CrownOutlined, CopyOutlined, ShareAltOutlined } from '@ant-design/icons'
-import { Modal, Button, Space, message } from 'antd'
+import { Modal, Button, Space, App } from 'antd'
 import { useQRCode } from '../../hooks/useQRCode'
 import { QRCodeDisplay } from '../common/QRCodeDisplay'
 import { useTranslation } from 'react-i18next'
@@ -67,6 +67,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   enableQrModal = false
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const [pointsConfig, setPointsConfig] = useState<PointsConfig | null>(null)
 

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { Button, Card, Col, Form, Input, Row, Space, message, Divider } from 'antd'
+import { Button, Card, Col, Form, Input, Row, Space, App, Divider } from 'antd'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import type { AppConfig, InvoiceTemplateConfig, Order, OrderInvoiceMeta } from '@/types'
@@ -64,6 +64,7 @@ const mergeTemplate = (tpl?: InvoiceTemplateConfig | null): InvoiceTemplateConfi
 
 const InvoiceTemplateEditor: React.FC = () => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { user } = useAuthStore()
   const [form] = Form.useForm<FormValues>()
   const [loading, setLoading] = useState(false)

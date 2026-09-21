@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { Layout, Space, Typography, Avatar, Button, Tooltip, Dropdown, MenuProps, message } from 'antd'
+import { Layout, Space, Typography, Avatar, Button, Tooltip, Dropdown, MenuProps, App } from 'antd'
 import { HomeOutlined, DashboardOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -31,6 +31,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
   const navigate = useNavigate()
   const location = useLocation()
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
 
   const isInAdmin = location.pathname.startsWith('/admin')

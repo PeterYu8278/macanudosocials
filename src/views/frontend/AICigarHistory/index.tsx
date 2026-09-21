@@ -1,6 +1,6 @@
 // 用户 AI 识茄历史记录页面
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { Card, Typography, Space, Tag, Spin, message, Empty, Button, Input } from 'antd';
+import { Card, Typography, Space, Tag, Spin, App, Empty, Button, Input } from 'antd';
 import { ArrowLeftOutlined, SearchOutlined, ReloadOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -26,6 +26,7 @@ const AICigarHistory: React.FC = () => {
     const { t, i18n } = useTranslation();
     const navigate = useNavigate();
     const { user } = useAuthStore();
+    const { message } = App.useApp();
     const [selectedBrand, setSelectedBrand] = useState<string>('all');
     const [searchKeyword, setSearchKeyword] = useState('');
     const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;

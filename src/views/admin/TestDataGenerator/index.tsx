@@ -1,6 +1,6 @@
 // 测试数据生成页面
 import React, { useState } from 'react'
-import { Card, Button, Space, Typography, Progress, Alert, Divider, Row, Col, Statistic, message, InputNumber } from 'antd'
+import { Card, Button, Space, Typography, Progress, Alert, Divider, Row, Col, Statistic, App, InputNumber } from 'antd'
 import { PlayCircleOutlined, CheckCircleOutlined, LoadingOutlined, WarningOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { generateBrands } from './generators/brands'
@@ -31,6 +31,7 @@ interface GenerationStage {
 
 const TestDataGenerator: React.FC = () => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const [stages, setStages] = useState<GenerationStage[]>(() => [
     { id: '1.1', name: t('testData.stage1_1Name'), description: t('testData.stage1_1Desc'), count: 300, status: 'pending', progress: 0 },
     { id: '1.2', name: t('testData.stage1_2Name'), description: t('testData.stage1_2Desc'), count: 10000, status: 'pending', progress: 0 },

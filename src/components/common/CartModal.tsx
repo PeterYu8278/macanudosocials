@@ -1,6 +1,6 @@
 // Common Cart Modal Component
 import React, { useState, useEffect } from 'react'
-import { Modal, Button, List, Typography, Radio, Divider, message, Select } from 'antd'
+import { Modal, Button, List, Typography, Radio, Divider, App, Select } from 'antd'
 import { useNavigate } from 'react-router-dom'
 import { getModalThemeStyles, getModalWidth } from '../../config/modalTheme'
 import type { Cigar, Event } from '../../types'
@@ -47,6 +47,7 @@ export const CartModal: React.FC<CartModalProps> = ({
   t,
   onCheckout
 }) => {
+  const { message } = App.useApp()
   // Mode: cart or checkout
   const [mode, setMode] = useState<'cart' | 'checkout'>('cart')
   // Payment method

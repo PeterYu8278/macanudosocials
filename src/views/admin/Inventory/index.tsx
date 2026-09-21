@@ -1,7 +1,7 @@
 // Inventory Management Page
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, InputNumber, message, Dropdown, Checkbox, Upload, Row, Col, App, Divider, AutoComplete, DatePicker } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, InputNumber, Dropdown, Checkbox, Upload, Row, Col, App, Divider, AutoComplete, DatePicker } from 'antd'
 import dayjs from 'dayjs'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, WarningOutlined, UploadOutlined, DownloadOutlined, MinusCircleOutlined, FilePdfOutlined, FileImageOutlined, EyeOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons'
 import type { Cigar, Brand, InboundOrder, OutboundOrder, InventoryMovement, Event, Store } from '../../../types'
@@ -30,7 +30,7 @@ const DEFAULT_CIGAR_IMAGE = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhla
 const AdminInventory: React.FC = () => {
   const { t } = useTranslation()
   const { user: currentUser, isSuperAdmin } = useAuthStore()
-  const { modal } = App.useApp() // Use App.useApp() to get modal instance for React 19 support
+  const { modal, message } = App.useApp() // Use App.useApp() to get modal instance for React 19 support
   const { data: items, loading: listLoading, error: itemsError, refresh: refreshItems } = useFirestoreQuery<Cigar>(getCigars)
   const { data: orders, refresh: refreshOrders } = useFirestoreQuery<any>(() => getAllOrders(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
   const { data: users, refresh: refreshUsers } = useFirestoreQuery<any>(getUsers)

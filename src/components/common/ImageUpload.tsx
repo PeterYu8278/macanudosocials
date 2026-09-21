@@ -1,7 +1,7 @@
 // 图片上传组件
 import React, { useState, useRef } from 'react'
 import { DeleteOutlined, LoadingOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
-import { Button, message, Modal } from 'antd'
+import { Button, App, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
 import { useCloudinary } from '../../hooks/useCloudinary'
 import type { UploadResult } from '../../services/cloudinary'
@@ -46,6 +46,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   cropMaxHeight = 800
 }) => {
   const { t } = useTranslation()
+  const { message } = App.useApp()
   const { upload, uploading, error } = useCloudinary()
   const [previewVisible, setPreviewVisible] = useState(false)
   const [cropVisible, setCropVisible] = useState(false)
