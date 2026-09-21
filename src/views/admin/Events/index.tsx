@@ -889,7 +889,7 @@ const AdminEvents: React.FC = () => {
                     fontWeight: 700
                   }}
                 >
-                  {t('eventsAdmin.newsAndEvents', { defaultValue: 'News & Events' })}
+                  {t('navigation.events', { defaultValue: 'Events' })}
                 </span>
               </span>
             ),
