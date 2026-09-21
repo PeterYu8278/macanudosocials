@@ -16,6 +16,7 @@ import { getCigars } from '../../../services/firebase/firestore';
 import { getAllStores } from '../../../services/firebase/stores';
 import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession } from '../../../services/firebase/redemption';
 import { useAuthStore } from '../../../store/modules/auth';
+import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer';
 import type { VisitSession, Cigar } from '../../../types';
 import dayjs from 'dayjs';
@@ -38,6 +39,11 @@ const VisitSessionsPage: React.FC = () => {
   const [qrScannerVisible, setQrScannerVisible] = useState(false);
   const [qrScannerMode, setQrScannerMode] = useState<'checkin' | 'checkout'>('checkin');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'expired'>('all');
+  const [roomBookingVisible, setRoomBookingVisible] = useState(false);
+
+  React.useEffect(() => {
+    isFeatureVisible('rooms-booking').then(setRoomBookingVisible)
+  }, []);
   const [addRedemptionModalVisible, setAddRedemptionModalVisible] = useState(false);
   const [forceCheckoutModalVisible, setForceCheckoutModalVisible] = useState(false);
   const { item: selectedSession, openDrawer: openSessionDrawer, closeDrawer: closeSessionDrawer } = useDetailDrawer<VisitSession>();
@@ -952,11 +958,11 @@ const VisitSessionsPage: React.FC = () => {
               </div>
             )
           },
-          {
+          ...(roomBookingVisible ? [{
             key: 'bookings',
             label: <span style={{ fontSize: 16, fontWeight: 700, paddingInline: 8 }}>{t('roomManagement.viewBookingsTitle')}</span>,
             children: <RoomManagement hideRoomConfig={true} />
-          }
+          }] : [])
         ]}
       />
 
