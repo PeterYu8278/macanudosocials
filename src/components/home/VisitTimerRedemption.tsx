@@ -793,7 +793,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                     {formatHours(totalHours - prevMilestone)} / 50 {t('visitTimer.hours')}
                   </Text>
                   <Text style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>
-                    +50 {t('visitTimer.cigars')}
+                    +25 {t('visitTimer.cigars')}
                   </Text>
                 </div>
               </div>
