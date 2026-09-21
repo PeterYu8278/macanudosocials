@@ -315,6 +315,7 @@
     "referralCodeAutoFilled": "已自动填写引荐码",
     "referralCodeNotFound": "引荐码不存在",
     "referralCodeVerifyFailed": "验证引荐码失败，请重试",
+    "referralCodeInvalidFormat": "引荐码格式无效",
     "userNotFoundRelogin": "用户信息不存在，请重新登录",
     "accountMergedSuccess": "账户已成功关联到现有账户，欢迎回来！",
     "profileCompletedSuccess": "账户信息已完善，欢迎加入 {{appName}}！",
@@ -2921,5 +2922,21 @@
     "statusRunning": "运行中",
     "statusRetry": "重试",
     "statusGenerate": "生成"
+  },
+  "announcements": {
+    "management": "公告管理",
+    "create": "新建公告",
+    "edit": "编辑公告",
+    "title": "标题",
+    "titlePlaceholder": "公告标题",
+    "content": "内容",
+    "contentPlaceholder": "公告内容",
+    "type": "类型",
+    "status": "状态",
+    "publishedAt": "发布时间",
+    "expiresAt": "到期时间",
+    "pinned": "置顶",
+    "pin": "置顶",
+    "unpin": "取消置顶"
   }
 }

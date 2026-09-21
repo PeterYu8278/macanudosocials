@@ -51,7 +51,9 @@ export const GLOBAL_COLLECTIONS = {
   /** 交易记录（财务） */
   TRANSACTIONS: 'transactions',
   /** 操作审计日志 */
-  AUDIT_LOGS: 'audit_logs'
+  AUDIT_LOGS: 'audit_logs',
+  /** 公告集合 */
+  ANNOUNCEMENTS: 'announcements'
 } as const
 
 export type CollectionName = typeof GLOBAL_COLLECTIONS[keyof typeof GLOBAL_COLLECTIONS]

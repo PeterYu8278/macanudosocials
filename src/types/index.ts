@@ -924,3 +924,22 @@ export interface AuditLog {
   details?: any;
   storeId?: string;
 }
+
+// 公告类型
+export type AnnouncementType = 'info' | 'warning' | 'important'
+export type AnnouncementStatus = 'draft' | 'published' | 'archived'
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  type: AnnouncementType;
+  status: AnnouncementStatus;
+  pinned: boolean;
+  image?: string;
+  publishedAt?: Date | null;
+  expiresAt?: Date | null;
+  createdBy: string;
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -315,6 +315,7 @@
     "referralCodeAutoFilled": "Referral code auto-filled",
     "referralCodeNotFound": "Referral code not found",
     "referralCodeVerifyFailed": "Failed to verify referral code, please try again",
+    "referralCodeInvalidFormat": "Invalid referral code format",
     "userNotFoundRelogin": "User information not found, please log in again",
     "accountMergedSuccess": "Account successfully linked to existing account, welcome back!",
     "profileCompletedSuccess": "Profile completed, welcome to {{appName}}!",
@@ -2921,5 +2922,21 @@
     "statusRunning": "Running",
     "statusRetry": "Retry",
     "statusGenerate": "Generate"
+  },
+  "announcements": {
+    "management": "Announcements",
+    "create": "New Announcement",
+    "edit": "Edit Announcement",
+    "title": "Title",
+    "titlePlaceholder": "Announcement title",
+    "content": "Content",
+    "contentPlaceholder": "Announcement content",
+    "type": "Type",
+    "status": "Status",
+    "publishedAt": "Publish Time",
+    "expiresAt": "Expiry Time",
+    "pinned": "Pin to top",
+    "pin": "Pin",
+    "unpin": "Unpin"
   }
 }
