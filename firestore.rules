@@ -85,7 +85,9 @@ service cloud.firestore {
       allow get: if isOwner(userId) || isAdmin();
       // 兼容旧账号按邮箱定位自己的用户文档；查询必须限定为当前 Auth 邮箱。
       allow list: if isAdmin()
-                  || (isSignedIn() && resource.data.email == request.auth.token.email);
+                  || (isSignedIn() && resource.data.email == request.auth.token.email)
+                  || (isSignedIn()
+                      && resource.data.referral.referredByUserId == request.auth.uid);
 
       // 创建：仅在注册时允许（特殊情况）
       allow create: if isSignedIn() && request.auth.uid == userId;

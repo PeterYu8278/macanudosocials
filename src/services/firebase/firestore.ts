@@ -236,6 +236,21 @@ export const getUsersByIds = async (ids: string[]): Promise<User[]> => {
   }
 }
 
+// 推荐关系以被推荐人自己的 referredByUserId 为准，避免依赖推荐人文档中的冗余数组。
+export const getReferredUsers = async (referrerId: string): Promise<User[]> => {
+  try {
+    if (!referrerId) return [];
+    const snapshot = await getDocs(query(
+      collection(db, COLLECTIONS.USERS),
+      where('referral.referredByUserId', '==', referrerId)
+    ));
+    return snapshot.docs.map(userDoc => ({ id: userDoc.id, ...userDoc.data() } as User));
+  } catch (error) {
+    console.error('[Firestore Service] getReferredUsers failed:', error);
+    return [];
+  }
+};
+
 // 品牌相关操作
 export const getBrands = async (options?: { limit?: number }): Promise<Brand[]> => {
   try {

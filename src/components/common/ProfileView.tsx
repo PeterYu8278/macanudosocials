@@ -15,7 +15,7 @@ import {
 
 const { Text } = Typography
 
-import { getEventsByUser, getOrdersByUser, getCigarById, getUsersByIds, getDocument } from '../../services/firebase/firestore'
+import { getEventsByUser, getOrdersByUser, getCigarById, getReferredUsers, getDocument } from '../../services/firebase/firestore'
 import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
@@ -172,17 +172,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   // Load referred users
   useEffect(() => {
     const loadReferredUsers = async () => {
-      if (!user?.referral?.referrals || user.referral.referrals.length === 0) {
+      if (!user?.id) {
         setReferredUsers([])
         return
       }
 
       setLoadingReferrals(true)
       try {
-        const referralUserIds = user.referral.referrals.map((r: any) =>
-          typeof r === 'string' ? r : r.userId
-        )
-        const referred = await getUsersByIds(referralUserIds)
+        const referred = await getReferredUsers(user.id)
         // Sort by join date descending
         referred.sort((a, b) => {
           const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)
@@ -220,7 +217,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }
     }
     loadReferralActivations()
-  }, [user?.referral?.referrals])
+  }, [user?.id])
 
   // Load points records
   useEffect(() => {
@@ -1030,7 +1027,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 background: 'rgba(255,255,255,0.03)'
               }}>
                 {[
-                  { icon: <TeamOutlined />, value: user?.referral?.referrals?.length || 0, label: t('profile.totalReferred') },
+                  { icon: <TeamOutlined />, value: referredUsers.length, label: t('profile.totalReferred') },
                   { icon: <TrophyOutlined />, value: user?.membership?.referralPoints || 0, label: t('profile.referralPoints') }
                 ].map((stat, i) => (
                   <React.Fragment key={i}>
