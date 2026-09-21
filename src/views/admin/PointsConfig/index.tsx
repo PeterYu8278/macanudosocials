@@ -878,21 +878,7 @@ const PointsConfigPage: React.FC = () => {
                 ]}
                 className="points-config-form"
               />
-              <Space>
-                <Button 
-                  icon={<PlusOutlined />}
-                  onClick={() => setCreatingFeeRecord(true)}
-                  style={{
-                    background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-                    border: 'none',
-                    color: '#111',
-                    fontWeight: 700,
-                    boxShadow: '0 4px 15px rgba(244,175,37,0.35)'
-                  }}
-                >
-                {t('pointsConfig.membershipFee.createRecord')}
-                </Button>
-                <Button
+              <Button
                   onClick={refreshMembershipFeeRecords}
                   loading={loadingMembershipFeeRecords}
                   style={{
@@ -903,7 +889,6 @@ const PointsConfigPage: React.FC = () => {
                 >
                 {t('common.refresh')}
                 </Button>
-              </Space>
             </div>
             {!isMobile ? (
               <div className="points-config-form">
