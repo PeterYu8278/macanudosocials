@@ -920,8 +920,6 @@ const AdminDashboard: React.FC = () => {
   const activeEvents = events.filter(e => e.status === 'ongoing').length
   const totalRevenue = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0)
 
-  // 当下驻店总人数
-  const currentCheckedIn = visitSessions.filter(s => s.status === 'pending').length
   // 房间预定数量（有效订单：confirmed 或 checked_in）
   const activeBookingsCount = roomBookings.filter(b => b.status === 'confirmed' || b.status === 'checked_in').length
 
@@ -1173,13 +1171,6 @@ const AdminDashboard: React.FC = () => {
     })
   }, [trendOrders, trendTransactions, ordersRevenueTrendPeriod])
 
-  // 本月数据
-  const currentMonth = dayjs().format('YYYY-MM')
-  const monthlyOrders = orders.filter(o => dayjs(o.createdAt).format('YYYY-MM') === currentMonth).length
-  const monthlyRevenue = transactions
-    .filter(t => t.amount > 0 && dayjs(t.createdAt).format('YYYY-MM') === currentMonth)
-    .reduce((sum, t) => sum + t.amount, 0)
-
   // 安全日期转换函数
   const getOrderDate = (order: any) => {
     if (!order?.createdAt) return new Date(0)
@@ -1402,7 +1393,6 @@ const AdminDashboard: React.FC = () => {
             actionLabel?: string;
             onClick?: () => void;
           }> = [
-            { label: t('dashboard.totalMembers'), value: `${totalUsers}/${currentPlan.maxMembers || 50}` },
             {
               label: t('dashboard.subscriptionLabel'),
               value: statusValue,
@@ -1412,10 +1402,7 @@ const AdminDashboard: React.FC = () => {
               showButton,
               actionLabel: isOverlimit || hasHigherPlan ? t('dashboard.planUpgrade') : (isExpired ? t('dashboard.planActivate') : t('dashboard.planRenew'))
             },
-            { label: t('dashboard.currentCheckedInMembers'), value: currentCheckedIn.toString(), onClick: () => { setTrendType('members'); setTrendPeriod('daily'); setTrendDrawerVisible(true); } },
-            { label: t('dashboard.activeRoomBookings'), value: activeBookingsCount.toString(), onClick: () => { setTrendType('bookings'); setTrendPeriod('daily'); setTrendDrawerVisible(true); } },
-            { label: t('dashboard.monthlyOrders'), value: monthlyOrders.toLocaleString() },
-            isSuperAdmin ? { label: t('dashboard.monthlyRevenue'), value: `RM${monthlyRevenue.toLocaleString()}` } : null
+            { label: t('dashboard.activeRoomBookings'), value: activeBookingsCount.toString(), onClick: () => { setTrendType('bookings'); setTrendPeriod('daily'); setTrendDrawerVisible(true); } }
           ].filter(Boolean) as any[];
 
           return cards.map((card: any, idx) => (
