@@ -15,8 +15,7 @@ import {
 
 const { Text } = Typography
 
-import { getEventsByUser, getOrdersByUser, getCigarById, getUsersByIds, getDocument, getSuccessfulReferralCount } from '../../services/firebase/firestore'
-import { getUserMembershipPeriod } from '../../services/firebase/membershipFee'
+import { getEventsByUser, getOrdersByUser, getCigarById, getUsersByIds, getDocument } from '../../services/firebase/firestore'
 import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
@@ -64,7 +63,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const canViewDiscount = authUser?.role === 'developer' || authUser?.role === 'superAdmin'
   const [loadingPointsRecords, setLoadingPointsRecords] = useState(false)
   const [referralActivationMap, setReferralActivationMap] = useState<Record<string, Date | null>>({})
-  const [successfulReferralCount, setSuccessfulReferralCount] = useState<number | null>(null)
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
   )
@@ -221,19 +219,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }
     }
     loadReferralActivations()
-
-    // Load successful referral count (for milestone display)
-    const loadSuccessfulReferralCount = async () => {
-      if (!user?.id) return
-      try {
-        const period = await getUserMembershipPeriod(user.id)
-        const count = await getSuccessfulReferralCount(user.id, period?.startDate, period?.endDate)
-        setSuccessfulReferralCount(count)
-      } catch {
-        setSuccessfulReferralCount(0)
-      }
-    }
-    loadSuccessfulReferralCount()
   }, [user?.referral?.referrals])
 
   // Load points records
@@ -1077,52 +1062,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   </React.Fragment>
                 ))}
               </div>
-
-              {/* Milestone Claims */}
-              {(() => {
-                const MILESTONES = [3, 6, 10, 20, 50]
-                const redeemed: number[] = user?.referral?.redeemedMilestones ?? []
-                const count = successfulReferralCount ?? 0
-                return (
-                  <div style={{ marginBottom: 16, background: 'rgba(255,255,255,0.03)', borderRadius: 12, padding: '12px 14px', border: '1px solid rgba(244,175,37,0.15)' }}>
-                    <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)', fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase', marginBottom: 10 }}>
-                      {t('redemptionMechanism.referralRewardsTitle')}
-                    </div>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                      {MILESTONES.map(target => {
-                        const eligible = count >= target
-                        const claimed = redeemed.includes(target)
-                        return (
-                          <div key={target} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                            {/* Status dot */}
-                            <div style={{
-                              width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                              background: claimed ? '#52c41a' : eligible ? '#FDE08D' : 'rgba(255,255,255,0.15)'
-                            }} />
-                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', flex: 1 }}>
-                              {t('redemptionMechanism.inviteFriends', { count: target })}
-                            </span>
-                            {claimed ? (
-                              <span style={{ fontSize: 11, color: '#52c41a', display: 'flex', alignItems: 'center', gap: 4 }}>
-                                <CheckCircleOutlined />
-                                {t('redemptionMechanism.redeemed')}
-                              </span>
-                            ) : eligible ? (
-                              <span style={{ fontSize: 11, color: '#FDE08D', fontWeight: 600 }}>
-                                {t('redemptionMechanism.claimReward')}
-                              </span>
-                            ) : (
-                              <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)' }}>
-                                {count}/{target}
-                              </span>
-                            )}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                )
-              })()}
 
               {/* Referral List */}
               {loadingReferrals ? (
