@@ -35,7 +35,7 @@ const createGoogleTempUserData = (
     email,
     displayName: displayName || '未命名用户',
     role: 'guest',
-    status: 'active',
+    status: 'inactive',
     memberId,
     profile: {
       // phone 字段省略，待用户完善信息后添加
@@ -111,7 +111,7 @@ export const registerUser = async (
       email: normalizedEmail,  // ✅ 邮箱必填（使用标准化格式）
       displayName,
       role: 'guest',
-      status: 'active',
+      status: 'inactive',
       memberId,  // ✅ 会员编号（用作引荐码）
       profile: {
         phone: normalizedPhone,  // ✅ 使用标准化格式
@@ -948,7 +948,7 @@ export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Pro
       email,
       displayName,
       role: 'guest',
-      status: 'active',
+      status: 'inactive',
       memberId,
       profile: { phone: '' },
       preferences: { locale: 'zh', notifications: true },

@@ -987,6 +987,7 @@
     "short": "Short",
     "createMembershipFeeRecordFailed": "Failed to create membership fee record",
     "membershipActivateSuccess": "Membership activated successfully!",
+    "membershipAlreadyActive": "Your Annual Pass is already active.",
     "deductFeeFailedRetry": "Failed to deduct annual fee, please try again later",
     "activateMembershipFailedRetry": "Failed to activate membership, please try again",
     "pleaseCheckInFirst": "Please check in first to redeem",

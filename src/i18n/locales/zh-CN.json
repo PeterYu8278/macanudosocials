@@ -987,6 +987,7 @@
     "short": "差",
     "createMembershipFeeRecordFailed": "创建年费记录失败",
     "membershipActivateSuccess": "会员开通成功！",
+    "membershipAlreadyActive": "Annual Pass 已经开通，无需重复购买。",
     "deductFeeFailedRetry": "扣除年费失败，请稍后重试",
     "activateMembershipFailedRetry": "开通会员失败，请重试",
     "pleaseCheckInFirst": "请先check-in才能兑换",

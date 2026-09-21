@@ -63,6 +63,18 @@ service cloud.firestore {
     function isActiveUser() {
       return isSignedIn() && getUserData().status == 'active';
     }
+
+    // Annual Pass is represented by users/{uid}.status.
+    // Any signed-in role may activate it for itself by spending points.
+    function isSelfAnnualPassActivation(userId) {
+      return isOwner(userId)
+             && resource.data.status == 'inactive'
+             && request.resource.data.status == 'active'
+             && request.resource.data.role == resource.data.role
+             && request.resource.data.membership.points < resource.data.membership.points
+             && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['membership', 'status', 'updatedAt']);
+    }
     
     // ================================
     // Users Collection
@@ -80,6 +92,7 @@ service cloud.firestore {
       // 更新：用户可以更新自己的数据，管理员可以更新所有
       allow update: if (isOwner(userId) &&
                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
+                    || isSelfAnnualPassActivation(userId)
                     || isAdmin();
 
       // 删除：仅管理员
@@ -149,8 +162,15 @@ service cloud.firestore {
       // 读取：用户可以查看自己的积分记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 创建/更新/删除：任意管理员（含 storeAdmin）
-      allow create, update, delete: if isAnyAdmin();
+      // 用户购买 Annual Pass / Day Pass 时可为自己写入消费记录。
+      allow create: if isAnyAdmin()
+                    || (isSignedIn()
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.type == 'spend'
+                        && request.resource.data.source in ['membership_fee', 'visit']
+                        && request.resource.data.amount > 0
+                        && request.resource.data.balance >= 0);
+      allow update, delete: if isAnyAdmin();
     }
     
     // ================================
@@ -160,8 +180,14 @@ service cloud.firestore {
       // 读取：用户可以查看自己的驻店记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 创建：活跃会员和任意管理员可以创建驻店记录
-      allow create: if isAnyAdmin() || isActiveMember();
+      // inactive 用户购买 Day Pass 时可为自己创建驻店记录，角色不限。
+      allow create: if isAnyAdmin()
+                    || isActiveMember()
+                    || (isSignedIn()
+                        && getUserData().status == 'inactive'
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.checkInType == 'daypass'
+                        && request.resource.data.dayPass.isPurchased == true);
 
       // 更新：用户可以更新自己的记录，任意管理员可以更新所有
       allow update: if isOwner(resource.data.userId) || isAnyAdmin();
@@ -177,8 +203,15 @@ service cloud.firestore {
       // 读取：用户可以查看自己的兑换记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 创建/更新/删除：任意管理员（含 storeAdmin）
-      allow create, update, delete: if isAnyAdmin();
+      // Day Pass 事务可创建或合并用户本人的待兑换记录。
+      allow create: if isAnyAdmin()
+                    || (isSignedIn()
+                        && getUserData().status == 'inactive'
+                        && request.resource.data.userId == request.auth.uid);
+      allow update: if isAnyAdmin()
+                    || (isOwner(resource.data.userId)
+                        && request.resource.data.userId == resource.data.userId);
+      allow delete: if isAnyAdmin();
     }
     
     // ================================
@@ -205,8 +238,23 @@ service cloud.firestore {
       // 读取：用户可以查看自己的年费记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 创建/更新/删除：任意管理员（含 storeAdmin）
-      allow create, update, delete: if isAnyAdmin();
+      // 所有角色都可为自己提交 Annual Pass；系统仍按用户 status 判断权益。
+      allow create: if isAnyAdmin()
+                    || (isSignedIn()
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.status == 'pending'
+                        && request.resource.data.amount > 0
+                        && (request.resource.data.renewalType == 'renewal'
+                            || getUserData().status == 'inactive'));
+      allow update: if isAnyAdmin()
+                    || (isOwner(resource.data.userId)
+                        && resource.data.status == 'pending'
+                        && request.resource.data.status == 'paid'
+                        && request.resource.data.userId == resource.data.userId
+                        && request.resource.data.amount == resource.data.amount
+                        && request.resource.data.diff(resource.data).affectedKeys()
+                             .hasOnly(['status', 'deductedAt', 'pointsRecordId', 'updatedAt']));
+      allow delete: if isAnyAdmin();
     }
     
     // ================================

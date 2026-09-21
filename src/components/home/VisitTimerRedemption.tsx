@@ -312,6 +312,11 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       return;
     }
 
+    if (user.status !== 'inactive') {
+      message.warning(t('visitTimer.membershipAlreadyActive'));
+      return;
+    }
+
     if (loading) {
       return;
     }
@@ -424,6 +429,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const handleBuyDayPass = async () => {
     if (!user?.id) {
       message.warning(t('auth.pleaseLogin'));
+      return;
+    }
+    if (user.status !== 'inactive') {
+      message.warning(t('visitTimer.membershipAlreadyActive'));
       return;
     }
     if (loading) return;
