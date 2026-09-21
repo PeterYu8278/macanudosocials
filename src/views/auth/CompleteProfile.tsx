@@ -262,317 +262,214 @@ const CompleteProfile: React.FC = () => {
         </div>
       )}
       
-      <Card style={{ 
-        width: '100%',
-        maxWidth: 400,
-        background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(45, 45, 45, 0.8) 100%)',
-        border: '1px solid rgba(255, 215, 0, 0.2)',
-        borderRadius: '16px',
-        boxShadow: '0 20px 60px rgba(0, 0, 0, 0.5), 0 8px 32px rgba(255, 215, 0, 0.1)',
-        backdropFilter: 'blur(10px)',
-        position: 'relative',
-        zIndex: 1
-      }}>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ textAlign: 'center', paddingTop: '20px' }}>
-            <Title level={2} style={{ 
-              marginBottom: 8,
-              background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              fontWeight: 700,
-              letterSpacing: '2px'
-            }}>
-              {t('auth.completeProfileTitle')}
-            </Title>
-            <Text style={{ color: '#c0c0c0', fontSize: '14px' }}>
-              {t('auth.completeProfileSubtitle')}
-            </Text>
-          </div>
+      <Card
+        styles={{ body: { padding: '28px 24px 24px' } }}
+        style={{
+          width: '100%',
+          maxWidth: 400,
+          background: 'linear-gradient(135deg, rgba(26,26,26,0.95) 0%, rgba(45,45,45,0.9) 100%)',
+          border: '1px solid rgba(255,215,0,0.25)',
+          borderRadius: 16,
+          boxShadow: '0 20px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,215,0,0.05)',
+          backdropFilter: 'blur(12px)',
+          position: 'relative',
+          zIndex: 1
+        }}
+      >
+        {/* Title */}
+        <div style={{ textAlign: 'center', marginBottom: 20 }}>
+          <Title level={3} style={{
+            margin: 0,
+            background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
+            WebkitBackgroundClip: 'text',
+            WebkitTextFillColor: 'transparent',
+            backgroundClip: 'text',
+            fontWeight: 700,
+            letterSpacing: 1
+          }}>
+            {t('auth.completeProfileTitle')}
+          </Title>
+          <Text style={{ color: '#888', fontSize: 13, marginTop: 4, display: 'block' }}>
+            {t('auth.completeProfileSubtitle')}
+          </Text>
+        </div>
 
-          {/* Google 账户信息 */}
-          {googleUser && (
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: '12px',
-              padding: '16px',
-              border: '1px solid rgba(255, 215, 0, 0.2)',
-              marginBottom: '8px',
-              marginLeft: '20px',
-              marginRight: '20px',
-              width: 'calc(100% - 40px)'
-            }}>
-              <div style={{ 
-                display: 'flex', 
-                alignItems: 'center', 
-                gap: '12px',
-                marginBottom: '12px'
-              }}>
-                <Avatar
-                  src={googleUser.photoURL}
-                  icon={<UserOutlined />}
-                  size={48}
-                  style={{
-                    border: '2px solid rgba(255, 215, 0, 0.5)',
-                    boxShadow: '0 2px 8px rgba(255, 215, 0, 0.2)'
-                  }}
-                />
-                <div style={{ flex: 1, textAlign: 'left' }}>
-                  <div style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    gap: '6px',
-                    color: '#c0c0c0', 
-                    fontSize: '13px'
-                  }}>
-                    <MailOutlined style={{ color: '#ffd700' }} />
-                    <span>{googleUser.email}</span>
-                  </div>
-                </div>
+        {/* Google 账户信息 */}
+        {googleUser && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            background: 'rgba(255,215,0,0.06)',
+            borderRadius: 10,
+            padding: '10px 14px',
+            border: '1px solid rgba(255,215,0,0.18)',
+            marginBottom: 20
+          }}>
+            <Avatar
+              src={googleUser.photoURL}
+              icon={<UserOutlined />}
+              size={40}
+              style={{ border: '1.5px solid rgba(255,215,0,0.5)', flexShrink: 0 }}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ color: '#c0c0c0', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {googleUser.email}
               </div>
-              <Divider style={{ 
-                margin: '12px 0', 
-                borderColor: 'rgba(255, 215, 0, 0.2)' 
-              }} />
-              <Text style={{ 
-                color: '#999999', 
-                fontSize: '12px',
-                display: 'block',
-                textAlign: 'center'
-              }}>
+              <div style={{ color: '#666', fontSize: 11, marginTop: 2 }}>
                 {t('auth.googleAccountInfo')}
-              </Text>
+              </div>
             </div>
-          )}
-
-          <Form
-            form={form}
-            name="complete-profile"
-            onFinish={onFinish}
-            autoComplete="off"
-            size="large"
-            style={{ padding: '0 20px' }}
-          >
-            {/* 姓名 */}
-            <Form.Item
-              name="displayName"
-              rules={[
-                { required: true, message: t('profile.nameRequired') },
-                { min: 2, message: t('auth.nameMinLength') }
-              ]}
-            >
-              <Input
-                prefix={<UserOutlined style={{ color: '#ffd700' }} />}
-                placeholder={t('auth.name')}
-                style={{
-                  background: 'rgba(45, 45, 45, 0.8)',
-                  border: '1px solid #444444',
-                  borderRadius: '8px',
-                  color: '#f8f8f8'
-                }}
-              />
-            </Form.Item>
-
-            {/* 手机号 */}
-            <Form.Item
-              name="phone"
-              rules={[
-                { required: true, message: t('auth.phoneOnlyRequired') },
-                {
-                  pattern: /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/,
-                  message: t('profile.phoneInvalidLength')
-                },
-                {
-                  validator: async (_, value) => {
-                    if (!value) return Promise.resolve()
-                    
-                    // ✅ 先验证格式，格式无效则跳过唯一性检查
-                    const formatPattern = /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/
-                    if (!formatPattern.test(value)) {
-                      // 格式无效，不检查唯一性（避免重复错误提示）
-                      return Promise.resolve()
-                    }
-                    
-                    // ✅ 格式有效，检查手机号唯一性
-                    const normalized = normalizePhoneNumber(value)
-                    
-                    // 标准化失败，不报错（pattern 已经处理）
-                    if (!normalized) {
-                      return Promise.resolve()
-                    }
-                    
-                    // 检查是否已被使用
-                    try {
-                      const { collection, query, where, getDocs, limit } = await import('firebase/firestore')
-                      const { db } = await import('../../config/firebase')
-                      
-                      const phoneQuery = query(
-                        collection(db, 'users'), 
-                        where('profile.phone', '==', normalized),
-                        limit(1)
-                      )
-                      const phoneSnap = await getDocs(phoneQuery)
-                      
-                      if (!phoneSnap.empty) {
-                        const existingUser = phoneSnap.docs[0].data()
-                        const existingEmail = existingUser.email
-                        
-                        // ✅ 如果该手机号的用户已有邮箱，则提示已被使用
-                        // （如果没有邮箱，后端会自动合并账户，所以不阻止）
-                        if (existingEmail && existingEmail !== '') {
-                        return Promise.reject(new Error(t('profile.phoneUsed')))
-                        }
-                        
-                        // 该手机号用户没有邮箱，允许通过（后端会合并账户）
-                        return Promise.resolve()
-                      }
-                    } catch (error) {
-                      // 如果查询失败，允许通过（不阻止用户提交）
-                    }
-                    
-                    return Promise.resolve()
-                  }
-                }
-              ]}
-              validateTrigger={['onBlur', 'onChange']}
-              validateDebounce={500}
-            >
-              <Input
-                prefix={<PhoneOutlined style={{ color: '#ffd700' }} />}
-                placeholder={t('auth.phonePlaceholder')}
-                onInput={(e) => {
-                  const input = e.currentTarget
-                  // 只保留数字、加号和空格
-                  input.value = input.value.replace(/[^\d+\s-]/g, '')
-                }}
-                style={{
-                  background: 'rgba(45, 45, 45, 0.8)',
-                  border: '1px solid #444444',
-                  borderRadius: '8px',
-                  color: '#f8f8f8'
-                }}
-              />
-            </Form.Item>
-
-            {/* 密码 */}
-            <Form.Item
-              name="password"
-              rules={[
-                { required: true, message: t('auth.setPasswordRequired') },
-                { min: 6, message: t('auth.passwordTooShort') }
-              ]}
-            >
-              <Input.Password
-                prefix={<LockOutlined style={{ color: '#ffd700' }} />}
-                placeholder={t('auth.setPasswordPlaceholder')}
-                style={{
-                  background: 'rgba(45, 45, 45, 0.8)',
-                  border: '1px solid #444444',
-                  borderRadius: '8px',
-                  color: '#f8f8f8'
-                }}
-              />
-            </Form.Item>
-
-            {/* 引荐码（可选） */}
-            <Form.Item
-              name="referralCode"
-              rules={[
-                {
-                  validator: async (_, value) => {
-                    // 如果没有输入引荐码，跳过验证（可选字段）
-                    if (!value || value.trim() === '') {
-                      return Promise.resolve();
-                    }
-                    
-                    // ✅ 只验证引荐码是否存在（不验证格式）
-                    const normalized = value.trim().toUpperCase();
-                    
-                    try {
-                      const result = await getUserByMemberId(normalized);
-                      if (!result.success) {
-                        return Promise.reject(new Error(result.error || t('auth.referralCodeNotFound')));
-                      }
-                      
-                      // 验证成功
-                      return Promise.resolve();
-                    } catch (error) {
-                      return Promise.reject(new Error(t('auth.referralCodeVerifyFailed')));
-                    }
-                  }
-                }
-              ]}
-              validateTrigger={['onBlur', 'onChange']}
-              validateDebounce={500}
-            >
-              <Input
-                prefix={<GiftOutlined style={{ color: '#ffd700' }} />}
-                placeholder={t('auth.referralCode')}
-                maxLength={20}
-                onInput={(e) => {
-                  const input = e.currentTarget;
-                  // ✅ 自动转大写
-                  input.value = input.value.toUpperCase();
-                }}
-                style={{
-                  background: 'rgba(45, 45, 45, 0.8)',
-                  border: '1px solid #444444',
-                  borderRadius: '8px',
-                  color: '#f8f8f8'
-                }}
-              />
-            </Form.Item>
-
-            {/* 提交按钮 */}
-            <Form.Item style={{ marginBottom: '16px' }}>
-              <Button
-                type="primary"
-                htmlType="submit"
-                loading={loading}
-                style={{ 
-                  width: '100%',
-                  height: '48px',
-                  background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-                  border: 'none',
-                  borderRadius: '8px',
-                  color: '#221c10',
-                  fontSize: '16px',
-                  fontWeight: 600,
-                  boxShadow: '0 4px 20px rgba(255, 215, 0, 0.3)'
-                }}
-              >
-                {t('auth.completeRegistration')}
-              </Button>
-            </Form.Item>
-
-            {/* 返回登录按钮 */}
-            <Form.Item style={{ marginBottom: '24px' }}>
-              <Button
-                icon={<LogoutOutlined />}
-                onClick={handleLogout}
-                disabled={loading}
-                style={{ 
-                  width: '100%',
-                  height: '40px',
-                  background: 'transparent',
-                  border: '1px solid #444444',
-                  borderRadius: '8px',
-                  color: '#999999',
-                  fontSize: '14px'
-                }}
-              >
-                {t('auth.backToLogin')}
-              </Button>
-            </Form.Item>
-          </Form>
-
-          <div style={{ textAlign: 'center', paddingBottom: '20px' }}>
-            <Text style={{ color: '#999999', fontSize: '12px' }}>
-              {t('auth.completeProfileNote')}
-            </Text>
           </div>
-        </Space>
+        )}
+
+        <Form
+          form={form}
+          name="complete-profile"
+          onFinish={onFinish}
+          autoComplete="off"
+          size="large"
+        >
+          {/* 姓名 */}
+          <Form.Item
+            name="displayName"
+            style={{ marginBottom: 12 }}
+            rules={[
+              { required: true, message: t('profile.nameRequired') },
+              { min: 2, message: t('auth.nameMinLength') }
+            ]}
+          >
+            <Input
+              prefix={<UserOutlined style={{ color: '#ffd700' }} />}
+              placeholder={t('auth.name')}
+              style={{ background: 'rgba(45,45,45,0.8)', border: '1px solid #444', borderRadius: 8, color: '#f8f8f8' }}
+            />
+          </Form.Item>
+
+          {/* 手机号 */}
+          <Form.Item
+            name="phone"
+            style={{ marginBottom: 12 }}
+            rules={[
+              { required: true, message: t('auth.phoneOnlyRequired') },
+              {
+                pattern: /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/,
+                message: t('profile.phoneInvalidLength')
+              },
+              {
+                validator: async (_, value) => {
+                  if (!value) return Promise.resolve()
+                  const formatPattern = /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/
+                  if (!formatPattern.test(value)) return Promise.resolve()
+                  const normalized = normalizePhoneNumber(value)
+                  if (!normalized) return Promise.resolve()
+                  try {
+                    const { collection, query, where, getDocs, limit } = await import('firebase/firestore')
+                    const { db } = await import('../../config/firebase')
+                    const phoneSnap = await getDocs(query(collection(db, 'users'), where('profile.phone', '==', normalized), limit(1)))
+                    if (!phoneSnap.empty) {
+                      const existingEmail = phoneSnap.docs[0].data().email
+                      if (existingEmail && existingEmail !== '') return Promise.reject(new Error(t('profile.phoneUsed')))
+                    }
+                  } catch {}
+                  return Promise.resolve()
+                }
+              }
+            ]}
+            validateTrigger={['onBlur', 'onChange']}
+            validateDebounce={500}
+          >
+            <Input
+              prefix={<PhoneOutlined style={{ color: '#ffd700' }} />}
+              placeholder={t('auth.phonePlaceholder')}
+              onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/[^\d+\s-]/g, '') }}
+              style={{ background: 'rgba(45,45,45,0.8)', border: '1px solid #444', borderRadius: 8, color: '#f8f8f8' }}
+            />
+          </Form.Item>
+
+          {/* 密码 */}
+          <Form.Item
+            name="password"
+            style={{ marginBottom: 12 }}
+            rules={[
+              { required: true, message: t('auth.setPasswordRequired') },
+              { min: 6, message: t('auth.passwordTooShort') }
+            ]}
+          >
+            <Input.Password
+              prefix={<LockOutlined style={{ color: '#ffd700' }} />}
+              placeholder={t('auth.setPasswordPlaceholder')}
+              style={{ background: 'rgba(45,45,45,0.8)', border: '1px solid #444', borderRadius: 8, color: '#f8f8f8' }}
+            />
+          </Form.Item>
+
+          {/* 引荐码（可选） */}
+          <Form.Item
+            name="referralCode"
+            style={{ marginBottom: 20 }}
+            rules={[
+              {
+                validator: async (_, value) => {
+                  if (!value || value.trim() === '') return Promise.resolve()
+                  const normalized = value.trim().toUpperCase()
+                  try {
+                    const result = await getUserByMemberId(normalized)
+                    if (!result.success) return Promise.reject(new Error(result.error || t('auth.referralCodeNotFound')))
+                    return Promise.resolve()
+                  } catch {
+                    return Promise.reject(new Error(t('auth.referralCodeVerifyFailed')))
+                  }
+                }
+              }
+            ]}
+            validateTrigger={['onBlur', 'onChange']}
+            validateDebounce={500}
+          >
+            <Input
+              prefix={<GiftOutlined style={{ color: '#ffd700' }} />}
+              placeholder={t('auth.referralCode')}
+              maxLength={20}
+              onInput={(e) => { e.currentTarget.value = e.currentTarget.value.toUpperCase() }}
+              style={{ background: 'rgba(45,45,45,0.8)', border: '1px solid #444', borderRadius: 8, color: '#f8f8f8' }}
+            />
+          </Form.Item>
+
+          {/* 提交 */}
+          <Form.Item style={{ marginBottom: 10 }}>
+            <Button
+              type="primary"
+              htmlType="submit"
+              loading={loading}
+              block
+              style={{
+                height: 48,
+                background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
+                border: 'none',
+                borderRadius: 10,
+                color: '#1a1000',
+                fontSize: 16,
+                fontWeight: 700,
+                boxShadow: '0 4px 20px rgba(255,215,0,0.25)'
+              }}
+            >
+              {t('auth.completeRegistration')}
+            </Button>
+          </Form.Item>
+
+          {/* 返回登录 */}
+          <Form.Item style={{ marginBottom: 0 }}>
+            <Button
+              type="text"
+              icon={<LogoutOutlined />}
+              onClick={handleLogout}
+              disabled={loading}
+              block
+              style={{ color: '#666', fontSize: 13 }}
+            >
+              {t('auth.backToLogin')}
+            </Button>
+          </Form.Item>
+        </Form>
       </Card>
     </div>
   )

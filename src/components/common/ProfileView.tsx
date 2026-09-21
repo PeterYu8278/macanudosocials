@@ -33,6 +33,7 @@ interface ProfileViewProps {
   readOnly?: boolean           // Read-only mode
   showEditButton?: boolean     // Show edit button
   onEdit?: (user: User) => void // Edit callback
+  onLogout?: () => void        // Logout callback
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
@@ -40,7 +41,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   userId: propUserId,
   readOnly = false,
   showEditButton = false,
-  onEdit
+  onEdit,
+  onLogout
 }) => {
   const { t, i18n } = useTranslation()
   const { user: authUser } = useAuthStore()
@@ -50,6 +52,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [showMemberCard, setShowMemberCard] = useState(false)
   const [activeTab, setActiveTab] = useState<'cigar' | 'points' | 'activity' | 'referral'>('cigar')
   const [eventsFeatureVisible, setEventsFeatureVisible] = useState<boolean>(true)
+  const [aiCigarHistoryVisible, setAiCigarHistoryVisible] = useState<boolean>(true)
   const [userEvents, setUserEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [userOrders, setUserOrders] = useState<Order[]>([])
@@ -97,15 +100,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }
   }, [propUser])
 
-  // Check if events feature is visible (developer always allowed)
+  // Check feature visibility (developer always allowed)
   useEffect(() => {
     const checkFeatureVisibility = async () => {
-      const visible = authUser?.role === 'developer' ? true : await isFeatureVisible('events')
-      setEventsFeatureVisible(visible)
-      // If feature hidden and active tab is activity, switch to cigar
-      if (!visible && activeTab === 'activity') {
-        setActiveTab('cigar')
-      }
+      const isDev = authUser?.role === 'developer'
+      const eventsVisible = isDev ? true : await isFeatureVisible('events')
+      setEventsFeatureVisible(eventsVisible)
+      if (!eventsVisible && activeTab === 'activity') setActiveTab('cigar')
+
+      const aiVisible = isDev ? true : await isFeatureVisible('ai-cigar-history')
+      setAiCigarHistoryVisible(aiVisible)
     }
     checkFeatureVisibility()
   }, []) // Check once on mount
@@ -341,14 +345,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
         </div>
 
-        {/* Edit Button */}
+        {/* Edit + Logout Buttons */}
         {showEditButton && onEdit && (
-          <div style={{ width: '100%', maxWidth: '640px', margin: '16px auto 0 auto' }}>
+          <div style={{ width: '100%', maxWidth: '640px', margin: '16px auto 0 auto', display: 'flex', gap: 2 }}>
             <Button
               type="primary"
               onClick={() => onEdit(user)}
               style={{
-                width: '100%',
+                flex: 1,
                 height: '48px',
                 fontSize: '16px',
                 fontWeight: 'bold',
@@ -360,6 +364,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             >
               {t('profile.editProfile')}
             </Button>
+            {onLogout && (
+              <Button
+                onClick={onLogout}
+                style={{
+                  width: 48,
+                  height: 48,
+                  flexShrink: 0,
+                  background: 'transparent',
+                  border: '1px solid rgba(255,80,80,0.45)',
+                  borderRadius: '8px',
+                  color: '#ff6b6b',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 18,
+                  padding: 0,
+                }}
+                icon={<span role="img" aria-label="logout" className="anticon anticon-logout"><svg viewBox="64 64 896 896" width="1em" height="1em" fill="currentColor"><path d="M868 732h-70.3c-4.8 0-9.3 2.1-12.3 5.8-7 8.5-14.5 16.7-22.4 24.5a353.84 353.84 0 01-112.7 75.9A352.8 352.8 0 01512.4 866c-47.9 0-94.3-9.4-137.9-27.8a353.84 353.84 0 01-112.7-75.9 353.28 353.28 0 01-76-112.5C167.3 606.2 158 559.9 158 512s9.4-94.2 27.8-137.8c17.8-42.1 43.4-80 76-112.5s70.5-58.1 112.7-75.9c43.6-18.4 90-27.8 137.9-27.8 47.9 0 94.3 9.3 137.9 27.8 42.2 17.8 80.1 43.4 112.7 75.9 7.9 7.9 15.3 16.1 22.4 24.5 3 3.7 7.6 5.8 12.3 5.8H868c6.3 0 10.2-7 6.7-12.3C798 160.5 663.8 81.6 511.3 82 271.7 82.6 79.6 277.1 82 516.4 84.4 751.9 276.2 942 512.4 942c152.1 0 285.7-78.8 362.3-197.7 3.4-5.3-.4-12.3-6.7-12.3zm88.9-226.3L815 393.7c-5.3-4.2-13-.4-13 6.3v76H488c-4.4 0-8 3.6-8 8v56c0 4.4 3.6 8 8 8h314v76c0 6.7 7.8 10.5 13 6.3l141.9-112a8 8 0 000-12.6z"/></svg></span>}
+              />
+            )}
           </div>
         )}
       </div>
@@ -368,7 +392,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <div style={{
         marginBottom: '10px',
         maxWidth: '640px',
-        margin: '0 auto 24px auto',
+        margin: '0 auto 12px auto',
         background: 'rgba(255, 255, 255, 0.05)',
         borderRadius: '12px',
         border: '1px solid rgba(244, 175, 37, 0.6)',
@@ -402,7 +426,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       </div>
 
       {/* AI Recognition History Entry */}
-      {user?.id === authUser?.id && (
+      {user?.id === authUser?.id && aiCigarHistoryVisible && (
         <div style={{
           maxWidth: '640px',
           margin: '0 auto 24px auto'

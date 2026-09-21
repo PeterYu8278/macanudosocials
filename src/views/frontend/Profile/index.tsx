@@ -7,7 +7,7 @@ import {
 import {
   ArrowLeftOutlined, MailOutlined, PhoneOutlined, BellOutlined,
   CalendarOutlined, WalletOutlined, ShoppingOutlined, GiftOutlined,
-  SaveOutlined, LockOutlined, SettingOutlined, UserOutlined
+  SaveOutlined, LockOutlined, SettingOutlined, UserOutlined, LogoutOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next'
 import { ProfileView } from '../../../components/common/ProfileView'
 import ImageUpload from '../../../components/common/ImageUpload'
 import { updateDocument, getUserById } from '../../../services/firebase/firestore'
+import { logoutUser } from '../../../services/firebase/auth'
 import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
 import type { User } from '../../../types'
 import { auth } from '../../../config/firebase'
@@ -180,6 +181,21 @@ const Profile: React.FC = () => {
       }
     } finally {
       setSaving(false)
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      const result = await logoutUser()
+      if (result.success) {
+        useAuthStore.getState().logout()
+        message.success(t('auth.logoutSuccess', { defaultValue: '已登出' }))
+        navigate('/')
+      } else {
+        message.error(result.error?.message || t('auth.logoutFailed', { defaultValue: '登出失败' }))
+      }
+    } catch (error: any) {
+      message.error(error.message || t('auth.logoutFailed', { defaultValue: '登出失败' }))
     }
   }
 
@@ -563,6 +579,7 @@ const Profile: React.FC = () => {
           readOnly={false}
           showEditButton={true}
           onEdit={(u) => handleEdit(u)}
+          onLogout={handleLogout}
         />
       </div>
 

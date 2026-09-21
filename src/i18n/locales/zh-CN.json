@@ -752,6 +752,7 @@
     "status": "状态",
     "join": "参加",
     "leave": "退出",
+    "noEvents": "暂无活动",
     "upcoming": "即将开始",
     "ongoing": "进行中",
     "completed": "已结束",

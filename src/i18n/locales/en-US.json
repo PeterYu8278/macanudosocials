@@ -752,6 +752,7 @@
     "status": "Status",
     "join": "Join",
     "leave": "Leave",
+    "noEvents": "No Events Available",
     "upcoming": "Upcoming",
     "ongoing": "Ongoing",
     "completed": "Completed",
