@@ -331,6 +331,15 @@ service cloud.firestore {
     }
     
     // ================================
+    // Audit Logs Collection
+    // ================================
+    match /audit_logs/{logId} {
+      allow read: if isAdmin();
+      allow create: if isAdmin();
+      allow update, delete: if false;
+    }
+
+    // ================================
     // 默认拒绝规则
     // ================================
     match /{document=**} {
