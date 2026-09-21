@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { Descriptions, Input, Select, DatePicker, InputNumber, Tag, Progress, Space, Switch, Row, Col } from 'antd'
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, FileTextOutlined, CalendarOutlined, TeamOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import type { Event } from '../../types'
 import ImageUpload from '../common/ImageUpload'
@@ -42,33 +42,56 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
 
   // 创建模式：使用卡片布局
   if (event.id === 'new' && isEditing) {
-  return (
+    const cardStyle: React.CSSProperties = {
+      ...theme.card.elevated,
+      marginBottom: 12,
+      borderLeft: '3px solid rgba(253,224,141,0.5)',
+      padding: isMobile ? 14 : 16,
+      boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
+    }
+
+    const sectionHeader = (icon: React.ReactNode, label: string) => (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+        <span style={{ color: '#FDE08D', fontSize: 15, display: 'flex', alignItems: 'center' }}>{icon}</span>
+        <span style={{ backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 700, fontSize: 14, letterSpacing: '0.3px' }}>
+          {label}
+        </span>
+      </div>
+    )
+
+    const fieldLabel = (label: string) => (
+      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginBottom: 6, fontWeight: 600, letterSpacing: '0.6px', textTransform: 'uppercase' }}>
+        {label}
+      </div>
+    )
+
+    return (
       <div style={{ width: '100%', overflow: 'hidden' }}>
         {/* 基本信息卡片 */}
-        <div style={theme.card.elevated}>
-          <div style={theme.text.subtitle}>{t('events.basicInfo')}</div>
-          
+        <div style={cardStyle}>
+          {sectionHeader(<FileTextOutlined />, t('events.basicInfo'))}
+
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('events.eventName')}</div>
+            {fieldLabel(t('events.eventName'))}
             <Input
               value={editForm.title}
               onChange={(e) => onEditFormChange({...editForm, title: e.target.value})}
               placeholder={t('events.namePlaceholder')}
             />
           </div>
-          
+
           <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('events.description')}</div>
+            {fieldLabel(t('events.description'))}
             <Input.TextArea
               value={editForm.description}
               onChange={(e) => onEditFormChange({...editForm, description: e.target.value})}
-              rows={2}
+              rows={isMobile ? 2 : 3}
               placeholder={t('events.descriptionPlaceholder')}
             />
           </div>
-          
+
           <div>
-            <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('events.location')}</div>
+            {fieldLabel(t('events.location'))}
             <Input
               value={editForm.locationName}
               onChange={(e) => onEditFormChange({...editForm, locationName: e.target.value})}
@@ -76,79 +99,86 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
             />
           </div>
         </div>
-        
+
         {/* 时间设置卡片 */}
-        <div style={theme.card.elevated}>
-          <div style={theme.text.subtitle}>{t('events.timeSettings')}</div>
-          
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.startDate')}</div>
-            <DatePicker
-              value={editForm.startDate}
-              onChange={(date) => onEditFormChange({...editForm, startDate: date})}
-              style={{ width: '100%' }}
-              showTime={{ format: 'HH:mm' }}
-              format="YYYY-MM-DD HH:mm"
-              placeholder={t('common.pleaseSelectStartDate')}
-            />
-          </div>
-          
-    <div>
-            <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.endDate')}</div>
-            <DatePicker
-              value={editForm.endDate}
-              onChange={(date) => onEditFormChange({...editForm, endDate: date})}
-              style={{ width: '100%' }}
-              showTime={{ format: 'HH:mm' }}
-              format="YYYY-MM-DD HH:mm"
-              placeholder={t('common.pleaseSelectEndDate')}
-            />
-          </div>
+        <div style={cardStyle}>
+          {sectionHeader(<CalendarOutlined />, t('events.timeSettings'))}
+
+          <Row gutter={isMobile ? 0 : 12}>
+            <Col span={isMobile ? 24 : 12} style={isMobile ? { marginBottom: 12 } : {}}>
+              {fieldLabel(t('common.startDate'))}
+              <DatePicker
+                value={editForm.startDate}
+                onChange={(date) => onEditFormChange({...editForm, startDate: date})}
+                style={{ width: '100%' }}
+                showTime={{ format: 'HH:mm' }}
+                format="YYYY-MM-DD HH:mm"
+                placeholder={t('common.pleaseSelectStartDate')}
+              />
+            </Col>
+            <Col span={isMobile ? 24 : 12}>
+              {fieldLabel(t('common.endDate'))}
+              <DatePicker
+                value={editForm.endDate}
+                onChange={(date) => onEditFormChange({...editForm, endDate: date})}
+                style={{ width: '100%' }}
+                showTime={{ format: 'HH:mm' }}
+                format="YYYY-MM-DD HH:mm"
+                placeholder={t('common.pleaseSelectEndDate')}
+              />
+            </Col>
+          </Row>
         </div>
-        
+
         {/* 参与设置卡片 */}
-        <div style={theme.card.elevated}>
-          <div style={theme.text.subtitle}>{t('events.participationSettings')}</div>
-          
+        <div style={cardStyle}>
+          {sectionHeader(<TeamOutlined />, t('events.participationSettings'))}
+
           <Row gutter={12} style={{ marginBottom: 12 }}>
             <Col span={12}>
-              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.fee')}</div>
+              {fieldLabel(t('common.fee'))}
               <InputNumber
                 value={editForm.fee}
                 onChange={(val) => onEditFormChange({...editForm, fee: val})}
                 min={0}
                 style={{ width: '100%' }}
-              controls={false}
-                placeholder={t('events.feePlaceholder')}
+                controls={false}
+                addonBefore={<span style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>RM</span>}
+                placeholder="0"
               />
             </Col>
             <Col span={12}>
-              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.maxParticipants')}</div>
+              {fieldLabel(t('common.maxParticipants'))}
               <InputNumber
                 value={editForm.maxParticipants}
                 onChange={(val) => onEditFormChange({...editForm, maxParticipants: val})}
                 min={0}
                 style={{ width: '100%' }}
-              controls={false}
-                placeholder={t('events.maxParticipantsPlaceholder')}
+                controls={false}
+                placeholder="0"
               />
             </Col>
           </Row>
-          
+
           <Row gutter={12}>
             <Col span={12}>
-              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.privateEvent')}</div>
-              <Switch
-                checked={editForm.isPrivate}
-                onChange={(checked) => onEditFormChange({...editForm, isPrivate: checked})}
-              />
+              {fieldLabel(t('common.privateEvent'))}
+              <div style={{ paddingTop: 4 }}>
+                <Switch
+                  checked={editForm.isPrivate}
+                  onChange={(checked) => onEditFormChange({...editForm, isPrivate: checked})}
+                  style={{ backgroundColor: editForm.isPrivate ? '#C48D3A' : undefined }}
+                />
+              </div>
             </Col>
             <Col span={12}>
-              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 4 }}>{t('common.status')}</div>
+              {fieldLabel(t('common.status'))}
               <Select
-                value={editForm.status}
+                value={editForm.status ?? 'draft'}
                 onChange={(val) => onEditFormChange({...editForm, status: val})}
                 style={{ width: '100%' }}
+                className="gold-select"
+                popupClassName="gold-select-dropdown"
               >
                 <Option value="draft">{t('common.draft')}</Option>
                 <Option value="published">{t('common.published')}</Option>
@@ -159,60 +189,34 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
             </Col>
           </Row>
         </div>
-        
-        {/* 保存按钮 */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 16 }}>
-          <button
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-              color: '#111',
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
-              border: 'none'
-            }}
-            onClick={async () => {
-              if (isEditing) {
-                // 🔥 创建模式：一次性创建活动，不要循环调用 onSaveField
-                if (event.id === 'new') {
-                  // 只调用一次 onSaveField，传入特殊标识
-                  await onSaveField('__CREATE_ALL__')
-                  onToggleEdit()
-                } else {
-                  // 编辑模式：保存所有更改的字段
-                  try {
-                    // 保存所有字段
-                    const fieldsToSave = ['title', 'description', 'status', 'isPrivate', 'locationName', 'fee', 'maxParticipants', 'image']
-                    for (const field of fieldsToSave) {
-                      if (editForm[field] !== undefined) {
-                        await onSaveField(field)
-                      }
-                    }
-                    // 保存日期字段（startDate 会同时保存 endDate）
-                    if (editForm.startDate !== undefined) {
-                      await onSaveField('startDate')
-                    } else if (editForm.endDate !== undefined) {
-                      await onSaveField('endDate')
-                    }
-                    // 退出编辑模式
-                    onToggleEdit()
-                  } catch (error) {
-                    console.error('🟠 EDIT MODE error:', error)
-                  }
-                }
-              } else {
-                // 非编辑模式下，进入编辑模式
-                onToggleEdit()
-              }
-            }}
-          >
-            <EditOutlined />
-            {' '}
-            {event.id === 'new' ? t('common.create') : (isEditing ? t('common.save') : t('common.editEvent'))}
-          </button>
-        </div>
+
+        {/* 创建按钮 */}
+        <button
+          style={{
+            width: '100%',
+            padding: isMobile ? '12px 0' : '10px 0',
+            borderRadius: 10,
+            background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+            color: '#111',
+            fontWeight: 700,
+            fontSize: 15,
+            cursor: 'pointer',
+            border: 'none',
+            boxShadow: '0 4px 15px rgba(244,175,37,0.35)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+            marginTop: 4,
+          }}
+          onClick={async () => {
+            await onSaveField('__CREATE_ALL__')
+            onToggleEdit()
+          }}
+        >
+          <EditOutlined />
+          {t('common.create')}
+        </button>
       </div>
     )
   }
