@@ -775,7 +775,7 @@
     "statusUpdateFailed": "Failed to update event status",
     "participants": "Participants",
     "basicInfo": "Basic Info",
-    "timeSettings": "📅 Time Settings",
+    "timeSettings": "Time Settings",
     "participationSettings": "Participation Settings",
     "namePlaceholder": "Please enter event name",
     "descriptionPlaceholder": "Please enter event description",

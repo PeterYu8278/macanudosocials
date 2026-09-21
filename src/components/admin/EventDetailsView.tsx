@@ -51,11 +51,14 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
       boxShadow: '0 4px 20px rgba(0,0,0,0.25)',
     }
 
+    // Strip leading emoji from translation strings (e.g. "📅 Time Settings" → "Time Settings")
+    const stripEmoji = (s: string) => s.replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}]\s*/u, '')
+
     const sectionHeader = (icon: React.ReactNode, label: string) => (
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
         <span style={{ color: '#FDE08D', fontSize: 15, display: 'flex', alignItems: 'center' }}>{icon}</span>
         <span style={{ backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent', fontWeight: 700, fontSize: 14, letterSpacing: '0.3px' }}>
-          {label}
+          {stripEmoji(label)}
         </span>
       </div>
     )
