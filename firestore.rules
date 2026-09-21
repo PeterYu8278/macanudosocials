@@ -76,6 +76,12 @@ service cloud.firestore {
              && request.resource.data.diff(resource.data).affectedKeys()
                   .hasOnly(['membership', 'role', 'status', 'updatedAt']);
     }
+
+    function isActiveReferredUser(referrerId, referredUserId) {
+      return isSignedIn()
+             && get(/databases/$(database)/documents/users/$(referredUserId)).data.status == 'active'
+             && get(/databases/$(database)/documents/users/$(referredUserId)).data.referral.referredByUserId == referrerId;
+    }
     
     // ================================
     // Users Collection
@@ -109,13 +115,21 @@ service cloud.firestore {
                           && referralId == request.auth.uid
                           && request.resource.data.referredUserId == request.auth.uid
                           && getUserData().status == 'active'
-                          && getUserData().referral.referredByUserId == userId);
+                          && getUserData().referral.referredByUserId == userId)
+                      || (isOwner(userId)
+                          && request.resource.data.referredUserId == referralId
+                          && isActiveReferredUser(userId, referralId));
         allow update: if isAdmin()
                       || (isSignedIn()
                           && referralId == request.auth.uid
                           && resource.data.referredUserId == request.auth.uid
                           && getUserData().status == 'active'
                           && getUserData().referral.referredByUserId == userId
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['membershipActivatedAt', 'updatedAt']))
+                      || (isOwner(userId)
+                          && resource.data.referredUserId == referralId
+                          && isActiveReferredUser(userId, referralId)
                           && request.resource.data.diff(resource.data).affectedKeys()
                                .hasOnly(['membershipActivatedAt', 'updatedAt']));
         allow delete: if isAdmin();

@@ -774,7 +774,32 @@ export const getSuccessfulReferralCount = async (userId: string): Promise<number
     const referralsRef = collection(db, COLLECTIONS.USERS, userId, 'referrals');
     const q = query(referralsRef, where('membershipActivatedAt', '!=', null));
     const snap = await getDocs(q);
-    return snap.size;
+    const successfulUserIds = new Set(snap.docs.map(referralDoc => referralDoc.id));
+
+    // Backfill users who activated before referral activation records were introduced.
+    const activeReferredUsers = (await getReferredUsers(userId))
+      .filter(referredUser => referredUser.status === 'active');
+    const activatedAt = Timestamp.fromDate(new Date());
+
+    await Promise.all(activeReferredUsers.map(async referredUser => {
+      successfulUserIds.add(referredUser.id);
+      if (snap.docs.some(referralDoc => referralDoc.id === referredUser.id)) return;
+
+      try {
+        await setDoc(doc(referralsRef, referredUser.id), {
+          referredUserId: referredUser.id,
+          referredUserName: referredUser.displayName || '',
+          referredUserMemberId: referredUser.memberId || null,
+          membershipActivatedAt: activatedAt,
+          createdAt: referredUser.referral?.referralDate || activatedAt,
+          updatedAt: activatedAt,
+        }, { merge: true });
+      } catch (backfillError) {
+        console.warn('[Firestore Service] referral activation backfill failed:', backfillError);
+      }
+    }));
+
+    return successfulUserIds.size;
   } catch (error) {
     console.warn('[Firestore Service] getSuccessfulReferralCount 失败:', error);
     return 0;

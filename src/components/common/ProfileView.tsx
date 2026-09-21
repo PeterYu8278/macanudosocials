@@ -1094,6 +1094,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         : new Date(referred.createdAt)
 
                     const activatedAt = referralActivationMap[referred.id]
+                    const isMembershipActivated = Boolean(activatedAt || referred.status === 'active')
                     const initial = (referred.displayName?.charAt(0) || '?').toUpperCase()
 
                     return (
@@ -1177,14 +1178,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                           {/* Membership activation */}
                           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {activatedAt
+                            {isMembershipActivated
                               ? <CheckCircleOutlined style={{ fontSize: 11, color: '#52c41a', flexShrink: 0 }} />
                               : <ClockCircleOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
                             }
                             <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
                               {t('profile.membership')}
                             </span>
-                            {activatedAt ? (
+                            {isMembershipActivated ? (
                               <span style={{
                                 fontSize: 12, marginLeft: 'auto',
                                 padding: '1px 8px', borderRadius: 10,
@@ -1192,7 +1193,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                                 border: '1px solid rgba(82,196,26,0.3)',
                                 color: '#52c41a'
                               }}>
-                                {formatDate(activatedAt)}
+                                {activatedAt ? formatDate(activatedAt) : t('profile.activatedMembership')}
                               </span>
                             ) : (
                               <span style={{
