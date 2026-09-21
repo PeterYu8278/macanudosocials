@@ -15,6 +15,38 @@ import { getUserMembershipPeriod } from '../../services/firebase/membershipFee'
 import { getThumbnailUrl, getOptimizedImageUrl, extractPublicIdFromUrl } from '../../services/cloudinary/url'
 import dayjs from 'dayjs'
 
+// Truncate text showing as many leading chars as possible, then "...", then last 3 chars
+const TailTruncatedText: React.FC<{ text: string; style?: React.CSSProperties }> = ({ text, style }) => {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [display, setDisplay] = useState(text)
+
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el || !text) return
+    const canvas = document.createElement('canvas')
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+    const computed = window.getComputedStyle(el)
+    ctx.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`
+    const containerWidth = el.clientWidth - 4  // 4px safety buffer for font rendering
+    if (ctx.measureText(text).width <= containerWidth) {
+      setDisplay(text)
+      return
+    }
+    const tail = text.slice(-3)
+    const ellipsis = '...'
+    let lo = 0, hi = text.length - 3
+    while (lo < hi) {
+      const mid = Math.floor((lo + hi + 1) / 2)
+      if (ctx.measureText(text.slice(0, mid) + ellipsis + tail).width <= containerWidth) lo = mid
+      else hi = mid - 1
+    }
+    setDisplay(lo > 0 ? text.slice(0, lo) + ellipsis + tail : ellipsis + tail)
+  }, [text])
+
+  return <div ref={containerRef} style={{ ...style, overflow: 'hidden', whiteSpace: 'nowrap' }}>{display}</div>
+}
+
 interface MemberProfileCardProps {
   user: User | null
   showMemberCard: boolean
@@ -467,7 +499,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                 </div>
               </div>
               <div style={{ marginTop: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
                   <div style={{
                     width: 56,
                     height: 56,
@@ -480,15 +512,18 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                     border: '2px solid #D4AF37',
                     boxShadow: '0 6px 16px rgba(0,0,0,0.5)'
                   }} />
-                  <div>
-                    <div style={{
-                      color: '#ffffff',
-                      fontSize: 20,
-                      fontWeight: 700,
-                      textAlign: 'left',
-                      textShadow: '0 2px 4px rgba(0,0,0,0.7)',
-                      fontFamily: "'Noto Sans SC', sans-serif"
-                    }}>{user?.displayName || t('common.member')}</div>
+                  <div style={{ minWidth: 0 }}>
+                    <TailTruncatedText
+                      text={user?.displayName || t('common.member')}
+                      style={{
+                        color: '#ffffff',
+                        fontSize: 20,
+                        fontWeight: 700,
+                        textAlign: 'left',
+                        textShadow: '0 2px 4px rgba(0,0,0,0.7)',
+                        fontFamily: "'Noto Sans SC', sans-serif"
+                      }}
+                    />
                     <div style={{
                       color: '#D4AF37',
                       fontSize: 12,
@@ -528,7 +563,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                     </div>
                   </div>
                 </div>
-                <div style={{ textAlign: 'right' }}>
+                <div style={{ textAlign: 'right', flexShrink: 0, paddingLeft: 8 }}>
 
                   <div style={{
                     color: '#ffffff',
@@ -557,7 +592,8 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                       fontSize: 12,
                       fontWeight: 600,
                       fontFamily: "'Noto Sans SC', sans-serif",
-                      textShadow: '0 1px 2px rgba(0,0,0,0.5)'
+                      textShadow: '0 1px 2px rgba(0,0,0,0.5)',
+                      whiteSpace: 'nowrap'
                     }}>
                       {membershipPeriod ? dayjs(membershipPeriod.startDate).format('YYYY-MM-DD') : t('profile.notActivated')}
                     </div>

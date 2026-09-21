@@ -329,17 +329,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           }}>
             {user.displayName || t('profile.noNameSet')}
           </h2>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '16px',
-            marginBottom: '8px',
-            color: 'rgba(255, 255, 255, 0.7)'
-          }}>
-            <div style={{ width: '1px', height: '16px', background: 'rgba(255, 255, 255, 0.2)' }} />
-            <span>{t('profile.points')}: {(user.membership as any)?.points || 0}</span>
-          </div>
           <div style={{ fontSize: '14px', color: 'rgba(255, 255, 255, 0.6)' }}>
             <p style={{ margin: '4px 0' }}>{t('auth.email')}: {user.email || '-'}</p>
             <p style={{ margin: '4px 0' }}>{t('auth.phone')}: {(user as any)?.profile?.phone || '-'}</p>

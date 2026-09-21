@@ -66,7 +66,12 @@ const Profile: React.FC = () => {
       email: userData.email || '',
       phone: (userData as any)?.profile?.phone || '',
       notifications: (userData as any)?.preferences?.notifications ?? true,
-      language: (userData as any)?.preferences?.locale || i18n.language || 'zh-CN',
+      language: (() => {
+        const raw = (userData as any)?.preferences?.locale || i18n.language || 'zh-CN'
+        if (raw === 'zh' || raw.startsWith('zh')) return 'zh-CN'
+        if (raw === 'en' || raw.startsWith('en')) return 'en-US'
+        return raw
+      })(),
       pushActivity: pushPrefs.types?.activity ?? true,
       pushPoints: pushPrefs.types?.points ?? true,
       pushOrder: pushPrefs.types?.order ?? true,

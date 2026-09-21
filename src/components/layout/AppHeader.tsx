@@ -124,24 +124,28 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
         }}
       />
 
-      {/* 左侧：标题与语言 */}
+      {/* 左侧：语言切换 */}
       <Space size={12} align="center" style={{ position: 'relative' }}>
-        {appConfig?.logoUrl && (
-        <img
-            src={appConfig.logoUrl}
-            alt={appConfig.appName || 'Cigar Club'}
-          style={{
-            height: 28,
-            display: 'block'
-          }}
-        />
-        )}
         <LanguageSwitcher />
       </Space>
 
-      {/* 右侧：操作区（已移除通知中心与购物车徽标） */}
+      {/* 居中：Logo */}
+      {appConfig?.logoUrl && (
+        <img
+          src={appConfig.logoUrl}
+          alt={appConfig.appName || 'Cigar Club'}
+          style={{
+            height: 28,
+            display: 'block',
+            position: 'absolute',
+            left: '50%',
+            transform: 'translateX(-50%)'
+          }}
+        />
+      )}
+
+      {/* 右侧：操作区 */}
       <Space size="middle" align="center" style={{ position: 'relative' }}>
-        {/* Admin/Home 切换 - 仅管理员可见 */}
         {isAdmin && (
           <Tooltip title={isInAdmin ? t('navigation.home') : t('navigation.admin')} placement="bottomRight">
             <Button
@@ -159,48 +163,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
             />
           </Tooltip>
         )}
-
-        {/* 用户信息 - 下拉菜单 */}
-        <Dropdown
-          menu={{ items: userMenuItems }}
-          placement="bottomRight"
-          trigger={['click']}
-        >
-          <Space
-            size="small"
-            align="center"
-            className="header-user-space"
-            style={{ cursor: 'pointer' }}
-          >
-            <Avatar
-              size={32}
-              src={
-                (user as any)?.profile?.avatar ||
-                'https://lh3.googleusercontent.com/aida-public/AB6AXuDs5P-wl44y-z3P55qwZDWCSmApe-9yEsTNGmr02UNzEVBeCMwE7hIq_ikKnzQespBptCZg7RY1P5pvidROpLwXpyUdWETLOFTJYuGtSIN_2d53icCJctg5HZDPl5zRc3QfbeMOn0fl6RWLZplcDWF9frxhgWKf4-RKyNaQsWhBGRCkTAVvLMDnCcZUDGLg-c8YjnHcY8-gFFEmIaa-bHoz3lEcP-SgonuSLCTv4Fa7-_dYYF8uQ3H5a7nAxZocj7UyH0Jl9CAQQWET'
-              }
-              style={{
-                border: '2px solid rgb(255,215,0)',
-                background: 'linear-gradient(135deg, #2d2d2d 0%, #444 100%)'
-              }}
-            />
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-              <Text style={{ color: 'rgb(248,248,248)', fontWeight: 600, fontSize: 14 }}>
-                {user?.displayName || user?.email || 'User'}
-              </Text>
-              <Text style={{ color: 'rgb(255,215,0)', fontSize: 12, fontWeight: 500 }}>
-                {(() => {
-                  const role = user?.role as string | undefined;
-                  if (role === 'developer') return t('auth.developer', { defaultValue: 'Developer' });
-                  if (role === 'superAdmin') return t('auth.superAdmin', { defaultValue: 'Super Admin' });
-                  if (role === 'admin' || role === 'storeAdmin') return t('auth.storeAdmin', { defaultValue: 'Store Admin' });
-                  if (role === 'vip') return t('auth.vip', { defaultValue: 'VIP' });
-                  if (role === 'member') return t('auth.member', { defaultValue: 'Member' });
-                  return t('auth.guest', { defaultValue: 'Guest' });
-                })()}
-              </Text>
-            </div>
-          </Space>
-        </Dropdown>
       </Space>
     </Header>
   )
