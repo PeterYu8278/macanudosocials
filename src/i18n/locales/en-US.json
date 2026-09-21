@@ -1757,7 +1757,9 @@
     "eventFee": "Event Fee"
   },
   "eventsAdmin": {
-    "eventFee": "Event Fee"
+    "eventFee": "Event Fee",
+    "newsAndEvents": "News & Events",
+    "newEvent": "New Event"
   },
   "upload": {
     "fileTooLarge": "File size cannot exceed {{size}}MB",

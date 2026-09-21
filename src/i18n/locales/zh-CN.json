@@ -1757,7 +1757,9 @@
     "eventFee": "活动费用"
   },
   "eventsAdmin": {
-    "eventFee": "活动费用"
+    "eventFee": "活动费用",
+    "newsAndEvents": "新闻与活动",
+    "newEvent": "新活动"
   },
   "upload": {
     "fileTooLarge": "文件大小不能超过 {{size}}MB",

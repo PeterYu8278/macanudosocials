@@ -1,7 +1,7 @@
 // 活动管理页面
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import dayjs from 'dayjs'
-import { Table, Button, Tag, Space, Typography, Input, Select, DatePicker, App, Modal, Form, InputNumber, Switch, Dropdown, Checkbox, Upload, Spin, Descriptions, Progress, Tabs, Row, Col } from 'antd'
+import { Table, Button, Tag, Space, Input, Select, DatePicker, App, Modal, Form, InputNumber, Switch, Dropdown, Checkbox, Upload, Spin, Descriptions, Progress, Tabs, Row, Col } from 'antd'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, EyeOutlined, DownloadOutlined, UploadOutlined, UserOutlined, CheckCircleOutlined, NotificationOutlined, CalendarOutlined } from '@ant-design/icons'
 import type { Event, User, Cigar, Transaction } from '../../../types'
 import AnnouncementsAdmin from '../../../components/admin/AnnouncementsAdmin'
@@ -11,7 +11,6 @@ import ParticipantsSummary from '../../../components/admin/ParticipantsSummary'
 import ImageUpload from '../../../components/common/ImageUpload'
 import ActionButtons from '../../../components/common/ActionButtons'
 import BatchDeleteButton from '../../../components/common/BatchDeleteButton'
-import CreateButton from '../../../components/common/CreateButton'
 import EventSearchBar from '../../../components/admin/EventSearchBar'
 import EventCard from '../../../components/admin/EventCard'
 import EventDetailsView from '../../../components/admin/EventDetailsView'
@@ -23,8 +22,6 @@ import { useAuthStore } from '../../../store/modules/auth'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 
-const { Title } = Typography
-const { Search } = Input
 const { Option } = Select
 
 // Constants
@@ -57,7 +54,7 @@ const AdminEvents: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const lang = i18n.language?.startsWith('zh') ? 'zh' : 'en'
-  const { user: currentUser, isSuperAdmin } = useAuthStore()
+  const { user: currentUser } = useAuthStore()
 
   // Page-level tab: events | announcements
   const [pageTab, setPageTab] = useState<'events' | 'announcements'>('events')
@@ -68,7 +65,7 @@ const AdminEvents: React.FC = () => {
 
   // Data hooks
   const fetchEventsWithAutoAdjust = useCallback(async () => {
-    const list = await getEvents(isSuperAdmin ? undefined : currentUser?.id)
+    const list = await getEvents()
     const updatedList: Event[] = []
     for (const event of list) {
       const updatedStatus = await autoAdjustEventStatus(event)
@@ -76,7 +73,7 @@ const AdminEvents: React.FC = () => {
     }
     return updatedList
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isSuperAdmin, currentUser?.id])
+  }, [])
   const { data: events = [], loading: eventsLoading, refresh: refreshEvents } = useFirestoreQuery(fetchEventsWithAutoAdjust)
   const { data: participantsUsers = [] } = useFirestoreQuery(() => getUsers({ limit: 500 }))
   const { data: cigars = [] } = useFirestoreQuery(getCigars)
@@ -97,6 +94,51 @@ const AdminEvents: React.FC = () => {
   const [manualAddValue, setManualAddValue] = useState<string>('')
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
   const [orderSyncing, setOrderSyncing] = useState(false)
+
+  const openNewEvent = () => {
+    const newEvent: Event = {
+      id: 'new',
+      title: '',
+      description: '',
+      organizerId: '',
+      status: 'draft',
+      schedule: {
+        startDate: new Date(),
+        endDate: new Date(),
+        registrationDeadline: new Date()
+      },
+      location: {
+        name: '',
+        address: ''
+      },
+      participants: {
+        fee: 0,
+        maxParticipants: 50,
+        registered: []
+      },
+      cigars: {
+        featured: [],
+        tasting: []
+      },
+      image: '',
+      createdAt: new Date(),
+      updatedAt: new Date()
+    }
+
+    openViewing(newEvent)
+    setIsEditingDetails(true)
+    setEditForm({
+      title: '',
+      description: '',
+      image: '',
+      status: 'draft',
+      startDate: dayjs(),
+      endDate: dayjs(),
+      locationName: '',
+      fee: 0,
+      maxParticipants: 0
+    })
+  }
   
   // Form instance
   const [form] = Form.useForm()
@@ -834,7 +876,23 @@ const AdminEvents: React.FC = () => {
         items={[
           {
             key: 'events',
-            label: <span><CalendarOutlined /> {t('navigation.events', { defaultValue: 'Events' })}</span>,
+            label: (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <CalendarOutlined style={{ color: '#E7B54A' }} />
+                <span
+                  style={{
+                    backgroundImage: 'linear-gradient(90deg, #FDE08D 0%, #E7B54A 52%, #C48D3A 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                    fontWeight: 700
+                  }}
+                >
+                  {t('eventsAdmin.newsAndEvents', { defaultValue: 'News & Events' })}
+                </span>
+              </span>
+            ),
           },
           {
             key: 'announcements',
@@ -859,115 +917,52 @@ const AdminEvents: React.FC = () => {
           <span>{t('common.processingOrders')}</span>
         </div>
       </Modal>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1 style={{ fontSize: 22, fontWeight: 800, backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent' }}>{t('navigation.events')}</h1>
-      
-        <Space>
-          {selectedRowKeys.length > 1 && (
-            <>
-              <BatchDeleteButton
-                selectedIds={selectedRowKeys}
-                onBatchDelete={async (ids) => {
-                  await Promise.all(ids.map(id => updateDocument(COLLECTIONS.EVENTS, id, { status: 'cancelled' })))
-                  return { success: true }
-                }}
-                onSuccess={async () => {
-                  refreshEvents()
-                  setSelectedRowKeys([])
-                }}
-                buttonText={t('common.batchCancelled')}
-                itemTypeName={t('events.event')}
-                style={{ 
-                  padding: '8px 16px', 
-                  borderRadius: 8, 
-                  background: 'rgba(255, 255, 255, 0.1)', 
-                  border: '1px solid rgba(255, 255, 255, 0.2)',
-                  color: '#FFFFFF' 
-                }}
-              />
-              <BatchDeleteButton
-                selectedIds={selectedRowKeys}
-                onBatchDelete={async (ids) => {
-                  await Promise.all(ids.map(id => deleteDocument(COLLECTIONS.EVENTS, id)))
-                  return { success: true }
-                }}
-                onSuccess={async () => {
-                  refreshEvents()
-                  setSelectedRowKeys([])
-                }}
-                itemTypeName={t('events.event')}
-                style={{ 
-                  padding: '8px 16px', 
-                  borderRadius: 8, 
-                  background: 'rgba(255, 77, 79, 0.8)', 
-                  border: 'none',
-                  color: '#FFFFFF',
-                  fontWeight: 700
-                }}
-              />
-            </>
-          )}
-          
-          <CreateButton
-            onCreate={() => { 
-              const newEvent: Event = {
-                id: 'new',
-                title: '',
-                description: '',
-                organizerId: '',
-                status: 'draft',
-                schedule: {
-                  startDate: new Date(),
-                  endDate: new Date(),
-                  registrationDeadline: new Date()
-                },
-                location: {
-                  name: '',
-                  address: ''
-                },
-                participants: {
-                  fee: 0,
-                  maxParticipants: 50,
-                  registered: []
-                },
-                cigars: {
-                  featured: [],
-                  tasting: []
-                },
-                image: '',
-                createdAt: new Date(),
-                updatedAt: new Date()
-              }
-              openViewing(newEvent)
-              setIsEditingDetails(true)
-              setEditForm({
-                title: '',
-                description: '',
-                image: '',
-                status: 'draft',
-                startDate: dayjs(),
-                endDate: dayjs(),
-                locationName: '',
-                fee: 0,
-                maxParticipants: 0
-              })
-            }}
-            buttonText={t('dashboard.createEvent')}
-            style={{ 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 8, 
-              borderRadius: 8, 
-              padding: '8px 16px', 
-              background: 'linear-gradient(to right,#FDE08D,#C48D3A)', 
-              color: '#111', 
-              fontWeight: 700,
-              boxShadow: '0 4px 15px rgba(244,175,37,0.35)',
-              zIndex: 1000
-            }}
-          />
-        </Space>
-      </div>
+      {selectedRowKeys.length > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', margin: '12px 0 0' }}>
+          <Space>
+            <BatchDeleteButton
+              selectedIds={selectedRowKeys}
+              onBatchDelete={async (ids) => {
+                await Promise.all(ids.map(id => updateDocument(COLLECTIONS.EVENTS, id, { status: 'cancelled' })))
+                return { success: true }
+              }}
+              onSuccess={async () => {
+                refreshEvents()
+                setSelectedRowKeys([])
+              }}
+              buttonText={t('common.batchCancelled')}
+              itemTypeName={t('events.event')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                background: 'rgba(255, 255, 255, 0.1)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#FFFFFF'
+              }}
+            />
+            <BatchDeleteButton
+              selectedIds={selectedRowKeys}
+              onBatchDelete={async (ids) => {
+                await Promise.all(ids.map(id => deleteDocument(COLLECTIONS.EVENTS, id)))
+                return { success: true }
+              }}
+              onSuccess={async () => {
+                refreshEvents()
+                setSelectedRowKeys([])
+              }}
+              itemTypeName={t('events.event')}
+              style={{
+                padding: '8px 16px',
+                borderRadius: 8,
+                background: 'rgba(255, 77, 79, 0.8)',
+                border: 'none',
+                color: '#FFFFFF',
+                fontWeight: 700
+              }}
+            />
+          </Space>
+        </div>
+      )}
 
       {/* 搜索和筛选 */}
       <div
@@ -1004,6 +999,31 @@ const AdminEvents: React.FC = () => {
           paddingBottom: 16
         }}
       >
+        <button
+          type="button"
+          onClick={openNewEvent}
+          style={{
+            width: '100%',
+            minHeight: 56,
+            marginBottom: 12,
+            padding: '0 16px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            border: '1px solid rgba(244, 175, 37, 0.5)',
+            borderRadius: 8,
+            background: 'linear-gradient(90deg, rgba(253, 224, 141, 0.12), rgba(196, 141, 58, 0.06))',
+            color: '#FDE08D',
+            fontSize: 15,
+            fontWeight: 700,
+            cursor: 'pointer',
+            textAlign: 'left'
+          }}
+        >
+          <PlusOutlined style={{ fontSize: 18, color: '#E7B54A' }} />
+          <span>{t('eventsAdmin.newEvent', { defaultValue: 'New Event' })}</span>
+        </button>
+
         {!isMobile ? (
           <div className="points-config-form">
           <Table
