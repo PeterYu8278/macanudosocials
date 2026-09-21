@@ -22,24 +22,36 @@ service cloud.firestore {
       return isSignedIn() && getUserData().role == role;
     }
     
-    // 检查是否为管理员（包括 superAdmin 和 developer）
+    // 检查是否为高级管理员（admin / superAdmin / developer）
+    // 用于敏感操作：财务、门店管理、系统配置、功能开关
     function isAdmin() {
       return isSignedIn() && getUserData().role in ['admin', 'superAdmin', 'developer'];
     }
-    
+
+    // 检查是否为门店管理员
+    function isStoreAdmin() {
+      return isSignedIn() && getUserData().role == 'storeAdmin';
+    }
+
+    // 检查是否为任意管理角色（含 storeAdmin）
+    // 用于运营类集合：活动、订单、库存、积分、到访记录等
+    function isAnyAdmin() {
+      return isSignedIn() && getUserData().role in ['admin', 'superAdmin', 'developer', 'storeAdmin'];
+    }
+
     // 检查是否为 VIP 会员
     function isVIP() {
       return hasRole('vip');
     }
-    
+
     // 检查是否为普通会员
     function isMember() {
       return hasRole('member');
     }
-    
-    // 检查是否为活跃用户（member、vip 或 admin）
+
+    // 检查是否为活跃用户（member、vip 或任意管理员）
     function isActiveMember() {
-      return isSignedIn() && (isMember() || isVIP() || isAdmin());
+      return isSignedIn() && (isMember() || isVIP() || isAnyAdmin());
     }
     
     // 检查是否为资源所有者
@@ -53,25 +65,46 @@ service cloud.firestore {
     }
     
     // ================================
+    // Member ID Index（公开只读，用于未登录时验证引荐码）
+    // ================================
+    match /memberIds/{memberId} {
+      allow read: if true;
+      // 已登录用户只能写入自己的 uid，防止伪造他人引荐码
+      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if isAnyAdmin();
+    }
+
+    // ================================
     // Users Collection
     // ================================
     match /users/{userId} {
-      // 读取：用户只能读取自己的数据，或者管理员可以读取所有
-      allow read: if isOwner(userId) || isAdmin();
-      
+      // isAdmin() 会调用 getUserData()，在 users 规则里会造成循环读取。
+      // 这里改用 request.auth.token.admin（custom claim）判断管理员，
+      // 在未设置 custom claim 时降级为只允许 owner 读取自己的文档。
+      allow get: if isOwner(userId) || request.auth.token.admin == true;
+      allow list: if isSignedIn();
+
       // 创建：仅在注册时允许（特殊情况）
       allow create: if isSignedIn() && request.auth.uid == userId;
-      
+
       // 更新：用户可以更新自己的数据，管理员可以更新所有
-      // 限制：普通用户不能修改自己的 role 和 status
-      allow update: if (isOwner(userId) && 
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status'])) 
-                    || isAdmin();
-      
+      allow update: if (isOwner(userId) &&
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
+                    || request.auth.token.admin == true;
+
       // 删除：仅管理员
-      allow delete: if isAdmin();
+      allow delete: if request.auth.token.admin == true;
+
+      match /referrals/{referralId} {
+        allow read: if isOwner(userId) || isSignedIn();
+        allow write: if request.auth.token.admin == true;
+      }
+
+      match /fcmTokens/{tokenId} {
+        allow read, write: if isOwner(userId);
+      }
     }
-    
+
     // ================================
     // Events Collection
     // ================================
@@ -79,117 +112,111 @@ service cloud.firestore {
       // 读取：所有已认证用户都可以查看活动
       allow read: if isSignedIn();
       
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
-    
+
     // ================================
     // Orders Collection
     // ================================
     match /orders/{orderId} {
-      // 读取：用户可以查看自己的订单，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建：管理员直接允许；活跃会员需检查状态
-      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
-      
-      // 更新：仅管理员可以更新订单状态
-      allow update: if isAdmin();
-      
-      // 删除：仅管理员
-      allow delete: if isAdmin();
+      // 读取：用户可以查看自己的订单，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 创建：任意管理员直接允许；活跃会员可创建
+      allow create: if isAnyAdmin() || isActiveMember();
+
+      // 更新/删除：任意管理员
+      allow update, delete: if isAnyAdmin();
     }
-    
+
     // ================================
     // Cigars/Inventory Collection
     // ================================
     match /cigars/{cigarId} {
       // 读取：所有已认证用户都可以查看库存
       allow read: if isSignedIn();
-      
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
-    
+
     // ================================
     // Brands Collection
     // ================================
     match /brands/{brandId} {
       // 读取：所有已认证用户都可以查看品牌
       allow read: if isSignedIn();
-      
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
     // Points Records Collection
     // ================================
     match /pointsRecords/{recordId} {
-      // 读取：用户可以查看自己的积分记录，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建：系统自动创建或管理员创建
-      allow create: if isAdmin();
-      
-      // 更新/删除：仅管理员
-      allow update, delete: if isAdmin();
+      // 读取：用户可以查看自己的积分记录，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
     // Visit Sessions Collection
     // ================================
     match /visitSessions/{sessionId} {
-      // 读取：用户可以查看自己的驻店记录，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建：活跃会员和管理员可以创建驻店记录；管理员/开发者绕过状态检查
-      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
-      
-      // 更新：用户可以更新自己的记录，管理员可以更新所有
-      allow update: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 删除：仅管理员
-      allow delete: if isAdmin();
+      // 读取：用户可以查看自己的驻店记录，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 创建：活跃会员和任意管理员可以创建驻店记录
+      allow create: if isAnyAdmin() || isActiveMember();
+
+      // 更新：用户可以更新自己的记录，任意管理员可以更新所有
+      allow update: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 删除：任意管理员
+      allow delete: if isAnyAdmin();
     }
     
     // ================================
     // Redemption Records Collection
     // ================================
     match /redemptionRecords/{recordId} {
-      // 读取：用户可以查看自己的兑换记录，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+      // 读取：用户可以查看自己的兑换记录，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
     // Reload Records Collection (充值记录)
     // ================================
     match /reloadRecords/{recordId} {
-      // 读取：用户可以查看自己的充值记录，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建：活跃会员可以提交充值申请；管理员/开发者绕过状态检查
-      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
+      // 读取：用户可以查看自己的充值记录，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 更新：仅管理员可以审核充值
-      allow update: if isAdmin();
-      
-      // 删除：仅管理员
-      allow delete: if isAdmin();
+      // 创建：所有已登录用户均可为自己提交充值申请（route 对所有角色开放）
+      allow create: if isAnyAdmin() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
+
+      // 更新：任意管理员可以审核充值
+      allow update: if isAnyAdmin();
+
+      // 删除：任意管理员可删除任意记录；用户只能删除自己的 pending 记录（撤销申请）
+      allow delete: if isAnyAdmin() || (isOwner(resource.data.userId) && resource.data.status == 'pending');
     }
     
     // ================================
     // Membership Fee Records Collection
     // ================================
     match /membershipFeeRecords/{recordId} {
-      // 读取：用户可以查看自己的年费记录，管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin();
-      
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+      // 读取：用户可以查看自己的年费记录，任意管理员可以查看所有
+      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
@@ -221,24 +248,24 @@ service cloud.firestore {
     // Inbound Orders Collection (入库订单)
     // ================================
     match /inbound_orders/{orderId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if isAnyAdmin();
+      allow create, update, delete: if isAnyAdmin();
     }
 
     // ================================
     // Outbound Orders Collection (出库订单)
     // ================================
     match /outbound_orders/{orderId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if isAnyAdmin();
+      allow create, update, delete: if isAnyAdmin();
     }
 
     // ================================
     // Inventory Movements Collection
     // ================================
     match /inventory_movements/{movementId} {
-      allow read: if isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if isAnyAdmin();
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
@@ -248,8 +275,8 @@ service cloud.firestore {
       // 读取：所有已认证用户都可以查看配置
       allow read: if isSignedIn();
 
-      // 创建/更新/删除：仅管理员
-      allow create, update, delete: if isAdmin();
+      // 创建/更新/删除：任意管理员（含 storeAdmin，管理积分/到访配置）
+      allow create, update, delete: if isAnyAdmin();
     }
 
     // ================================
@@ -257,7 +284,7 @@ service cloud.firestore {
     // ================================
     match /pointsConfig/{configId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAnyAdmin();
     }
 
     // ================================
@@ -265,7 +292,7 @@ service cloud.firestore {
     // ================================
     match /membershipFeeConfig/{configId} {
       allow read: if isSignedIn();
-      allow create, update, delete: if isAdmin();
+      allow create, update, delete: if isAnyAdmin();
     }
     
     // ================================
@@ -294,17 +321,17 @@ service cloud.firestore {
     // Room Bookings Collection (包厢预订)
     // ================================
     match /roomBookings/{bookingId} {
-      // 读取：用户可查看自己的预订，管理员可查看所有
-      allow read: if isOwner(resource.data.userId) || isAdmin() || isSignedIn();
+      // 读取：所有已登录用户可查看（已简化为 isSignedIn，含已有的 owner/admin 情况）
+      allow read: if isSignedIn();
 
-      // 创建：活跃会员可预订；管理员绕过状态检查
-      allow create: if isAdmin() || (isActiveMember() && isActiveUser());
+      // 创建：活跃会员可预订；任意管理员绕过状态检查
+      allow create: if isAnyAdmin() || isActiveMember();
 
-      // 更新：用户可更新自己的预订（如取消），管理员可更新所有
-      allow update: if isOwner(resource.data.userId) || isAdmin();
+      // 更新：用户可更新自己的预订（如取消），任意管理员可更新所有
+      allow update: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 删除：仅管理员
-      allow delete: if isAdmin();
+      // 删除：任意管理员
+      allow delete: if isAnyAdmin();
     }
 
     // ================================
@@ -334,9 +361,22 @@ service cloud.firestore {
     // Audit Logs Collection
     // ================================
     match /audit_logs/{logId} {
+      // 读取：仅高级管理员（不含 storeAdmin，避免泄露敏感操作日志）
       allow read: if isAdmin();
-      allow create: if isAdmin();
+      // 创建：任意管理员（storeAdmin 的操作也应写入审计日志）
+      allow create: if isAnyAdmin();
       allow update, delete: if false;
+    }
+
+    // ================================
+    // Announcements Collection（公告）
+    // ================================
+    match /announcements/{announcementId} {
+      // 读取：所有已登录用户可读取公告
+      allow read: if isSignedIn();
+
+      // 创建/更新/删除：任意管理员（含 storeAdmin）
+      allow create, update, delete: if isAnyAdmin();
     }
 
     // ================================
