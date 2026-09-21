@@ -124,10 +124,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
         }}
       />
 
-      {/* 左侧：语言切换 */}
-      <Space size={12} align="center" style={{ position: 'relative' }}>
-        <LanguageSwitcher />
-      </Space>
+      {/* 左侧占位 */}
+      <Space size={12} align="center" style={{ position: 'relative' }} />
 
       {/* 居中：Logo */}
       {appConfig?.logoUrl && (

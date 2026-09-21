@@ -7,9 +7,7 @@ import { useTranslation } from 'react-i18next'
 export type SupportedLanguage = 'zh-CN' | 'en-US'
 
 /**
- * 语言切换器组件
- * 使用i18next直接管理语言状态
- * 只有2个选项，点击直接切换
+ * 语言切换器组件（header 按钮，点击直接切换）
  */
 const LanguageSwitcher: React.FC = () => {
   const { language, changeLanguage } = useLanguage()

@@ -22,6 +22,7 @@ import type { User } from '../../../types'
 import { auth } from '../../../config/firebase'
 import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { getResponsiveModalConfig, getModalTheme } from '../../../config/modalTheme'
+import LanguageSelect from '../../../components/common/LanguageSelect'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -363,13 +364,7 @@ const Profile: React.FC = () => {
           label={<span style={{ color: '#fff' }}>{t('profile.language')}</span>}
           style={{ marginBottom: 0 }}
         >
-          <Select
-            placeholder={t('profile.language')}
-            options={[
-              { label: t('language.zhCN'), value: 'zh-CN' },
-              { label: t('language.enUS'), value: 'en-US' }
-            ]}
-          />
+          <LanguageSelect />
         </Form.Item>
       </Form>
 
