@@ -571,6 +571,16 @@ const AdminEvents: React.FC = () => {
   const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
   const theme = getModalTheme()
 
+  // Offset modals to account for sidebar width so they center in the content area
+  const [siderOffset, setSiderOffset] = useState(0)
+  useEffect(() => {
+    const anyOpen = viewingOpen || creating || editingOpen
+    if (anyOpen && !isMobile) {
+      const sider = document.querySelector('.ant-layout-sider') as HTMLElement | null
+      setSiderOffset(sider ? sider.offsetWidth / 2 : 120)
+    }
+  }, [viewingOpen, creating, editingOpen, isMobile])
+
   // 自动调整活动状态根据日期
   const autoAdjustEventStatus = async (event: Event) => {
     const now = new Date()
@@ -1016,6 +1026,7 @@ const AdminEvents: React.FC = () => {
         open={viewingOpen}
         onCancel={() => { closeViewing(); setIsEditingDetails(false) }}
         {...getResponsiveModalConfig(isMobile, true, 1000)}
+        style={!isMobile ? { marginLeft: siderOffset } : undefined}
         footer={null}
       >
         {viewing && (
@@ -1360,6 +1371,7 @@ const AdminEvents: React.FC = () => {
           form.resetFields()
         }}
         {...getResponsiveModalConfig(isMobile, true, 720)}
+        style={!isMobile ? { marginLeft: siderOffset } : undefined}
         footer={[
           <button 
             key="cancel" 
