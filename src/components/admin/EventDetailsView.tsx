@@ -4,6 +4,7 @@ import { EditOutlined, DeleteOutlined, FileTextOutlined, CalendarOutlined, TeamO
 import dayjs from 'dayjs'
 import type { Event } from '../../types'
 import ImageUpload from '../common/ImageUpload'
+import { UploadOutlined } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import { getModalTheme } from '../../config/modalTheme'
 
@@ -188,6 +189,20 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
               </Select>
             </Col>
           </Row>
+        </div>
+
+        {/* 图片上传卡片 */}
+        <div style={cardStyle}>
+          {sectionHeader(<UploadOutlined />, t('events.eventImages'))}
+          <div style={{ display: 'flex', justifyContent: isMobile ? 'center' : 'flex-start' }}>
+            <ImageUpload
+              value={editForm.image}
+              onChange={(url) => onEditFormChange({...editForm, image: url || null})}
+              folder="events"
+              maxSize={2 * 1024 * 1024}
+              showPreview={true}
+            />
+          </div>
         </div>
 
         {/* 创建按钮 */}
