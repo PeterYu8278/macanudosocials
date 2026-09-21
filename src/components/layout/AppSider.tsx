@@ -43,7 +43,8 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin, isSuperAdmin, isDeveloper } = useAuthStore()
+  const { isAdmin, isSuperAdmin, isDeveloper, user } = useAuthStore()
+  const isStoreAdmin = user?.role === 'storeAdmin'
   const { t, i18n } = useTranslation()
 
   // 加载应用配置
@@ -163,11 +164,12 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
     const items: any[] = [...frontendMenuItems]
 
     // 管理后台分组
-    if (isAdmin) {
+    if (isAdmin || isStoreAdmin) {
       const filteredAdminBase = adminMenuItemsBase.filter(item => {
         // 角色权限检查
+        if (isStoreAdmin && !['admin/points-config'].some(k => item.key.includes(k))) return false;
         if (item.key === '/admin/finance' && !isSuperAdmin) return false;
-        if (item.key === '/admin/points-config' && !isSuperAdmin) return false;
+        if (item.key === '/admin/points-config' && !isSuperAdmin && !isStoreAdmin) return false;
 
         if (isDeveloper) return true;
         const featureKey = getFeatureKeyByRoute(item.key);
@@ -225,7 +227,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
     }
 
     return items
-  }, [frontendMenuItems, adminMenuItemsBase, featuresVisibility, isAdmin, isDeveloper, collapsed, t])
+  }, [frontendMenuItems, adminMenuItemsBase, featuresVisibility, isAdmin, isStoreAdmin, isSuperAdmin, isDeveloper, collapsed, t])
 
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key)
