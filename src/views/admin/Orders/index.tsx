@@ -427,7 +427,8 @@ const AdminOrders: React.FC = () => {
                             allowClear
                             value={statusFilter}
                             onChange={setStatusFilter}
-                            className="points-config-form"
+                            className="gold-select"
+                            popupClassName="gold-select-dropdown"
                           >
                             <Option value="pending">{t('ordersAdmin.status.pending')}</Option>
                             <Option value="confirmed">{t('ordersAdmin.status.confirmed')}</Option>
@@ -441,7 +442,8 @@ const AdminOrders: React.FC = () => {
                             allowClear
                             value={paymentFilter}
                             onChange={setPaymentFilter}
-                            className="points-config-form"
+                            className="gold-select"
+                            popupClassName="gold-select-dropdown"
                           >
                             <Option value="credit">{t('ordersAdmin.payment.credit')}</Option>
                             <Option value="paypal">PayPal</Option>
@@ -452,7 +454,8 @@ const AdminOrders: React.FC = () => {
                             style={{ width: 140 }}
                             value={matchStatusTab}
                             onChange={setMatchStatusTab}
-                            className="points-config-form"
+                            className="gold-select"
+                            popupClassName="gold-select-dropdown"
                           >
                             <Option value="all">{t('common.all')} ({orders.length})</Option>
                             <Option value="matched">{t('financeAdmin.fullyMatched')} ({matchedCount})</Option>
@@ -536,7 +539,8 @@ const AdminOrders: React.FC = () => {
                               value={statusFilter}
                               onChange={setStatusFilter}
                               style={{ width: '100%' }}
-                              className="points-config-form"
+                              className="gold-select"
+                              popupClassName="gold-select-dropdown"
                             >
                               <Option value="pending">{t('ordersAdmin.status.pending')}</Option>
                               <Option value="confirmed">{t('ordersAdmin.status.confirmed')}</Option>
@@ -552,7 +556,8 @@ const AdminOrders: React.FC = () => {
                               value={paymentFilter}
                               onChange={setPaymentFilter}
                               style={{ width: '100%' }}
-                              className="points-config-form"
+                              className="gold-select"
+                              popupClassName="gold-select-dropdown"
                             >
                               <Option value="bank_transfer">{t('ordersAdmin.payment.bankTransfer')}</Option>
                               <Option value="credit">{t('ordersAdmin.payment.credit')}</Option>
@@ -565,7 +570,8 @@ const AdminOrders: React.FC = () => {
                               value={matchStatusTab}
                               onChange={setMatchStatusTab}
                               style={{ width: '100%' }}
-                              className="points-config-form"
+                              className="gold-select"
+                              popupClassName="gold-select-dropdown"
                             >
                               <Option value="all">{t('common.all')} ({orders.length})</Option>
                               <Option value="matched">{t('financeAdmin.fullyMatched')} ({matchedCount})</Option>

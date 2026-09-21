@@ -205,8 +205,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         label: t('navigation.subscription'),
       })
     }
-    // 发票模板：管理员和开发者均可见
-    if (isAdmin || isDeveloper) {
+    if (isDeveloper) {
       developerItems.push({
         key: '/developer/invoice-template',
         icon: <FileTextOutlined />,

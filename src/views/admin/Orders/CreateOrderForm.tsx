@@ -229,32 +229,24 @@ const CreateOrderForm: React.FC<CreateOrderFormProps> = ({
                             rules={[{ required: false }]}
                             style={{ width: isMobile ? '100%' : 300, marginBottom: 0 }}
                           >
-                            <Select 
+                            <Select
                               placeholder={t('ordersAdmin.selectItem') + ' / ' + t('ordersAdmin.customFee')}
                               showSearch
-                              optionFilterProp="children"
+                              optionFilterProp="label"
                               onChange={(cigarId) => {
                                 const cigar = cigars.find(c => c.id === cigarId)
                                 if (cigar) {
                                   form.setFieldValue(['items', field.name, 'price'], applyDiscount(cigar.price))
                                 }
                               }}
-                              filterOption={(input, option) => {
-                                const kw = (input || '').toLowerCase()
-                                const text = String((option?.children as any) || '').toLowerCase()
-                                return text.includes(kw)
-                              }}
-                            >
-                              {groupedCigars.map(group => (
-                                <Select.OptGroup key={group.brand} label={group.brand}>
-                                  {group.list.map(c => (
-                                    <Select.Option key={c.id} value={c.id}>
-                                      {c.name} - RM{c.price}
-                                    </Select.Option>
-                                  ))}
-                                </Select.OptGroup>
-                              ))}
-                            </Select>
+                              options={groupedCigars.map(group => ({
+                                label: group.brand,
+                                options: group.list.map(c => ({
+                                  value: c.id,
+                                  label: `${c.name} - RM${c.price}`,
+                                })),
+                              }))}
+                            />
                           </Form.Item>
                           
                           <div style={{ 

@@ -6,6 +6,7 @@ import { getModalThemeStyles, getModalWidth } from '../../config/modalTheme'
 import type { Cigar, Event } from '../../types'
 import { CigarRatingBadge } from './CigarRatingBadge'
 import { AddressSelector } from './AddressSelector'
+import EventSelect from './EventSelect'
 import { getEvents } from '../../services/firebase/firestore'
 import { useAuthStore } from '../../store/modules/auth'
 import { createOrder } from '../../services/firebase/orders'
@@ -695,21 +696,10 @@ export const CartModal: React.FC<CartModalProps> = ({
                   {/* Event Selection */}
                   {deliveryMethod === 'event' && (
                     <div style={{ marginBottom: '12px' }}>
-                      <Select
+                      <EventSelect
                         value={selectedEventId || undefined}
                         onChange={(eventId) => setSelectedEventId(eventId)}
-                        placeholder={t('shop.selectEvent')}
-                        style={{ width: '100%' }}
-                        loading={availableEvents.length === 0}
-                        className="dark-theme-form"
-                        dropdownClassName="dark-theme-form"
-                      >
-                        {availableEvents.map(event => (
-                          <Select.Option key={event.id} value={event.id}>
-                            {event.title} - {event.location.name}
-                          </Select.Option>
-                        ))}
-                      </Select>
+                      />
                     </div>
                   )}
                 </div>

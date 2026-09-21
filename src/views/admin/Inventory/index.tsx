@@ -1460,7 +1460,8 @@ const AdminInventory: React.FC = () => {
                       allowClear
                       value={brandFilter}
                       onChange={setBrandFilter}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       {Array.from(new Set(items.map(i => i.brand))).sort().map(brand => (
                         <Option key={brand} value={brand}>{brand}</Option>
@@ -1472,7 +1473,8 @@ const AdminInventory: React.FC = () => {
                       allowClear
                       value={originFilter}
                       onChange={setOriginFilter}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       {[...new Set(items.map(i => i.origin).filter(Boolean))].map(org => (
                         <Option key={org} value={org}>{org}</Option>
@@ -1484,7 +1486,8 @@ const AdminInventory: React.FC = () => {
                       allowClear
                       value={strengthFilter}
                       onChange={setStrengthFilter}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       <Option value="mild">{t('inventory.mild')} </Option>
                       <Option value="mild-medium">{t('inventory.mildMedium')}</Option>
@@ -1498,7 +1501,8 @@ const AdminInventory: React.FC = () => {
                       allowClear
                       value={statusFilter}
                       onChange={setStatusFilter}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       <Option value="normal">{t('inventory.stockNormal')}</Option>
                       <Option value="low">{t('inventory.stockLow')}</Option>
@@ -1578,7 +1582,8 @@ const AdminInventory: React.FC = () => {
                       value={brandFilter as any}
                       onChange={setBrandFilter}
                       style={{ flex: 1, minWidth: 0 }}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       {Array.from(new Set(items.map(i => i.brand))).sort().map(brand => (
                         <Option key={brand} value={brand}>{brand}</Option>
@@ -1590,7 +1595,8 @@ const AdminInventory: React.FC = () => {
                       value={statusFilter as any}
                       onChange={setStatusFilter}
                       style={{ flex: 1, minWidth: 0 }}
-                      className="points-config-form"
+                      className="gold-select"
+                      popupClassName="gold-select-dropdown"
                     >
                       <Option value="normal">{t('inventory.stockNormal')}</Option>
                       <Option value="low">{t('inventory.stockLow')}</Option>
@@ -2391,7 +2397,8 @@ const AdminInventory: React.FC = () => {
                     onChange={setInBrandFilter}
                     style={{ flex: 1 }}
                     allowClear
-                    className="points-config-form"
+                    className="gold-select"
+                    popupClassName="gold-select-dropdown"
                   >
                     {Array.from(new Set(items.map(i => i.brand))).sort().map(brand => (
                       <Option key={brand} value={brand}>{brand}</Option>
@@ -4058,7 +4065,8 @@ const AdminInventory: React.FC = () => {
                     onChange={setOutBrandFilter}
                     style={{ flex: 1 }}
                     allowClear
-                    className="points-config-form"
+                    className="gold-select"
+                    popupClassName="gold-select-dropdown"
                   >
                     {Array.from(new Set(items.map(i => i.brand))).sort().map(brand => (
                       <Option key={brand} value={brand}>{brand}</Option>

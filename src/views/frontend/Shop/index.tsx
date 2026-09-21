@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { CartModal } from '../../../components/common/CartModal'
 import { AddressSelector } from '../../../components/common/AddressSelector'
+import EventSelect from '../../../components/common/EventSelect'
 import { getModalThemeStyles } from '../../../config/modalTheme'
 import { CigarRatingBadge } from '../../../components/common/CigarRatingBadge'
 import { useAuthStore } from '../../../store/modules/auth'
@@ -1638,21 +1639,10 @@ const Shop: React.FC = () => {
                     {/* 活动选择 */}
                     {deliveryMethod === 'event' && (
                       <div style={{ marginBottom: '12px' }}>
-                        <Select
+                        <EventSelect
                           value={selectedEventId || undefined}
                           onChange={(eventId) => setSelectedEventId(eventId)}
-                          placeholder={t('shop.selectEvent')}
-                          style={{ width: '100%' }}
-                          loading={availableEvents.length === 0}
-                          className="dark-theme-form"
-                          dropdownClassName="dark-theme-form"
-                        >
-                          {availableEvents.map(event => (
-                            <Select.Option key={event.id} value={event.id}>
-                              {event.title} - {event.location.name}
-                            </Select.Option>
-                          ))}
-                        </Select>
+                        />
                       </div>
                     )}
                   </div>

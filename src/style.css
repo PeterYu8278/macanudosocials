@@ -1059,19 +1059,3 @@ a:hover {
   background: linear-gradient(to right, #FFE9A0, #D4A050) !important;
 }
 
-/* Language Select dropdown options */
-.language-select-dropdown .ant-select-item {
-  color: rgba(255, 255, 255, 0.85) !important;
-  background: transparent !important;
-  border-radius: 6px;
-}
-.language-select-dropdown .ant-select-item:hover,
-.language-select-dropdown .ant-select-item-option-active {
-  background: rgba(244, 175, 37, 0.15) !important;
-  color: #FDE08D !important;
-}
-.language-select-dropdown .ant-select-item-option-selected {
-  background: rgba(244, 175, 37, 0.25) !important;
-  color: #FDE08D !important;
-  font-weight: 600;
-}

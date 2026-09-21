@@ -28,6 +28,7 @@ import {
 import { useAuthStore } from '../../../store/modules/auth'
 import { getModalThemeStyles } from '../../../config/modalTheme'
 import { useTranslation } from 'react-i18next'
+import MalaysiaStateSelect from '../MalaysiaStateSelect'
 
 interface AddressSelectorProps {
   value?: string // 选中的地址ID
@@ -474,26 +475,7 @@ export const AddressSelector: React.FC<AddressSelectorProps> = ({
             label={<span style={{ color: '#fff' }}>{t('address.province')}</span>}
             rules={[{ required: true, message: t('address.pleaseSelectProvince') }]}
           >
-            <Select 
-              placeholder={t('address.pleaseSelectProvince')}
-              className="dark-theme-form"
-              dropdownClassName="dark-theme-form"
-            >
-              <Select.Option value="Johor">{t('address.states.johor')}</Select.Option>
-              <Select.Option value="Kedah">{t('address.states.kedah')}</Select.Option>
-              <Select.Option value="Kelantan">{t('address.states.kelantan')}</Select.Option>
-              <Select.Option value="Melaka">{t('address.states.melaka')}</Select.Option>
-              <Select.Option value="Negeri Sembilan">{t('address.states.negerisembilan')}</Select.Option>
-              <Select.Option value="Pahang">{t('address.states.pahang')}</Select.Option>
-              <Select.Option value="Perak">{t('address.states.perak')}</Select.Option>
-              <Select.Option value="Perlis">{t('address.states.perlis')}</Select.Option>
-              <Select.Option value="Pulau Pinang">{t('address.states.pulaupinang')}</Select.Option>
-              <Select.Option value="Sabah">{t('address.states.sabah')}</Select.Option>
-              <Select.Option value="Sarawak">{t('address.states.sarawak')}</Select.Option>
-              <Select.Option value="Selangor">{t('address.states.selangor')}</Select.Option>
-              <Select.Option value="Terengganu">{t('address.states.terengganu')}</Select.Option>
-              <Select.Option value="Wilayah Persekutuan">{t('address.states.wilayahpersekutuan')}</Select.Option>
-            </Select>
+            <MalaysiaStateSelect />
           </Form.Item>
           
           <Form.Item

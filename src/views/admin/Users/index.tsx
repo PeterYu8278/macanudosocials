@@ -50,6 +50,20 @@ const AdminUsers: React.FC = () => {
   const { user: currentUser } = useAuthStore()
   const canManageDiscount = currentUser?.role === 'developer' || currentUser?.role === 'superAdmin'
 
+  const assignableRoles = (() => {
+    const all = [
+      { value: 'developer', label: t('auth.developer') },
+      { value: 'superAdmin', label: t('auth.superAdmin') },
+      { value: 'admin', label: t('auth.admin') },
+      { value: 'vip', label: t('auth.vip') },
+      { value: 'member', label: t('auth.member') },
+      { value: 'guest', label: t('auth.guest') },
+    ]
+    const ROLE_RANK: Record<string, number> = { developer: 4, superAdmin: 3, admin: 2, vip: 1, member: 1, guest: 0 }
+    const myRank = ROLE_RANK[currentUser?.role ?? ''] ?? 0
+    return all.filter(r => ROLE_RANK[r.value] < myRank)
+  })()
+
   const { data: users = [], loading: usersLoading, refresh: refreshUsers } = useFirestoreQuery(getUsers)
   const { item: editing, open: editingOpen, openDrawer: openEditing, closeDrawer: closeEditing } = useDetailDrawer<User>()
   const { item: resettingPassword, open: resettingPasswordOpen, openDrawer: openResettingPassword, closeDrawer: closeResettingPassword } = useDetailDrawer<User>()
@@ -1462,15 +1476,15 @@ const AdminUsers: React.FC = () => {
             rules={[{ required: true }]}
             initialValue="member"
           >
-            <Select>
-              <Option value="superAdmin">{t('auth.superAdmin')}</Option>
-              <Option value="admin">{t('auth.admin')}</Option>
-              <Option value="vip">{t('auth.vip')}</Option>
-              <Option value="member">{t('auth.member')}</Option>
-              <Option value="guest">{t('auth.guest')}</Option>
-              {currentUser?.role === 'developer' && (
-                <Option value="developer">{t('auth.developer')}</Option>
-              )}
+            <Select disabled={(() => {
+              const ROLE_RANK: Record<string, number> = { developer: 4, superAdmin: 3, admin: 2, vip: 1, member: 1, guest: 0 }
+              const myRank = ROLE_RANK[currentUser?.role ?? ''] ?? 0
+              const targetRank = ROLE_RANK[(editing as any)?.role ?? ''] ?? 0
+              return editing?.id === currentUser?.id || targetRank >= myRank
+            })()}>
+              {assignableRoles.map(r => (
+                <Option key={r.value} value={r.value}>{r.label}</Option>
+              ))}
             </Select>
           </Form.Item>
 
