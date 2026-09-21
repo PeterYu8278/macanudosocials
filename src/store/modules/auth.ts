@@ -230,11 +230,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             setUser(userData)
             setFirebaseUser(firebaseUser)
             set({ 
-              isAdmin: ['superAdmin', 'admin', 'developer'].includes(userData.role),
+              isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(userData.role),
               isSuperAdmin: ['superAdmin', 'developer'].includes(userData.role),
               isDeveloper: userData.role === 'developer'
             })
-            
+
             // 自动初始化推送通知（静默执行，不阻塞登录流程）
             initializePushNotifications(userData).catch((error) => {
               // 静默处理错误，不影响登录流程
@@ -254,8 +254,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     const data = convertFirestoreTimestamps(rawData);
                     const updatedUser = { id: firestoreUserId, ...data } as User;
                     setUser(updatedUser);
-                    set({ 
-                      isAdmin: ['superAdmin', 'admin', 'developer'].includes(updatedUser.role),
+                    set({
+                      isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(updatedUser.role),
                       isSuperAdmin: ['superAdmin', 'developer'].includes(updatedUser.role),
                       isDeveloper: updatedUser.role === 'developer'
                     });
@@ -293,7 +293,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               setUser(cachedUserData);
               setFirebaseUser(firebaseUser);
               set({ 
-                isAdmin: ['superAdmin', 'admin', 'developer'].includes(cachedUserData.role),
+                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(cachedUserData.role),
                 isSuperAdmin: ['superAdmin', 'developer'].includes(cachedUserData.role),
                 isDeveloper: cachedUserData.role === 'developer',
                 error: '网络繁忙，使用缓存数据'
@@ -302,8 +302,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               console.info('[Auth Store] ✅ 使用 sessionStorage 缓存作为降级方案');
               setUser(storageCache.userData);
               setFirebaseUser(firebaseUser);
-              set({ 
-                isAdmin: ['superAdmin', 'admin', 'developer'].includes(storageCache.userData.role),
+              set({
+                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(storageCache.userData.role),
                 isSuperAdmin: ['superAdmin', 'developer'].includes(storageCache.userData.role),
                 isDeveloper: storageCache.userData.role === 'developer',
                 error: '网络繁忙，使用缓存数据'

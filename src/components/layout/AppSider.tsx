@@ -169,7 +169,6 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         // 角色权限检查
         if (isStoreAdmin && !['admin/points-config'].some(k => item.key.includes(k))) return false;
         if (item.key === '/admin/finance' && !isSuperAdmin) return false;
-        if (item.key === '/admin/points-config' && !isSuperAdmin && !isStoreAdmin) return false;
 
         if (isDeveloper) return true;
         const featureKey = getFeatureKeyByRoute(item.key);
