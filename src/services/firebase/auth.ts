@@ -35,7 +35,7 @@ const createGoogleTempUserData = (
     email,
     displayName: displayName || '未命名用户',
     role: 'guest',
-    status: 'inactive',
+    status: 'active',
     memberId,
     profile: {
       // phone 字段省略，待用户完善信息后添加
@@ -100,9 +100,6 @@ export const registerUser = async (
     const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
     const user = userCredential.user;
 
-    // 强制刷新 token，确保 Firestore 写入时 auth token 已就绪
-    await user.getIdToken(true);
-
     // 更新用户显示名称
     await updateProfile(user, { displayName });
 
@@ -114,7 +111,7 @@ export const registerUser = async (
       email: normalizedEmail,  // ✅ 邮箱必填（使用标准化格式）
       displayName,
       role: 'guest',
-      status: 'inactive',  // ✅ 默认状态为非活跃
+      status: 'active',
       memberId,  // ✅ 会员编号（用作引荐码）
       profile: {
         phone: normalizedPhone,  // ✅ 使用标准化格式
@@ -410,16 +407,15 @@ export const loginWithGoogle = async () => {
       );
       
       await setDoc(newUserDoc, tempUserData);
-      
       // 保存新用户的 document ID
       sessionStorage.setItem('firestoreUserId', newUserId);
-      
+
       // ✅ 场景 1.b.1：跳转到完善资料页面
-      return { 
-        success: true, 
+      return {
+        success: true,
         user: googleUser,
         firestoreUserId: newUserId,
-        needsProfile: true 
+        needsProfile: true
       };
     }
   } catch (error) {
@@ -540,12 +536,12 @@ export const handleGoogleRedirectResult = async () => {
       
       await setDoc(newUserDoc, tempUserData);
       sessionStorage.setItem('firestoreUserId', newUserId);
-      
-      return { 
-        success: true, 
+
+      return {
+        success: true,
         user: googleUser,
         firestoreUserId: newUserId,
-        needsProfile: true 
+        needsProfile: true
       };
     }
   } catch (error) {
@@ -871,31 +867,41 @@ export const convertFirestoreTimestamps = (value: any): any => {
 
 export const getUserData = async (uid: string, useCache: boolean = true): Promise<User | null> => {
   const userDocRef = doc(db, 'users', uid);
-  
-  try {
+
+  const fetchFromFirestore = async (): Promise<User | null> => {
     let userDoc;
-    
-    // 策略5: 优先使用 Firestore 离线缓存
     if (useCache) {
       try {
-        // 尝试从缓存读取（不消耗配额）
         userDoc = await getDocFromCache(userDocRef);
-      } catch (cacheError) {
-        // 缓存不存在，从服务器读取
-        userDoc = await getDoc(userDocRef);
+        // A cached "missing" result can be stale while registration is writing
+        // the new user document. Confirm it with the server before returning null.
+        if (!userDoc.exists()) {
+          userDoc = await getDocFromServer(userDocRef);
+        }
+      } catch {
+        userDoc = await getDocFromServer(userDocRef);
       }
     } else {
-      // 强制从服务器读取
-      userDoc = await getDoc(userDocRef);
+      userDoc = await getDocFromServer(userDocRef);
     }
-    
-    if (userDoc.exists()) {
-      const rawData = userDoc.data();
-      const data = convertFirestoreTimestamps(rawData);
-      return { id: uid, ...data } as User;
-    }
-    return null;
+    if (!userDoc.exists()) return null;
+    const data = convertFirestoreTimestamps(userDoc.data());
+    return { id: uid, ...data } as User;
+  };
+
+  try {
+    return await fetchFromFirestore();
   } catch (error: any) {
+    // 注册时存在竞态：onAuthStateChanged 比 setDoc 先触发，此时文档尚未写入。
+    // 静默等待后重试一次，给 registerUser 的 setDoc 时间完成。
+    if (error?.code === 'permission-denied' || error?.code === 'PERMISSION_DENIED') {
+      await new Promise(r => setTimeout(r, 1500));
+      try {
+        return await fetchFromFirestore();
+      } catch {
+        return null;
+      }
+    }
     // 策略2: 错误处理与降级
     if (error?.code === 'resource-exhausted') {
       console.warn('[Auth Service] ⚠️ Firestore 配额超限，尝试使用缓存数据');
@@ -942,7 +948,7 @@ export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Pro
       email,
       displayName,
       role: 'guest',
-      status: 'inactive',
+      status: 'active',
       memberId,
       profile: { phone: '' },
       preferences: { locale: 'zh', notifications: true },
@@ -967,7 +973,6 @@ export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Pro
 
     await setDoc(userDocRef, userData);
     await waitForPendingWrites(db);
-
     console.info('[Auth Service] ✅ 补救创建 Firestore 用户文档:', firebaseUser.uid);
     return { id: firebaseUser.uid, ...userData } as User;
   } catch (error) {

@@ -46,6 +46,21 @@ const SESSION_STORAGE_KEYS = {
 // 缓存有效期：5分钟
 const CACHE_VALID_DURATION = 5 * 60 * 1000;
 
+const waitForNewUserDocument = async (firebaseUser: any): Promise<User | null> => {
+  const creationTime = Date.parse(firebaseUser.metadata?.creationTime || '');
+  const isRecentlyCreated = Number.isFinite(creationTime) && Date.now() - creationTime < 30_000;
+  if (!isRecentlyCreated) return null;
+
+  // Firebase Auth notifies listeners before registerUser finishes its Firestore write.
+  for (let attempt = 1; attempt <= 5; attempt += 1) {
+    await new Promise(resolve => setTimeout(resolve, attempt * 200));
+    const userData = await getUserData(firebaseUser.uid, false);
+    if (userData) return userData;
+  }
+
+  return null;
+};
+
 // 策略1: 从 sessionStorage 读取缓存的用户数据
 const getCachedUserDataFromStorage = (): { userData: User; timestamp: number } | null => {
   try {
@@ -165,7 +180,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const { cachedUserData, cacheTimestamp } = get();
           let firestoreUserId: string | null = null;
           let userData: User | null = null;
-          
+
           // 策略1: 检查内存缓存
           if (cachedUserData && isMemoryCacheValid(cachedUserData, cacheTimestamp, firebaseUser.uid)) {
             console.info('[Auth Store] ✅ 使用内存缓存数据');
@@ -196,7 +211,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 // 大多数情况下，Firestore 文档 ID 就是 Firebase UID
                 firestoreUserId = firebaseUser.uid;
                 userData = await getUserData(firestoreUserId, true); // 使用缓存
-                
+
+                if (!userData) {
+                  // 新注册时 Auth 回调可能先于 users/{uid} 写入完成。
+                  userData = await waitForNewUserDocument(firebaseUser);
+                }
+
                 if (!userData) {
                   // 如果使用 UID 找不到，再尝试通过邮箱查找（兼容旧数据）
                   const normalizedEmail = firebaseUser.email?.toLowerCase().trim();
