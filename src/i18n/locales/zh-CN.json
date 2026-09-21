@@ -2142,9 +2142,9 @@
   "language": {
     "switch": "切换语言",
     "chinese": "中文",
-    "english": "EN",
+    "english": "English",
     "zhCN": "中文",
-    "enUS": "EN"
+    "enUS": "English"
   },
   "cigarDatabase": {
     "title": "雪茄知识库",

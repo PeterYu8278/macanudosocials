@@ -188,12 +188,12 @@ const Profile: React.FC = () => {
   const renderBasicSection = () => (
     <Form
       form={form}
-      layout={isMobile ? 'vertical' : 'horizontal'}
-      labelCol={isMobile ? undefined : { flex: labelFlex }}
-      wrapperCol={isMobile ? undefined : { flex: '1 0 0' }}
+      layout="horizontal"
+      labelCol={{ flex: labelFlex }}
+      wrapperCol={{ flex: '1 0 0' }}
       labelAlign="left"
       labelWrap={false}
-      style={{ rowGap: isMobile ? 0 : 8 }}
+      style={{ rowGap: 8 }}
     >
       <Form.Item label={<span style={{ color: '#fff' }}>{t('profile.avatar')}</span>} style={{ marginBottom: 8 }}>
         <ImageUpload
@@ -297,12 +297,12 @@ const Profile: React.FC = () => {
   const renderSecuritySection = () => (
     <Form
       form={form}
-      layout={isMobile ? 'vertical' : 'horizontal'}
-      labelCol={isMobile ? undefined : { flex: labelFlex }}
-      wrapperCol={isMobile ? undefined : { flex: '1 0 0' }}
+      layout="horizontal"
+      labelCol={{ flex: labelFlex }}
+      wrapperCol={{ flex: '1 0 0' }}
       labelAlign="left"
       labelWrap={false}
-      style={{ rowGap: isMobile ? 0 : 8 }}
+      style={{ rowGap: 8 }}
     >
       <Form.Item
         name="currentPassword"
@@ -344,9 +344,9 @@ const Profile: React.FC = () => {
     <>
       <Form
         form={form}
-        layout={isMobile ? 'vertical' : 'horizontal'}
-        labelCol={isMobile ? undefined : { flex: labelFlex }}
-        wrapperCol={isMobile ? undefined : { flex: '1 0 0' }}
+        layout="horizontal"
+        labelCol={{ flex: labelFlex }}
+        wrapperCol={{ flex: '1 0 0' }}
         labelAlign="left"
         labelWrap={false}
       >
@@ -356,7 +356,7 @@ const Profile: React.FC = () => {
           style={{ marginBottom: 12 }}
           label={<span style={{ color: '#fff' }}>{t('profile.notificationsToggle')}</span>}
         >
-          <Switch />
+          <Switch className="gold-switch" />
         </Form.Item>
 
         <Form.Item
@@ -431,7 +431,7 @@ const Profile: React.FC = () => {
 
                 <Form.Item name="quietHoursEnabled" valuePropName="checked" style={{ marginBottom: 8 }}>
                   <Space>
-                    <Switch disabled={!notificationsEnabled} />
+                    <Switch className="gold-switch" disabled={!notificationsEnabled} />
                     <Typography.Text style={{ color: '#fff' }}>
                       {t('profile.pushNotifications.quietHours.enabled')}
                     </Typography.Text>

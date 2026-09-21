@@ -26,6 +26,13 @@ const LanguageSelect: React.FC<LanguageSelectProps> = ({ value, onChange, style,
       options={options}
       style={style}
       disabled={disabled}
+      popupClassName="language-select-dropdown"
+      dropdownStyle={{
+        background: '#1a1a1a',
+        border: '1px solid rgba(244,175,37,0.5)',
+        borderRadius: 8,
+        padding: 4,
+      }}
     />
   )
 }

@@ -2142,9 +2142,9 @@
   "language": {
     "switch": "Switch Language",
     "chinese": "中文",
-    "english": "EN",
+    "english": "English",
     "zhCN": "中文",
-    "enUS": "EN"
+    "enUS": "English"
   },
   "cigarDatabase": {
     "title": "Cigar Database",
