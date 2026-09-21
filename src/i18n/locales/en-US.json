@@ -953,6 +953,9 @@
     "friends": "friends",
     "inviteFriends": "Invite {{count}} Friends",
     "points": "pts",
+    "claimReward": "Claim",
+    "redeemed": "Redeemed",
+    "claimSuccess": "Reward claimed! Please contact staff to collect.",
     "footerNote": "Keep visiting and referring to unlock more rewards!"
   },
   "visitTimer": {

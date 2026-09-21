@@ -953,6 +953,9 @@
     "friends": "位好友",
     "inviteFriends": "邀请 {{count}} 位好友",
     "points": "积分",
+    "claimReward": "领取",
+    "redeemed": "已兑换",
+    "claimSuccess": "奖励已领取！请联系工作人员领取奖品。",
     "footerNote": "持续到店与邀请好友，解锁更多专属奖励！"
   },
   "visitTimer": {

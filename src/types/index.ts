@@ -64,6 +64,7 @@ export interface User {
     }>;
     totalReferred: number;            // 累计引荐人数
     activeReferrals: number;          // 活跃引荐人数（已完成首单）
+    redeemedMilestones?: number[];    // 已兑换的里程碑目标值列表（如 [3, 6]）
   };
   
   // 用户配置
