@@ -1038,6 +1038,8 @@
     "last24Hours": "Past 24 Hours",
     "last7Days": "Past 7 Days",
     "peopleUnit": "people",
+    "ordersRevenueTrend": "Orders vs Revenue",
+    "revenue": "Revenue",
     "quickActions": "Quick Actions",
     "event": "Event",
     "orders": "Orders",

@@ -460,6 +460,116 @@ const GrowthTrendChart: React.FC<{ data: GrowthTrendPoint[]; isMobile: boolean }
   )
 }
 
+type OrdersRevenueTrendPoint = {
+  label: string
+  orders: number
+  revenue: number
+}
+
+const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMobile: boolean }> = ({ data, isMobile }) => {
+  const { t } = useTranslation()
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const width = 500
+  const height = 220
+  const paddingLeft = 35
+  const paddingRight = 48
+  const paddingTop = 20
+  const paddingBottom = 30
+  const chartWidth = width - paddingLeft - paddingRight
+  const chartHeight = height - paddingTop - paddingBottom
+  const maxOrders = Math.max(...data.map(point => point.orders), 5)
+  const maxRevenue = Math.max(...data.map(point => point.revenue), 100)
+
+  const pointFor = (value: number, maxValue: number, index: number) => ({
+    x: paddingLeft + (index / (data.length - 1 || 1)) * chartWidth,
+    y: paddingTop + chartHeight - (value / maxValue) * chartHeight
+  })
+  const orderPoints = data.map((point, index) => pointFor(point.orders, maxOrders, index))
+  const revenuePoints = data.map((point, index) => pointFor(point.revenue, maxRevenue, index))
+  const pathFor = (points: Array<{ x: number; y: number }>) => {
+    if (points.length === 0) return ''
+    let path = `M ${points[0].x} ${points[0].y}`
+    for (let index = 1; index < points.length; index++) {
+      const previous = points[index - 1]
+      const current = points[index]
+      const firstControlX = previous.x + (current.x - previous.x) / 3
+      const secondControlX = previous.x + (2 * (current.x - previous.x)) / 3
+      path += ` C ${firstControlX} ${previous.y}, ${secondControlX} ${current.y}, ${current.x} ${current.y}`
+    }
+    return path
+  }
+  const compactMoney = (value: number) => value >= 1000
+    ? `RM${(value / 1000).toFixed(value >= 10000 ? 0 : 1)}k`
+    : `RM${Math.round(value)}`
+
+  return (
+    <div style={{ position: 'relative', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+          <span style={{ width: 18, height: 3, borderRadius: 2, background: '#38bdf8' }} />
+          {t('dashboard.orders')}
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+          <span style={{ width: 18, height: 3, borderRadius: 2, background: '#34d399' }} />
+          {t('dashboard.revenue')}
+        </span>
+      </div>
+
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+        {Array.from({ length: 5 }, (_, index) => {
+          const ratio = index / 4
+          const y = paddingTop + chartHeight - ratio * chartHeight
+          return (
+            <g key={index}>
+              <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+              <text x={paddingLeft - 8} y={y + 4} fill="#38bdf8" fontSize="9" textAnchor="end" fontFamily="monospace">
+                {Math.round(ratio * maxOrders)}
+              </text>
+              <text x={width - paddingRight + 8} y={y + 4} fill="#34d399" fontSize="9" textAnchor="start" fontFamily="monospace">
+                {compactMoney(ratio * maxRevenue)}
+              </text>
+            </g>
+          )
+        })}
+
+        {data.map((point, index) => {
+          const stride = isMobile ? Math.max(1, Math.ceil(data.length / 6)) : 2
+          const showLabel = index % stride === 0 || index === data.length - 1
+          if (!showLabel) return null
+          return (
+            <text key={point.label} x={orderPoints[index].x} y={paddingTop + chartHeight + 16} fill="rgba(255,255,255,0.45)" fontSize="9" textAnchor="middle">
+              {point.label}
+            </text>
+          )
+        })}
+
+        <path d={pathFor(orderPoints)} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
+        <path d={pathFor(revenuePoints)} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
+
+        {data.map((point, index) => {
+          const x = orderPoints[index].x
+          const targetWidth = chartWidth / Math.max(data.length - 1, 1)
+          return (
+            <g key={`${point.label}-${index}`}>
+              <rect x={x - targetWidth / 2} y={paddingTop} width={targetWidth} height={chartHeight} fill="transparent" style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(null)} />
+              <circle cx={x} cy={orderPoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#38bdf8" strokeWidth="2" />
+              <circle cx={x} cy={revenuePoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#34d399" strokeWidth="2" />
+            </g>
+          )
+        })}
+      </svg>
+
+      {hoveredIndex !== null && (
+        <div style={{ position: 'absolute', left: `${Math.min(Math.max((orderPoints[hoveredIndex].x / width) * 100, 15), 82)}%`, top: 44, transform: 'translateX(-50%)', padding: '7px 10px', border: '1px solid rgba(52,211,153,0.5)', borderRadius: 6, background: 'rgba(26,22,13,0.96)', color: '#fff', fontSize: 11, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 2 }}>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, marginBottom: 3 }}>{data[hoveredIndex].label}</div>
+          <div style={{ color: '#38bdf8' }}>{t('dashboard.orders')}: {data[hoveredIndex].orders}</div>
+          <div style={{ color: '#34d399' }}>{t('dashboard.revenue')}: RM{data[hoveredIndex].revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 type QuickActionButtonProps = {
   label: string
   icon: React.ReactNode
@@ -685,6 +795,7 @@ const AdminDashboard: React.FC = () => {
     const now = new Date()
     return new Date(now.getFullYear(), now.getMonth(), 1)
   }, [])
+  const analyticsStartDate = useMemo(() => dayjs().subtract(11, 'month').startOf('month').toDate(), [])
 
   const { data: users, loading: usersLoading, refresh: refreshUsers } = useFirestoreQuery<User>(
     () => getUsers()
@@ -699,6 +810,14 @@ const AdminDashboard: React.FC = () => {
   )
   const { data: transactions, refresh: refreshTransactions } = useFirestoreQuery<Transaction>(
     () => getAllTransactions(isSuperAdmin ? undefined : user?.storeId, { startDate: startOfMonth, limit: 500 }),
+    [isSuperAdmin, user?.storeId]
+  )
+  const { data: trendOrders, loading: trendOrdersLoading, refresh: refreshTrendOrders } = useFirestoreQuery<Order>(
+    () => getAllOrders(isSuperAdmin ? undefined : user?.storeId, { startDate: analyticsStartDate, limit: 5000 }),
+    [isSuperAdmin, user?.storeId]
+  )
+  const { data: trendTransactions, loading: trendTransactionsLoading, refresh: refreshTrendTransactions } = useFirestoreQuery<Transaction>(
+    () => getAllTransactions(isSuperAdmin ? undefined : user?.storeId, { startDate: analyticsStartDate, limit: 5000 }),
     [isSuperAdmin, user?.storeId]
   )
   const { data: cigars, refresh: refreshCigars } = useFirestoreQuery<Cigar>(getCigars)
@@ -722,6 +841,8 @@ const AdminDashboard: React.FC = () => {
     refreshOrders()
     refreshEvents()
     refreshTransactions()
+    refreshTrendOrders()
+    refreshTrendTransactions()
     refreshCigars()
     refreshVisitSessions()
     refreshRoomBookings()
@@ -734,6 +855,7 @@ const AdminDashboard: React.FC = () => {
   const [reloadTrendPeriod, setReloadTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [growthTrendPeriod, setGrowthTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [occupancyTrendPeriod, setOccupancyTrendPeriod] = useState<'hours24' | 'days7'>('hours24')
+  const [ordersRevenueTrendPeriod, setOrdersRevenueTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [inventoryFeatureVisible, setInventoryFeatureVisible] = useState<boolean>(true)
   const [eventsAdminFeatureVisible, setEventsAdminFeatureVisible] = useState<boolean>(true)
   const [ordersFeatureVisible, setOrdersFeatureVisible] = useState<boolean>(true)
@@ -999,6 +1121,57 @@ const AdminDashboard: React.FC = () => {
       return { label: bucket.label, value: people.size }
     })
   }, [visitSessions, occupancyTrendPeriod])
+
+  const ordersRevenueTrendData = useMemo(() => {
+    const orderTotals = new Map<string, number>()
+    const revenueTotals = new Map<string, number>()
+    const toDate = (value: any): Date | null => {
+      if (!value) return null
+      const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+    const dateKey = (date: Date) => ordersRevenueTrendPeriod === 'days30'
+      ? dayjs(date).format('YYYY-MM-DD')
+      : dayjs(date).format('YYYY-MM')
+
+    trendOrders.forEach(order => {
+      if (order.status === 'cancelled') return
+      const createdAt = toDate(order.createdAt)
+      if (!createdAt) return
+      const key = dateKey(createdAt)
+      orderTotals.set(key, (orderTotals.get(key) || 0) + 1)
+    })
+
+    trendTransactions.forEach(transaction => {
+      if (Number(transaction.amount || 0) <= 0) return
+      const createdAt = toDate(transaction.createdAt)
+      if (!createdAt) return
+      const key = dateKey(createdAt)
+      revenueTotals.set(key, (revenueTotals.get(key) || 0) + Number(transaction.amount || 0))
+    })
+
+    if (ordersRevenueTrendPeriod === 'days30') {
+      return Array.from({ length: 30 }, (_, index) => {
+        const date = dayjs().subtract(29 - index, 'day')
+        const key = date.format('YYYY-MM-DD')
+        return {
+          label: date.format('DD MMM'),
+          orders: orderTotals.get(key) || 0,
+          revenue: revenueTotals.get(key) || 0
+        }
+      })
+    }
+
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = dayjs().subtract(11 - index, 'month')
+      const key = month.format('YYYY-MM')
+      return {
+        label: month.format('MMM YY'),
+        orders: orderTotals.get(key) || 0,
+        revenue: revenueTotals.get(key) || 0
+      }
+    })
+  }, [trendOrders, trendTransactions, ordersRevenueTrendPeriod])
 
   // 本月数据
   const currentMonth = dayjs().format('YYYY-MM')
@@ -1445,6 +1618,47 @@ const AdminDashboard: React.FC = () => {
             valueUnit={t('dashboard.peopleUnit')}
             xLabelStride={occupancyTrendPeriod === 'hours24' ? 3 : 1}
           />
+        )}
+      </section>
+
+      {/* Orders and revenue trend */}
+      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
+            {t('dashboard.ordersRevenueTrend')}
+          </h2>
+
+          <div style={{ display: 'flex', padding: 4, borderRadius: 8, background: 'rgba(255,255,255,0.05)' }}>
+            {(['days30', 'months12'] as const).map(period => {
+              const active = ordersRevenueTrendPeriod === period
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setOrdersRevenueTrendPeriod(period)}
+                  style={{
+                    minHeight: 32,
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: active ? 'linear-gradient(to right, #FDE08D, #C48D3A)' : 'transparent',
+                    color: active ? '#111' : 'rgba(255,255,255,0.62)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {period === 'days30' ? t('dashboard.last30Days') : t('dashboard.last12Months')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {trendOrdersLoading || trendTransactionsLoading ? (
+          <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : (
+          <OrdersRevenueTrendChart data={ordersRevenueTrendData} isMobile={isMobile} />
         )}
       </section>
 
