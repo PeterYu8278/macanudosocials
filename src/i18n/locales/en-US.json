@@ -754,6 +754,7 @@
     "join": "Join",
     "leave": "Leave",
     "noEvents": "No Events Available",
+    "noUpdates": "No events or announcements available",
     "upcoming": "Upcoming",
     "ongoing": "Ongoing",
     "completed": "Completed",
@@ -2927,6 +2928,10 @@
   },
   "announcements": {
     "management": "Announcements",
+    "label": "Announcement",
+    "info": "Info",
+    "warning": "Warning",
+    "important": "Important",
     "create": "New Announcement",
     "edit": "Edit Announcement",
     "title": "Title",

@@ -1,15 +1,16 @@
 // 活动页面
 import React, { useMemo, useState } from 'react'
 import { Typography, Button, Empty, Spin, App } from 'antd'
-import { CalendarOutlined, TeamOutlined, RightOutlined } from '@ant-design/icons'
+import { CalendarOutlined, TeamOutlined, RightOutlined, NotificationOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 
 const { Text } = Typography
 
 import { getEvents, registerForEvent, unregisterFromEvent } from '../../../services/firebase/firestore'
+import { getAnnouncements } from '../../../services/firebase/announcements'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useAuthStore } from '../../../store/modules/auth'
-import type { Event } from '../../../types'
+import type { Announcement, Event } from '../../../types'
 import { useTranslation } from 'react-i18next'
 
 const toDateOrNull = (value: any): Date | null => {
@@ -20,15 +21,77 @@ const toDateOrNull = (value: any): Date | null => {
   return Number.isNaN(date.getTime()) ? null : date
 }
 
+const formatDisplayDate = (value: unknown, language: string): string => {
+  const date = toDateOrNull(value)
+  if (!date) return '-'
+
+  if (language.startsWith('zh')) {
+    return date.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
+  }
+
+  return `${date.getDate()} ${date.toLocaleString('en-US', { month: 'short' })}, ${date.getFullYear()}`
+}
+
+type FeedItem =
+  | { kind: 'event'; id: string; date: Date; data: Event }
+  | { kind: 'announcement'; id: string; date: Date; data: Announcement }
+
 const Events: React.FC = () => {
   const { user } = useAuthStore()
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const isMobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 991px)').matches : false
-  const { data: allEvents, loading, error, refresh } = useFirestoreQuery(getEvents)
-  const events = (allEvents ?? []).filter(event =>
+  const {
+    data: allEvents,
+    loading: eventsLoading,
+    error: eventsError,
+    refresh: refreshEvents
+  } = useFirestoreQuery(getEvents)
+  const {
+    data: allAnnouncements,
+    loading: announcementsLoading,
+    error: announcementsError,
+    refresh: refreshAnnouncements
+  } = useFirestoreQuery(getAnnouncements)
+
+  const events = useMemo(() => (allEvents ?? []).filter(event =>
     !event.isPrivate && event.status !== 'draft' && event.status !== 'cancelled'
-  )
+  ), [allEvents])
+
+  const announcements = useMemo(() => {
+    const now = new Date()
+    return (allAnnouncements ?? []).filter(announcement => {
+      const publishedAt = toDateOrNull(announcement.publishedAt)
+      const expiresAt = toDateOrNull(announcement.expiresAt)
+      return announcement.status === 'published'
+        && (!publishedAt || publishedAt <= now)
+        && (!expiresAt || expiresAt >= now)
+    })
+  }, [allAnnouncements])
+
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const eventItems: FeedItem[] = events.map(event => ({
+      kind: 'event',
+      id: event.id,
+      date: toDateOrNull(event.schedule?.startDate) ?? new Date(0),
+      data: event
+    }))
+    const announcementItems: FeedItem[] = announcements.map(announcement => ({
+      kind: 'announcement',
+      id: announcement.id,
+      date: toDateOrNull(announcement.publishedAt) ?? toDateOrNull(announcement.createdAt) ?? new Date(0),
+      data: announcement
+    }))
+
+    return [...eventItems, ...announcementItems].sort((a, b) => b.date.getTime() - a.date.getTime())
+  }, [events, announcements])
+
+  const loading = eventsLoading || announcementsLoading
+  const error = eventsError || announcementsError
+  const refresh = () => {
+    refreshEvents()
+    refreshAnnouncements()
+  }
   const [loadingId, setLoadingId] = useState<string | null>(null)
 
   const getDisplayStatus = (event: Event): 'upcoming' | 'ongoing' | 'completed' => {
@@ -209,9 +272,9 @@ const Events: React.FC = () => {
           </div>
         )}
 
-        {!loading && !error && events.length === 0 && (
+        {!loading && !error && feedItems.length === 0 && (
           <Empty
-            description={<span style={{ color: 'rgba(255, 255, 255, 0.72)' }}>{t('events.noEvents')}</span>}
+            description={<span style={{ color: 'rgba(255, 255, 255, 0.72)' }}>{t('events.noUpdates')}</span>}
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             style={{ gridColumn: '1 / -1', padding: '72px 16px' }}
           >
@@ -221,24 +284,70 @@ const Events: React.FC = () => {
           </Empty>
         )}
 
-        {events.map((event) => {
+        {feedItems.map((item) => {
+          if (item.kind === 'announcement') {
+            const announcement = item.data
+            const typeColors = {
+              info: '#3b82f6',
+              warning: '#f59e0b',
+              important: '#ef4444'
+            }
+            const accentColor = typeColors[announcement.type] ?? '#E7B54A'
+
+            return (
+              <article
+                key={`announcement-${announcement.id}`}
+                style={{
+                  border: `1px solid ${accentColor}55`,
+                  borderRadius: 8,
+                  overflow: 'hidden',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  background: '#1a1a1a',
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.35)'
+                }}
+              >
+                {announcement.image && (
+                  <img
+                    src={announcement.image}
+                    alt=""
+                    style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }}
+                  />
+                )}
+                <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
+                      <NotificationOutlined />
+                      {t('announcements.label')}
+                    </span>
+                    <span style={{ padding: '3px 9px', borderRadius: 99, background: `${accentColor}22`, color: accentColor, fontSize: 11, fontWeight: 700 }}>
+                      {t(`announcements.${announcement.type}`)}
+                    </span>
+                  </div>
+
+                  <h2 style={{ margin: 0, color: '#fff', fontSize: 18, lineHeight: 1.35, fontWeight: 750 }}>
+                    {announcement.title}
+                  </h2>
+                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                    {announcement.content}
+                  </p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+                    <CalendarOutlined style={{ fontSize: 12 }} />
+                    <span>{formatDisplayDate(item.date, i18n.language || 'zh-CN')}</span>
+                  </div>
+                </div>
+              </article>
+            )
+          }
+
+          const event = item.data
           const socialTag = getSocialRelationTag(event)
           const registeredIds = event.participants?.registered || []
           const isUserRegistered = user ? registeredIds.includes(user.id) : false
           const closed = isRegistrationClosed(event)
           const displayStatus = getDisplayStatus(event)
 
-          const formattedDate = (() => {
-            const d = (event as any)?.schedule?.startDate as any
-            const dateVal = d?.toDate ? d.toDate() : d
-            if (!dateVal) return '-'
-            const dateObj = new Date(dateVal)
-            const currentLang = i18n.language || 'zh-CN'
-            if (currentLang === 'zh-CN') {
-              return dateObj.toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric' })
-            }
-            return `${dateObj.getDate()} ${dateObj.toLocaleString('en-US', { month: 'short' })}, ${dateObj.getFullYear()}`
-          })()
+          const formattedDate = formatDisplayDate(item.date, i18n.language || 'zh-CN')
 
           const statusColors: Record<string, string> = {
             upcoming: '#3b82f6',

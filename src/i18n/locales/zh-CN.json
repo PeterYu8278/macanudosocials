@@ -754,6 +754,7 @@
     "join": "参加",
     "leave": "退出",
     "noEvents": "暂无活动",
+    "noUpdates": "暂无活动或公告",
     "upcoming": "即将开始",
     "ongoing": "进行中",
     "completed": "已结束",
@@ -2927,6 +2928,10 @@
   },
   "announcements": {
     "management": "公告管理",
+    "label": "公告",
+    "info": "资讯",
+    "warning": "提醒",
+    "important": "重要",
     "create": "新建公告",
     "edit": "编辑公告",
     "title": "标题",
