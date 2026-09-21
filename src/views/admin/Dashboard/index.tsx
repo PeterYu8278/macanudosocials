@@ -16,7 +16,7 @@ import {
 import { db } from '../../../config/firebase'
 import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections'
 import { collection, addDoc } from 'firebase/firestore'
-import type { User, Order, Event, Transaction, Cigar, AppConfig, SubscriptionRequest, ReloadRecord } from '../../../types'
+import type { User, Order, Event, Transaction, Cigar, AppConfig, SubscriptionRequest, ReloadRecord, MembershipFeeRecord } from '../../../types'
 import { useTranslation } from 'react-i18next'
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../../store/modules/auth'
@@ -24,6 +24,7 @@ import { getAppConfig } from '../../../services/firebase/appConfig'
 import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
 import { getAllRoomBookings } from '../../../services/firebase/rooms'
 import { getAllReloadRecords } from '../../../services/firebase/reload'
+import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import OrderDetails from '../Orders/OrderDetails'
 
 const { Title } = Typography
@@ -346,6 +347,119 @@ const TrendChart: React.FC<{
   );
 };
 
+type GrowthTrendPoint = {
+  label: string
+  newUsers: number
+  annualPasses: number
+}
+
+const GrowthTrendChart: React.FC<{ data: GrowthTrendPoint[]; isMobile: boolean }> = ({ data, isMobile }) => {
+  const { t } = useTranslation()
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const width = 500
+  const height = 220
+  const paddingLeft = 35
+  const paddingRight = 15
+  const paddingTop = 20
+  const paddingBottom = 30
+  const chartWidth = width - paddingLeft - paddingRight
+  const chartHeight = height - paddingTop - paddingBottom
+  const maxValue = Math.max(...data.flatMap(point => [point.newUsers, point.annualPasses]), 5)
+
+  const pointFor = (value: number, index: number) => ({
+    x: paddingLeft + (index / (data.length - 1 || 1)) * chartWidth,
+    y: paddingTop + chartHeight - (value / maxValue) * chartHeight
+  })
+  const newUserPoints = data.map((point, index) => ({ ...pointFor(point.newUsers, index), value: point.newUsers }))
+  const annualPassPoints = data.map((point, index) => ({ ...pointFor(point.annualPasses, index), value: point.annualPasses }))
+  const pathFor = (points: Array<{ x: number; y: number }>) => {
+    if (points.length === 0) return ''
+    let path = `M ${points[0].x} ${points[0].y}`
+    for (let index = 1; index < points.length; index++) {
+      const previous = points[index - 1]
+      const current = points[index]
+      const firstControlX = previous.x + (current.x - previous.x) / 3
+      const secondControlX = previous.x + (2 * (current.x - previous.x)) / 3
+      path += ` C ${firstControlX} ${previous.y}, ${secondControlX} ${current.y}, ${current.x} ${current.y}`
+    }
+    return path
+  }
+
+  return (
+    <div style={{ position: 'relative', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+          <span style={{ width: 18, height: 3, borderRadius: 2, background: '#38bdf8' }} />
+          {t('dashboard.newUsers')}
+        </span>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+          <span style={{ width: 18, height: 3, borderRadius: 2, background: '#F4AF25' }} />
+          {t('dashboard.annualPassActivated')}
+        </span>
+      </div>
+
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+        {Array.from({ length: 5 }, (_, index) => {
+          const ratio = index / 4
+          const y = paddingTop + chartHeight - ratio * chartHeight
+          return (
+            <g key={index}>
+              <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
+              <text x={paddingLeft - 8} y={y + 4} fill="rgba(255,255,255,0.45)" fontSize="10" textAnchor="end" fontFamily="monospace">
+                {Math.round(ratio * maxValue)}
+              </text>
+            </g>
+          )
+        })}
+
+        {data.map((point, index) => {
+          const showLabel = isMobile
+            ? index % Math.max(1, Math.ceil(data.length / 6)) === 0 || index === data.length - 1
+            : index % 2 === 0 || index === data.length - 1
+          if (!showLabel) return null
+          return (
+            <text key={point.label} x={newUserPoints[index].x} y={paddingTop + chartHeight + 16} fill="rgba(255,255,255,0.45)" fontSize="9" textAnchor="middle">
+              {point.label}
+            </text>
+          )
+        })}
+
+        <path d={pathFor(newUserPoints)} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
+        <path d={pathFor(annualPassPoints)} fill="none" stroke="#F4AF25" strokeWidth="3" strokeLinecap="round" />
+
+        {data.map((point, index) => {
+          const x = newUserPoints[index].x
+          const targetWidth = chartWidth / Math.max(data.length - 1, 1)
+          return (
+            <g key={`${point.label}-${index}`}>
+              <rect
+                x={x - targetWidth / 2}
+                y={paddingTop}
+                width={targetWidth}
+                height={chartHeight}
+                fill="transparent"
+                style={{ cursor: 'pointer' }}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              />
+              <circle cx={x} cy={newUserPoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#38bdf8" strokeWidth="2" />
+              <circle cx={x} cy={annualPassPoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#F4AF25" strokeWidth="2" />
+            </g>
+          )
+        })}
+      </svg>
+
+      {hoveredIndex !== null && (
+        <div style={{ position: 'absolute', left: `${Math.min(Math.max((newUserPoints[hoveredIndex].x / width) * 100, 14), 86)}%`, top: 44, transform: 'translateX(-50%)', padding: '7px 10px', border: '1px solid rgba(244,175,37,0.5)', borderRadius: 6, background: 'rgba(26,22,13,0.96)', color: '#fff', fontSize: 11, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 2 }}>
+          <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, marginBottom: 3 }}>{data[hoveredIndex].label}</div>
+          <div style={{ color: '#38bdf8' }}>{t('dashboard.newUsers')}: {data[hoveredIndex].newUsers}</div>
+          <div style={{ color: '#F4AF25' }}>{t('dashboard.annualPassActivated')}: {data[hoveredIndex].annualPasses}</div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 type QuickActionButtonProps = {
   label: string
   icon: React.ReactNode
@@ -572,8 +686,8 @@ const AdminDashboard: React.FC = () => {
     return new Date(now.getFullYear(), now.getMonth(), 1)
   }, [])
 
-  const { data: users, refresh: refreshUsers } = useFirestoreQuery<User>(
-    () => getUsers({ limit: 300 })
+  const { data: users, loading: usersLoading, refresh: refreshUsers } = useFirestoreQuery<User>(
+    () => getUsers()
   )
   const { data: orders, refresh: refreshOrders } = useFirestoreQuery<Order>(
     () => getAllOrders(isSuperAdmin ? undefined : user?.storeId, { limit: 100 }),
@@ -599,6 +713,9 @@ const AdminDashboard: React.FC = () => {
   const { data: reloadRecords, loading: reloadRecordsLoading, refresh: refreshReloadRecords } = useFirestoreQuery<ReloadRecord>(
     () => getAllReloadRecords('completed')
   )
+  const { data: annualPassRecords, loading: annualPassRecordsLoading, refresh: refreshAnnualPassRecords } = useFirestoreQuery<MembershipFeeRecord>(
+    () => getAllMembershipFeeRecords('paid')
+  )
 
   const refreshAll = () => {
     refreshUsers()
@@ -609,11 +726,13 @@ const AdminDashboard: React.FC = () => {
     refreshVisitSessions()
     refreshRoomBookings()
     refreshReloadRecords()
+    refreshAnnualPassRecords()
   }
   const [trendDrawerVisible, setTrendDrawerVisible] = useState(false)
   const [trendType, setTrendType] = useState<'members' | 'bookings'>('members')
   const [trendPeriod, setTrendPeriod] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [reloadTrendPeriod, setReloadTrendPeriod] = useState<'days30' | 'months12'>('days30')
+  const [growthTrendPeriod, setGrowthTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [inventoryFeatureVisible, setInventoryFeatureVisible] = useState<boolean>(true)
   const [eventsAdminFeatureVisible, setEventsAdminFeatureVisible] = useState<boolean>(true)
   const [ordersFeatureVisible, setOrdersFeatureVisible] = useState<boolean>(true)
@@ -788,6 +907,63 @@ const AdminDashboard: React.FC = () => {
   }, [reloadRecords, reloadTrendPeriod])
 
   const reloadTrendTotal = reloadTrendData.reduce((sum, item) => sum + item.value, 0)
+
+  const growthTrendData = useMemo(() => {
+    const newUsers = new Map<string, number>()
+    const annualPasses = new Map<string, number>()
+    const customerRoles = new Set(['guest', 'member', 'vip'])
+    const dateKey = (date: Date) => growthTrendPeriod === 'days30'
+      ? dayjs(date).format('YYYY-MM-DD')
+      : dayjs(date).format('YYYY-MM')
+    const toDate = (value: any): Date | null => {
+      if (!value) return null
+      const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+
+    users.forEach(currentUser => {
+      if (!customerRoles.has(currentUser.role)) return
+      const createdAt = toDate(currentUser.createdAt)
+      if (!createdAt) return
+      const key = dateKey(createdAt)
+      newUsers.set(key, (newUsers.get(key) || 0) + 1)
+    })
+
+    const firstActivationByUser = new Map<string, Date>()
+    annualPassRecords.forEach(record => {
+      if (record.status !== 'paid' || record.renewalType !== 'initial') return
+      const activatedAt = toDate(record.deductedAt || record.createdAt)
+      if (!activatedAt) return
+      const existing = firstActivationByUser.get(record.userId)
+      if (!existing || activatedAt < existing) firstActivationByUser.set(record.userId, activatedAt)
+    })
+    firstActivationByUser.forEach(activatedAt => {
+      const key = dateKey(activatedAt)
+      annualPasses.set(key, (annualPasses.get(key) || 0) + 1)
+    })
+
+    if (growthTrendPeriod === 'days30') {
+      return Array.from({ length: 30 }, (_, index) => {
+        const date = dayjs().subtract(29 - index, 'day')
+        const key = date.format('YYYY-MM-DD')
+        return {
+          label: date.format('DD MMM'),
+          newUsers: newUsers.get(key) || 0,
+          annualPasses: annualPasses.get(key) || 0
+        }
+      })
+    }
+
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = dayjs().subtract(11 - index, 'month')
+      const key = month.format('YYYY-MM')
+      return {
+        label: month.format('MMM YY'),
+        newUsers: newUsers.get(key) || 0,
+        annualPasses: annualPasses.get(key) || 0
+      }
+    })
+  }, [users, annualPassRecords, growthTrendPeriod])
 
   // 本月数据
   const currentMonth = dayjs().format('YYYY-MM')
@@ -1146,6 +1322,47 @@ const AdminDashboard: React.FC = () => {
             valueFormatter={value => `RM${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             valueUnit=""
           />
+        )}
+      </section>
+
+      {/* Customer growth trend */}
+      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
+            {t('dashboard.customerGrowthTrend')}
+          </h2>
+
+          <div style={{ display: 'flex', padding: 4, borderRadius: 8, background: 'rgba(255,255,255,0.05)' }}>
+            {(['days30', 'months12'] as const).map(period => {
+              const active = growthTrendPeriod === period
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setGrowthTrendPeriod(period)}
+                  style={{
+                    minHeight: 32,
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: active ? 'linear-gradient(to right, #FDE08D, #C48D3A)' : 'transparent',
+                    color: active ? '#111' : 'rgba(255,255,255,0.62)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {period === 'days30' ? t('dashboard.last30Days') : t('dashboard.last12Months')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {usersLoading || annualPassRecordsLoading ? (
+          <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : (
+          <GrowthTrendChart data={growthTrendData} isMobile={isMobile} />
         )}
       </section>
 
