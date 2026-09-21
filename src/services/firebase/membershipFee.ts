@@ -443,8 +443,8 @@ export const deductMembershipFee = async (
         });
       }
 
-      // 创建下一年的年费记录
-      const nextDueDate = new Date(record.dueDate);
+      // 新期限从实际付款日开始，避免延迟续费导致期限缩短。
+      const nextDueDate = new Date(now);
       nextDueDate.setFullYear(nextDueDate.getFullYear() + 1);
       await createMembershipFeeRecord(
         record.userId,

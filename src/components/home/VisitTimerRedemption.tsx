@@ -324,10 +324,14 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     setLoading(true);
 
     try {
-      // 先检查是否已存在 pending 状态的年费记录
+      // 优先复用已有的续费记录，避免到期后重新创建 initial 记录。
       const { getUserMembershipFeeRecords } = await import('../../services/firebase/membershipFee');
       const existingRecords = await getUserMembershipFeeRecords(user.id, 10);
-      const pendingRecord = existingRecords.find(r => r.status === 'pending' && r.renewalType === 'initial');
+      const pendingRecords = existingRecords
+        .filter(r => r.status === 'pending')
+        .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
+      const pendingRecord = pendingRecords.find(r => r.renewalType === 'renewal')
+        || pendingRecords.find(r => r.renewalType === 'initial');
 
       let recordId: string;
 
@@ -338,7 +342,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         const result = await createMembershipFeeRecord(
           user.id,
           today,
-          'initial',
+          user.role === 'guest' ? 'initial' : 'renewal',
           undefined,
           user.displayName,
           selectedStoreId
