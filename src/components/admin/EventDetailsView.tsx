@@ -69,68 +69,88 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
       </div>
     )
 
-    const imageCard = (
-      <div style={{ ...cardStyle, marginBottom: isMobile ? 12 : 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        {sectionHeader(<UploadOutlined />, t('events.eventImages'))}
-        <div style={{ display: 'flex', justifyContent: 'center' }}>
-          <ImageUpload
-            value={editForm.image}
-            onChange={(url) => onEditFormChange({...editForm, image: url || null})}
-            folder="events"
-            maxSize={2 * 1024 * 1024}
-            showPreview={true}
+    const basicInfoFields = (
+      <>
+        <div style={{ marginBottom: 12 }}>
+          {fieldLabel(t('events.eventName'))}
+          <Input
+            value={editForm.title}
+            onChange={(e) => onEditFormChange({...editForm, title: e.target.value})}
+            placeholder={t('events.namePlaceholder')}
           />
         </div>
-      </div>
+
+        <div style={{ marginBottom: 12 }}>
+          {fieldLabel(t('events.description'))}
+          <Input.TextArea
+            value={editForm.description}
+            onChange={(e) => onEditFormChange({...editForm, description: e.target.value})}
+            rows={isMobile ? 2 : 3}
+            placeholder={t('events.descriptionPlaceholder')}
+          />
+        </div>
+
+        <div>
+          {fieldLabel(t('events.location'))}
+          <Input
+            value={editForm.locationName}
+            onChange={(e) => onEditFormChange({...editForm, locationName: e.target.value})}
+            placeholder={t('events.locationPlaceholder')}
+          />
+        </div>
+      </>
     )
 
     return (
       <div style={{ width: '100%', overflow: 'hidden' }}>
-        {/* 手机端：图片在上 */}
-        {isMobile && imageCard}
-
-        {/* 基本信息 + 图片（电脑端并排） */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 0 }}>
-          {/* 基本信息卡片 */}
-          <div style={{ ...cardStyle, flex: 1, marginBottom: 12 }}>
-            {sectionHeader(<FileTextOutlined />, t('events.basicInfo'))}
-
-            <div style={{ marginBottom: 12 }}>
-              {fieldLabel(t('events.eventName'))}
-              <Input
-                value={editForm.title}
-                onChange={(e) => onEditFormChange({...editForm, title: e.target.value})}
-                placeholder={t('events.namePlaceholder')}
-              />
+        {/* 手机端：图片在上，Basic Info 在下 */}
+        {isMobile && (
+          <>
+            <div style={{ ...cardStyle, marginBottom: 12, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              {sectionHeader(<UploadOutlined />, t('events.eventImages'))}
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <ImageUpload
+                  value={editForm.image}
+                  onChange={(url) => onEditFormChange({...editForm, image: url || null})}
+                  folder="events"
+                  maxSize={2 * 1024 * 1024}
+                  showPreview={true}
+                  width={120}
+                  height={120}
+                />
+              </div>
             </div>
-
-            <div style={{ marginBottom: 12 }}>
-              {fieldLabel(t('events.description'))}
-              <Input.TextArea
-                value={editForm.description}
-                onChange={(e) => onEditFormChange({...editForm, description: e.target.value})}
-                rows={isMobile ? 2 : 3}
-                placeholder={t('events.descriptionPlaceholder')}
-              />
+            <div style={{ ...cardStyle, marginBottom: 12 }}>
+              {sectionHeader(<FileTextOutlined />, t('events.basicInfo'))}
+              {basicInfoFields}
             </div>
+          </>
+        )}
 
-            <div>
-              {fieldLabel(t('events.location'))}
-              <Input
-                value={editForm.locationName}
-                onChange={(e) => onEditFormChange({...editForm, locationName: e.target.value})}
-                placeholder={t('events.locationPlaceholder')}
-              />
+        {/* 电脑端：CSS Grid — 行高由 Basic Info 决定，图片卡片自动等高 */}
+        {!isMobile && (
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 200px', gap: 12, marginBottom: 12 }}>
+            <div style={{ ...cardStyle, marginBottom: 0 }}>
+              {sectionHeader(<FileTextOutlined />, t('events.basicInfo'))}
+              {basicInfoFields}
+            </div>
+            <div style={{ ...cardStyle, marginBottom: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+              {sectionHeader(<UploadOutlined />, t('events.eventImages'))}
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <ImageUpload
+                  value={editForm.image}
+                  onChange={(url) => onEditFormChange({...editForm, image: url || null})}
+                  folder="events"
+                  maxSize={2 * 1024 * 1024}
+                  showPreview={true}
+                  width={136}
+                  height={136}
+                />
+              </div>
             </div>
           </div>
+        )}
 
-          {/* 电脑端：图片在右 */}
-          {!isMobile && (
-            <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
-              {imageCard}
-            </div>
-          )}
-        </div>
 
         {/* 时间设置卡片 */}
         <div style={cardStyle}>
