@@ -64,16 +64,17 @@ service cloud.firestore {
       return isSignedIn() && getUserData().status == 'active';
     }
 
-    // Annual Pass is represented by users/{uid}.status.
-    // Any signed-in role may activate it for itself by spending points.
+    // Annual Pass is represented by users/{uid}.status. Activation upgrades
+    // guest to member while every other role remains unchanged.
     function isSelfAnnualPassActivation(userId) {
       return isOwner(userId)
              && resource.data.status == 'inactive'
              && request.resource.data.status == 'active'
-             && request.resource.data.role == resource.data.role
+             && ((resource.data.role == 'guest' && request.resource.data.role == 'member')
+                 || (resource.data.role != 'guest' && request.resource.data.role == resource.data.role))
              && request.resource.data.membership.points < resource.data.membership.points
              && request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['membership', 'status', 'updatedAt']);
+                  .hasOnly(['membership', 'role', 'status', 'updatedAt']);
     }
     
     // ================================

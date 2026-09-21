@@ -373,7 +373,8 @@ export const deductMembershipFee = async (
       // 更新用户积分
       await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
         'membership.points': newPoints,
-        status: 'active', // 激活会员
+        status: 'active', // 激活 Annual Pass
+        role: userData.role === 'guest' ? 'member' : userData.role,
         updatedAt: Timestamp.fromDate(now)
       });
 
@@ -723,4 +724,3 @@ export const getUserMembershipPeriod = async (userId: string): Promise<{ startDa
     return null;
   }
 };
-
