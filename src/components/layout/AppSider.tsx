@@ -147,11 +147,6 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
       icon: <ClockCircleOutlined />,
       label: t('navigation.visitSessions'),
     },
-    {
-      key: '/admin/stores',
-      icon: <ShopOutlined />,
-      label: t('navigation.stores'),
-    },
   ]
 
   // 根据功能可见性过滤菜单项（developer 不受限制）
@@ -173,7 +168,6 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         // 角色权限检查
         if (item.key === '/admin/finance' && !isSuperAdmin) return false;
         if (item.key === '/admin/points-config' && !isSuperAdmin) return false;
-        if (item.key === '/admin/stores' && !isSuperAdmin) return false;
 
         if (isDeveloper) return true;
         const featureKey = getFeatureKeyByRoute(item.key);
@@ -193,6 +187,13 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
 
     // 开发者/系统管理分组
     const developerItems: any[] = []
+    if (isSuperAdmin || isDeveloper) {
+      developerItems.push({
+        key: '/admin/system-config',
+        icon: <SettingOutlined />,
+        label: t('navigation.systemConfig', 'System Config'),
+      })
+    }
     if (isDeveloper) {
       developerItems.push({
         key: '/developer/feature-management',

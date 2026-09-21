@@ -44,6 +44,7 @@ const GeminiModelTester = lazy(() => import('./views/admin/GeminiModelTester'))
 const InvoiceTemplateEditor = lazy(() => import('./views/admin/InvoiceTemplate'))
 const SubscriptionSettings = lazy(() => import('./views/admin/SubscriptionSettings').then(m => ({ default: m.SubscriptionSettings })))
 const StoreManagement = lazy(() => import('./views/admin/StoreManagement'))
+const SystemConfig = lazy(() => import('./views/admin/SystemConfig'))
 const AdminReports = lazy(() => import('./views/admin/Reports'))
 
 // --- 认证页面 (Lazy Loaded) ---
@@ -324,6 +325,7 @@ const AppContent: React.FC = () => {
                   <Route path="/admin/points-config" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><PointsConfigPage /></ProtectedRoute>} />
                   <Route path="/admin/visit-sessions" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><VisitSessionsPage /></ProtectedRoute>} />
                   <Route path="/admin/stores" element={<ProtectedRoute roles={['superAdmin', 'developer']}><StoreManagement /></ProtectedRoute>} />
+                  <Route path="/admin/system-config" element={<ProtectedRoute roles={['superAdmin', 'developer']}><SystemConfig /></ProtectedRoute>} />
                   <Route path="/developer/orphaned-users" element={<ProtectedRoute roles={['developer']}><OrphanedUserCleanup /></ProtectedRoute>} />
                   <Route path="/developer/performance" element={<ProtectedRoute roles={['developer']}><PerformanceMonitor /></ProtectedRoute>} />
                   <Route path="/developer/feature-management" element={<ProtectedRoute roles={['developer']}><FeatureManagement /></ProtectedRoute>} />

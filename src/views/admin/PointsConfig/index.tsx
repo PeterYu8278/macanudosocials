@@ -25,7 +25,7 @@ const PointsConfigPage: React.FC = () => {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [activeTab, setActiveTab] = useState<'config' | 'records' | 'reload' | 'membershipFees'>(isSuperAdmin ? 'config' : 'reload');
+  const [activeTab, setActiveTab] = useState<'records' | 'reload' | 'membershipFees'>('reload');
   const [processingFees, setProcessingFees] = useState(false);
   const [membershipFeeStatusFilter, setMembershipFeeStatusFilter] = useState<'all' | 'pending' | 'paid' | 'failed' | 'cancelled'>('all');
   const [creatingFeeRecord, setCreatingFeeRecord] = useState(false);
@@ -360,7 +360,7 @@ const PointsConfigPage: React.FC = () => {
           borderBottom: '1px solid rgba(244,175,37,0.2)',
           marginBottom: 16
         }}>
-          {(['config', 'records', 'reload', 'membershipFees'] as const).filter(k => isSuperAdmin || (k !== 'config')).map((tabKey) => {
+          {(['records', 'reload', 'membershipFees'] as const).map((tabKey) => {
             const isActive = activeTab === tabKey
             const baseStyle: React.CSSProperties = {
               flex: 1,
@@ -386,7 +386,6 @@ const PointsConfigPage: React.FC = () => {
 
             const getTabLabel = (key: string) => {
               switch (key) {
-                case 'config': return <><SettingOutlined style={{ marginRight: 4 }} />{t('pointsConfig.tabs.config')}</>
                 case 'records': return <><HistoryOutlined style={{ marginRight: 4 }} />{t('pointsConfig.tabs.records')}</>
                 case 'reload': return <><HistoryOutlined style={{ marginRight: 4 }} />{t('pointsConfig.tabs.reload')}</>
                 case 'membershipFees': return <><HistoryOutlined style={{ marginRight: 4 }} />{t('pointsConfig.tabs.membershipFees')}</>
@@ -401,7 +400,7 @@ const PointsConfigPage: React.FC = () => {
                   ...baseStyle,
                   ...(isActive ? activeStyle : inactiveStyle),
                 }}
-                onClick={() => setActiveTab(tabKey as 'config' | 'records' | 'reload' | 'membershipFees')}
+                onClick={() => setActiveTab(tabKey)}
               >
                 {getTabLabel(tabKey)}
               </button>
@@ -412,7 +411,7 @@ const PointsConfigPage: React.FC = () => {
 
       {/* 标签页内容 */}
       <div>
-        {activeTab === 'config' && (
+        {false && (
           <div>
                   <Form
                     form={form}
