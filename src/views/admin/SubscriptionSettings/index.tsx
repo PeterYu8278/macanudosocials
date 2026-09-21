@@ -29,6 +29,7 @@ const fetchAdmins = async (): Promise<User[]> => {
 
 const AdminAccountList: React.FC = () => {
   const { t } = useTranslation();
+  const { message } = App.useApp();
   const { data: admins = [], loading, refresh: refreshAdmins } = useFirestoreQuery(fetchAdmins);
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
 

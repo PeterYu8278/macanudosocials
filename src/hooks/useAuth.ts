@@ -259,6 +259,7 @@ export const useAuth = (): UseAuthReturn => {
 export const useRequireAuth = (): UseAuthReturn => {
   const auth = useAuth()
   const navigate = useNavigate()
+  const { message } = App.useApp()
 
   React.useEffect(() => {
     if (!auth.loading && !auth.isAuthenticated) {
@@ -290,6 +291,7 @@ export const useRequireAuth = (): UseAuthReturn => {
 export const useRequireAdmin = (): UseAuthReturn => {
   const auth = useAuth()
   const navigate = useNavigate()
+  const { message } = App.useApp()
 
   React.useEffect(() => {
     if (!auth.loading) {

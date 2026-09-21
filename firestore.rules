@@ -65,24 +65,12 @@ service cloud.firestore {
     }
     
     // ================================
-    // Member ID Index（公开只读，用于未登录时验证引荐码）
-    // ================================
-    match /memberIds/{memberId} {
-      allow read: if true;
-      // 已登录用户只能写入自己的 uid，防止伪造他人引荐码
-      allow create: if isSignedIn() && request.resource.data.uid == request.auth.uid;
-      allow update, delete: if isAnyAdmin();
-    }
-
-    // ================================
     // Users Collection
     // ================================
     match /users/{userId} {
-      // isAdmin() 会调用 getUserData()，在 users 规则里会造成循环读取。
-      // 这里改用 request.auth.token.admin（custom claim）判断管理员，
-      // 在未设置 custom claim 时降级为只允许 owner 读取自己的文档。
-      allow get: if isOwner(userId) || request.auth.token.admin == true;
-      allow list: if isSignedIn();
+      // 用户只能读取自己；高级管理员权限统一跟随 users/{uid}.role。
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin();
 
       // 创建：仅在注册时允许（特殊情况）
       allow create: if isSignedIn() && request.auth.uid == userId;
@@ -90,14 +78,14 @@ service cloud.firestore {
       // 更新：用户可以更新自己的数据，管理员可以更新所有
       allow update: if (isOwner(userId) &&
                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
-                    || request.auth.token.admin == true;
+                    || isAdmin();
 
       // 删除：仅管理员
-      allow delete: if request.auth.token.admin == true;
+      allow delete: if isAdmin();
 
       match /referrals/{referralId} {
         allow read: if isOwner(userId) || isSignedIn();
-        allow write: if request.auth.token.admin == true;
+        allow write: if isAdmin();
       }
 
       match /fcmTokens/{tokenId} {

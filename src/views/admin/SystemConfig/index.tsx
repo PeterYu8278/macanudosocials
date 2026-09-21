@@ -252,9 +252,9 @@ const SystemConfig: React.FC = () => {
                 borderBottom: isActive ? '2px solid #f4af25' : '2px solid transparent',
                 borderTop: 'none', borderLeft: 'none', borderRight: 'none',
                 cursor: 'pointer',
-                background: 'none',
+                background: isActive ? 'linear-gradient(to right,#FDE08D,#C48D3A)' : 'none',
                 ...(isActive
-                  ? { color: 'transparent', background: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text' }
+                  ? { color: 'transparent', WebkitBackgroundClip: 'text' }
                   : { color: '#A0A0A0' }),
               }}
             >

@@ -103,34 +103,27 @@ export const checkMemberIdExists = async (memberId: string): Promise<boolean> =>
 
 /**
  * 通过会员编号查找用户（用于引荐码验证）
+ * 通过后端直接查询 users.memberId，避免公开 users 集合或维护重复索引。
  */
 export const getUserByMemberId = async (memberId: string): Promise<{ success: boolean; user?: any; error?: string }> => {
   try {
-    // 标准化 memberId（转大写，去空格）
     const normalized = memberId.trim().toUpperCase();
-    
-    // ✅ 不验证格式，只验证是否为空
     if (!normalized) {
       return { success: false, error: '引荐码不能为空' };
     }
-    
-    // ✅ 直接查询是否存在
-    const q = query(
-      collection(db, 'users'),
-      where('memberId', '==', normalized),
-      limit(1)
-    );
-    
-    const snapshot = await getDocs(q);
-    
-    if (snapshot.empty) {
-      return { success: false, error: '引荐码不存在' };
+
+    const response = await fetch('/.netlify/functions/lookup-member', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ memberId: normalized }),
+    });
+    const result = await response.json() as { success?: boolean; user?: any; error?: string };
+
+    if (!response.ok || !result.success || !result.user) {
+      return { success: false, error: result.error || '引荐码不存在' };
     }
-    
-    const userDoc = snapshot.docs[0];
-    const userData = { id: userDoc.id, ...userDoc.data() };
-    
-    return { success: true, user: userData };
+
+    return { success: true, user: result.user };
   } catch (error) {
     return { success: false, error: '查询失败，请重试' };
   }
@@ -168,4 +161,3 @@ export const formatMemberId = (memberId: string | undefined, format: 'full' | 's
       return memberId;
   }
 };
-
