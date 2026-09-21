@@ -70,7 +70,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
     )
 
     const imageCard = (
-      <div style={{ ...cardStyle, marginBottom: isMobile ? 12 : 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: isMobile ? undefined : 200 }}>
+      <div style={{ ...cardStyle, marginBottom: isMobile ? 12 : 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: isMobile ? undefined : '100%', boxSizing: 'border-box' }}>
         {sectionHeader(<UploadOutlined />, t('events.eventImages'))}
         <div style={{ display: 'flex', justifyContent: 'center' }}>
           <ImageUpload
@@ -90,7 +90,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
         {isMobile && imageCard}
 
         {/* 基本信息 + 图片（电脑端并排） */}
-        <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start', marginBottom: 0 }}>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'stretch', marginBottom: 0 }}>
           {/* 基本信息卡片 */}
           <div style={{ ...cardStyle, flex: 1, marginBottom: 12 }}>
             {sectionHeader(<FileTextOutlined />, t('events.basicInfo'))}
@@ -126,7 +126,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
 
           {/* 电脑端：图片在右 */}
           {!isMobile && (
-            <div style={{ width: 200, flexShrink: 0 }}>
+            <div style={{ width: 200, flexShrink: 0, display: 'flex', flexDirection: 'column' }}>
               {imageCard}
             </div>
           )}
