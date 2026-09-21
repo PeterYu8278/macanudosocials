@@ -57,22 +57,38 @@ const DEFAULT_COLOR_THEME: ColorThemeConfig = {
 };
 
 const CONFIG_ID = 'default';
+const CONFIG_TIMEOUT_MS = 8000;
+const CONFIG_CACHE_TTL_MS = 30_000;
+
+let appConfigRequest: Promise<AppConfig | null> | null = null;
+let appConfigMemoryCache: { value: AppConfig; expiresAt: number } | null = null;
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
-  Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`appConfig timeout after ${ms}ms`)), ms)
-    ),
-  ]);
+  new Promise<T>((resolve, reject) => {
+    const timeoutId = setTimeout(
+      () => reject(new Error(`appConfig timeout after ${ms}ms`)),
+      ms
+    );
+
+    promise.then(
+      value => {
+        clearTimeout(timeoutId);
+        resolve(value);
+      },
+      error => {
+        clearTimeout(timeoutId);
+        reject(error);
+      }
+    );
+  });
 
 /**
  * 获取应用配置
  */
-export const getAppConfig = async (): Promise<AppConfig | null> => {
+const fetchAppConfig = async (): Promise<AppConfig | null> => {
   try {
     const docRef = doc(db, GLOBAL_COLLECTIONS.APP_CONFIG, CONFIG_ID);
-    let docSnap = await withTimeout(getDoc(docRef), 3000);
+    let docSnap = await withTimeout(getDoc(docRef), CONFIG_TIMEOUT_MS);
 
     // 如果文档不存在，尝试从缓存读取（可能是离线状态）
     if (!docSnap.exists()) {
@@ -210,15 +226,14 @@ export const getAppConfig = async (): Promise<AppConfig | null> => {
       updatedBy: data.updatedBy || '',
     };
   } catch (error: any) {
-    // 如果是离线错误，尝试从缓存读取
-    if (error?.code === 'unavailable' || error?.message?.includes('offline')) {
-      try {
-        const docRef = doc(db, GLOBAL_COLLECTIONS.APP_CONFIG, CONFIG_ID);
-        const docSnap = await getDocFromCache(docRef);
+    // 网络超时或离线时都尝试缓存，避免启动阶段直接丢失配置。
+    try {
+      const docRef = doc(db, GLOBAL_COLLECTIONS.APP_CONFIG, CONFIG_ID);
+      const docSnap = await getDocFromCache(docRef);
 
-        if (docSnap.exists()) {
-          console.log('[getAppConfig] 使用缓存数据（离线模式）');
-          const data = docSnap.data();
+      if (docSnap.exists()) {
+        console.log('[getAppConfig] 使用缓存数据（离线模式）');
+        const data = docSnap.data();
 
           // 处理配置数据（复用现有逻辑）
           const whapiConfig: WhapiConfig | undefined = data.whapi ? {
@@ -246,7 +261,7 @@ export const getAppConfig = async (): Promise<AppConfig | null> => {
               updatedAt: new Date(),
             }));
 
-          return {
+        return {
             id: docSnap.id,
             logoUrl: data.logoUrl || undefined,
             appName: data.appName || undefined,
@@ -305,16 +320,43 @@ export const getAppConfig = async (): Promise<AppConfig | null> => {
             } : undefined,
             updatedAt: data.updatedAt?.toDate?.() || new Date(data.updatedAt),
             updatedBy: data.updatedBy || '',
-          };
-        }
-      } catch (cacheError) {
-        console.warn('[getAppConfig] 缓存读取也失败:', cacheError);
+        };
       }
+    } catch (cacheError) {
+      console.warn('[getAppConfig] 缓存读取也失败:', cacheError);
+    }
+
+    if (error?.code === 'unavailable' || error?.message?.includes('offline') || error?.message?.includes('timeout')) {
+      console.warn('[getAppConfig] 网络读取失败，当前无可用缓存:', error.message);
     } else {
       console.error('[getAppConfig] 获取配置失败:', error);
     }
     return null;
   }
+};
+
+export const getAppConfig = (): Promise<AppConfig | null> => {
+  if (appConfigMemoryCache && appConfigMemoryCache.expiresAt > Date.now()) {
+    return Promise.resolve(appConfigMemoryCache.value);
+  }
+
+  if (!appConfigRequest) {
+    appConfigRequest = fetchAppConfig()
+      .then(config => {
+        if (config) {
+          appConfigMemoryCache = {
+            value: config,
+            expiresAt: Date.now() + CONFIG_CACHE_TTL_MS,
+          };
+        }
+        return config;
+      })
+      .finally(() => {
+        appConfigRequest = null;
+      });
+  }
+
+  return appConfigRequest;
 };
 
 /**
@@ -385,6 +427,8 @@ export const updateAppConfig = async (
         ...updateData,
       });
     }
+
+    appConfigMemoryCache = null;
 
     // 记录审计日志
     await saveAuditLog({
