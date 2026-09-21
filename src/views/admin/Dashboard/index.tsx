@@ -153,7 +153,8 @@ const TrendChart: React.FC<{
   valueFormatter?: (value: number) => string
   valueUnit?: string
   chartId?: string
-}> = ({ data, isMobile, valueFormatter, valueUnit, chartId = 'trend' }) => {
+  xLabelStride?: number
+}> = ({ data, isMobile, valueFormatter, valueUnit, chartId = 'trend', xLabelStride }) => {
   const { t } = useTranslation()
   const [hoveredPoint, setHoveredPoint] = useState<any>(null);
   if (data.length === 0) return <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '40px 0' }}>{t("common.noData")}</div>;
@@ -254,9 +255,8 @@ const TrendChart: React.FC<{
         {/* X Axis Labels */}
         {points.map((pt, idx) => {
           // Render fewer labels on mobile to avoid overlap
-          const showLabel = isMobile 
-            ? idx % 3 === 0 || idx === points.length - 1
-            : idx % 2 === 0 || idx === points.length - 1;
+          const stride = xLabelStride ?? (isMobile ? 3 : 2)
+          const showLabel = idx % stride === 0 || idx === points.length - 1
             
           if (!showLabel) return null;
           return (
@@ -702,7 +702,7 @@ const AdminDashboard: React.FC = () => {
     [isSuperAdmin, user?.storeId]
   )
   const { data: cigars, refresh: refreshCigars } = useFirestoreQuery<Cigar>(getCigars)
-  const { data: visitSessions, refresh: refreshVisitSessions } = useFirestoreQuery<any>(
+  const { data: visitSessions, loading: visitSessionsLoading, refresh: refreshVisitSessions } = useFirestoreQuery<any>(
     () => getAllVisitSessions(undefined, isSuperAdmin ? undefined : user?.storeId),
     [isSuperAdmin, user?.storeId]
   )
@@ -733,6 +733,7 @@ const AdminDashboard: React.FC = () => {
   const [trendPeriod, setTrendPeriod] = useState<'daily' | 'monthly' | 'yearly'>('daily')
   const [reloadTrendPeriod, setReloadTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [growthTrendPeriod, setGrowthTrendPeriod] = useState<'days30' | 'months12'>('days30')
+  const [occupancyTrendPeriod, setOccupancyTrendPeriod] = useState<'hours24' | 'days7'>('hours24')
   const [inventoryFeatureVisible, setInventoryFeatureVisible] = useState<boolean>(true)
   const [eventsAdminFeatureVisible, setEventsAdminFeatureVisible] = useState<boolean>(true)
   const [ordersFeatureVisible, setOrdersFeatureVisible] = useState<boolean>(true)
@@ -964,6 +965,40 @@ const AdminDashboard: React.FC = () => {
       }
     })
   }, [users, annualPassRecords, growthTrendPeriod])
+
+  const occupancyTrendData = useMemo(() => {
+    const now = dayjs()
+    const toDate = (value: any): Date | null => {
+      if (!value) return null
+      const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
+      return Number.isNaN(date.getTime()) ? null : date
+    }
+
+    const buckets = occupancyTrendPeriod === 'hours24'
+      ? Array.from({ length: 24 }, (_, index) => {
+          const start = now.subtract(23 - index, 'hour').startOf('hour')
+          return { start, end: start.add(1, 'hour'), label: start.format('HH:00') }
+        })
+      : Array.from({ length: 7 }, (_, index) => {
+          const start = now.subtract(6 - index, 'day').startOf('day')
+          return { start, end: start.add(1, 'day'), label: start.format('ddd') }
+        })
+
+    return buckets.map(bucket => {
+      const people = new Set<string>()
+      visitSessions.forEach(session => {
+        const checkIn = toDate(session.checkInAt)
+        if (!checkIn) return
+        const checkOut = toDate(session.checkOutAt)
+          || (session.status === 'pending' ? now.toDate() : toDate(session.updatedAt))
+          || checkIn
+        if (checkIn < bucket.end.toDate() && checkOut >= bucket.start.toDate()) {
+          people.add(session.userId || session.id)
+        }
+      })
+      return { label: bucket.label, value: people.size }
+    })
+  }, [visitSessions, occupancyTrendPeriod])
 
   // 本月数据
   const currentMonth = dayjs().format('YYYY-MM')
@@ -1363,6 +1398,53 @@ const AdminDashboard: React.FC = () => {
           <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
         ) : (
           <GrowthTrendChart data={growthTrendData} isMobile={isMobile} />
+        )}
+      </section>
+
+      {/* In-store occupancy trend */}
+      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
+            {t('dashboard.occupancyTrend')}
+          </h2>
+
+          <div style={{ display: 'flex', padding: 4, borderRadius: 8, background: 'rgba(255,255,255,0.05)' }}>
+            {(['hours24', 'days7'] as const).map(period => {
+              const active = occupancyTrendPeriod === period
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setOccupancyTrendPeriod(period)}
+                  style={{
+                    minHeight: 32,
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: active ? 'linear-gradient(to right, #FDE08D, #C48D3A)' : 'transparent',
+                    color: active ? '#111' : 'rgba(255,255,255,0.62)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {period === 'hours24' ? t('dashboard.last24Hours') : t('dashboard.last7Days')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {visitSessionsLoading ? (
+          <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : (
+          <TrendChart
+            data={occupancyTrendData}
+            isMobile={isMobile}
+            chartId="occupancy"
+            valueUnit={t('dashboard.peopleUnit')}
+            xLabelStride={occupancyTrendPeriod === 'hours24' ? 3 : 1}
+          />
         )}
       </section>
 
