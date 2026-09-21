@@ -752,26 +752,12 @@ export const createOrdersFromEventAllocations = async (eventId: string): Promise
   }
 };
 
-// 获取用户成功推荐的人数（已激活会员）
-// 可选：过滤特定时间段内的推荐（用于年费续费后重置计算）
-export const getSuccessfulReferralCount = async (userId: string, startDate?: Date, endDate?: Date): Promise<number> => {
+// 获取推荐人累计成功推荐人数：被推荐人曾成功开通 Annual Pass 即计入。
+export const getSuccessfulReferralCount = async (userId: string): Promise<number> => {
   try {
     if (!userId) return 0;
     const referralsRef = collection(db, COLLECTIONS.USERS, userId, 'referrals');
-    
-    let q;
-    if (startDate && endDate) {
-      // 过滤在特定时间段内激活会员的推荐记录
-      q = query(
-        referralsRef, 
-        where('membershipActivatedAt', '>=', startDate),
-        where('membershipActivatedAt', '<', endDate)
-      );
-    } else {
-      // 查询所有已激活会员的记录
-      q = query(referralsRef, where('membershipActivatedAt', '!=', null));
-    }
-    
+    const q = query(referralsRef, where('membershipActivatedAt', '!=', null));
     const snap = await getDocs(q);
     return snap.size;
   } catch (error) {

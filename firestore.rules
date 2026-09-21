@@ -101,7 +101,22 @@ service cloud.firestore {
 
       match /referrals/{referralId} {
         allow read: if isOwner(userId) || isSignedIn();
-        allow write: if isAdmin();
+        // 被推荐人成功开通 Annual Pass 后，只能为自己确认与既有推荐人的关系。
+        allow create: if isAdmin()
+                      || (isSignedIn()
+                          && referralId == request.auth.uid
+                          && request.resource.data.referredUserId == request.auth.uid
+                          && getUserData().status == 'active'
+                          && getUserData().referral.referredByUserId == userId);
+        allow update: if isAdmin()
+                      || (isSignedIn()
+                          && referralId == request.auth.uid
+                          && resource.data.referredUserId == request.auth.uid
+                          && getUserData().status == 'active'
+                          && getUserData().referral.referredByUserId == userId
+                          && request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['membershipActivatedAt', 'updatedAt']));
+        allow delete: if isAdmin();
       }
 
       match /fcmTokens/{tokenId} {
