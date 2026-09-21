@@ -16,13 +16,14 @@ import {
 import { db } from '../../../config/firebase'
 import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections'
 import { collection, addDoc } from 'firebase/firestore'
-import type { User, Order, Event, Transaction, Cigar, AppConfig, SubscriptionRequest } from '../../../types'
+import type { User, Order, Event, Transaction, Cigar, AppConfig, SubscriptionRequest, ReloadRecord } from '../../../types'
 import { useTranslation } from 'react-i18next'
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../../store/modules/auth'
 import { getAppConfig } from '../../../services/firebase/appConfig'
 import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
 import { getAllRoomBookings } from '../../../services/firebase/rooms'
+import { getAllReloadRecords } from '../../../services/firebase/reload'
 import OrderDetails from '../Orders/OrderDetails'
 
 const { Title } = Typography
@@ -145,7 +146,13 @@ const PlanSelector: React.FC<{ value?: string; onChange?: (val: string) => void;
   );
 };
 
-const TrendChart: React.FC<{ data: Array<{ label: string; value: number }>; isMobile: boolean }> = ({ data, isMobile }) => {
+const TrendChart: React.FC<{
+  data: Array<{ label: string; value: number }>
+  isMobile: boolean
+  valueFormatter?: (value: number) => string
+  valueUnit?: string
+  chartId?: string
+}> = ({ data, isMobile, valueFormatter, valueUnit, chartId = 'trend' }) => {
   const { t } = useTranslation()
   const [hoveredPoint, setHoveredPoint] = useState<any>(null);
   if (data.length === 0) return <div style={{ color: 'rgba(255,255,255,0.4)', textAlign: 'center', padding: '40px 0' }}>{t("common.noData")}</div>;
@@ -204,17 +211,17 @@ const TrendChart: React.FC<{ data: Array<{ label: string; value: number }>; isMo
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
         <defs>
           {/* Background area gradient */}
-          <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+          <linearGradient id={`${chartId}-area-gradient`} x1="0" y1="0" x2="0" y2="1">
             <stop offset="0%" stopColor="#f4af25" stopOpacity="0.3" />
             <stop offset="100%" stopColor="#f4af25" stopOpacity="0.0" />
           </linearGradient>
           {/* Smooth line gradient */}
-          <linearGradient id="lineGradient" x1="0" y1="0" x2="1" y2="0">
+          <linearGradient id={`${chartId}-line-gradient`} x1="0" y1="0" x2="1" y2="0">
             <stop offset="0%" stopColor="#FDE08D" />
             <stop offset="100%" stopColor="#C48D3A" />
           </linearGradient>
           {/* Shadow filter for glow effect */}
-          <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+          <filter id={`${chartId}-glow`} x="-20%" y="-20%" width="140%" height="140%">
             <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#f4af25" floodOpacity="0.3" />
           </filter>
         </defs>
@@ -267,7 +274,7 @@ const TrendChart: React.FC<{ data: Array<{ label: string; value: number }>; isMo
 
         {/* Shaded Area */}
         {areaD && (
-          <path d={areaD} fill="url(#areaGradient)" />
+          <path d={areaD} fill={`url(#${chartId}-area-gradient)`} />
         )}
 
         {/* Curve Path */}
@@ -275,10 +282,10 @@ const TrendChart: React.FC<{ data: Array<{ label: string; value: number }>; isMo
           <path 
             d={pathD} 
             fill="none" 
-            stroke="url(#lineGradient)" 
+            stroke={`url(#${chartId}-line-gradient)`}
             strokeWidth="3" 
             strokeLinecap="round"
-            filter="url(#glow)"
+            filter={`url(#${chartId}-glow)`}
           />
         )}
 
@@ -330,7 +337,8 @@ const TrendChart: React.FC<{ data: Array<{ label: string; value: number }>; isMo
         }}>
           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: '9px', marginBottom: 2 }}>{hoveredPoint.label}</div>
           <div style={{ fontWeight: 'bold' }}>
-            {hoveredPoint.value} {t("dashboard.trendCountUnit")}
+            {valueFormatter ? valueFormatter(hoveredPoint.value) : hoveredPoint.value}{' '}
+            {valueUnit ?? t("dashboard.trendCountUnit")}
           </div>
         </div>
       )}
@@ -588,6 +596,9 @@ const AdminDashboard: React.FC = () => {
     () => getAllRoomBookings(isSuperAdmin ? undefined : user?.storeId),
     [isSuperAdmin, user?.storeId]
   )
+  const { data: reloadRecords, loading: reloadRecordsLoading, refresh: refreshReloadRecords } = useFirestoreQuery<ReloadRecord>(
+    () => getAllReloadRecords('completed')
+  )
 
   const refreshAll = () => {
     refreshUsers()
@@ -597,10 +608,12 @@ const AdminDashboard: React.FC = () => {
     refreshCigars()
     refreshVisitSessions()
     refreshRoomBookings()
+    refreshReloadRecords()
   }
   const [trendDrawerVisible, setTrendDrawerVisible] = useState(false)
   const [trendType, setTrendType] = useState<'members' | 'bookings'>('members')
   const [trendPeriod, setTrendPeriod] = useState<'daily' | 'monthly' | 'yearly'>('daily')
+  const [reloadTrendPeriod, setReloadTrendPeriod] = useState<'days30' | 'months12'>('days30')
   const [inventoryFeatureVisible, setInventoryFeatureVisible] = useState<boolean>(true)
   const [eventsAdminFeatureVisible, setEventsAdminFeatureVisible] = useState<boolean>(true)
   const [ordersFeatureVisible, setOrdersFeatureVisible] = useState<boolean>(true)
@@ -740,6 +753,41 @@ const AdminDashboard: React.FC = () => {
     
     return list
   }
+
+  const reloadTrendData = useMemo(() => {
+    const totals = new Map<string, number>()
+
+    reloadRecords.forEach(record => {
+      const rawDate = record.verifiedAt || record.createdAt
+      const date = rawDate instanceof Date ? rawDate : new Date(rawDate)
+      if (Number.isNaN(date.getTime())) return
+
+      const key = reloadTrendPeriod === 'days30'
+        ? dayjs(date).format('YYYY-MM-DD')
+        : dayjs(date).format('YYYY-MM')
+      totals.set(key, (totals.get(key) || 0) + Number(record.requestedAmount || 0))
+    })
+
+    if (reloadTrendPeriod === 'days30') {
+      return Array.from({ length: 30 }, (_, index) => {
+        const date = dayjs().subtract(29 - index, 'day')
+        return {
+          label: date.format('DD MMM'),
+          value: totals.get(date.format('YYYY-MM-DD')) || 0
+        }
+      })
+    }
+
+    return Array.from({ length: 12 }, (_, index) => {
+      const month = dayjs().subtract(11 - index, 'month')
+      return {
+        label: month.format('MMM YY'),
+        value: totals.get(month.format('YYYY-MM')) || 0
+      }
+    })
+  }, [reloadRecords, reloadTrendPeriod])
+
+  const reloadTrendTotal = reloadTrendData.reduce((sum, item) => sum + item.value, 0)
 
   // 本月数据
   const currentMonth = dayjs().format('YYYY-MM')
@@ -1044,6 +1092,62 @@ const AdminDashboard: React.FC = () => {
           </div>
         </Form>
       </Modal>
+
+      {/* Reload trend */}
+      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
+          <div>
+            <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
+              <ReloadOutlined style={{ color: '#E7B54A' }} />
+              {t('dashboard.reloadTrend')}
+            </h2>
+            <div style={{ marginTop: 3, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+              {t('dashboard.reloadTotal')}:{' '}
+              <span style={{ color: '#FDE08D', fontWeight: 700 }}>
+                RM{reloadTrendTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+          </div>
+
+          <div style={{ display: 'flex', padding: 4, borderRadius: 8, background: 'rgba(255,255,255,0.05)' }}>
+            {(['days30', 'months12'] as const).map(period => {
+              const active = reloadTrendPeriod === period
+              return (
+                <button
+                  key={period}
+                  type="button"
+                  onClick={() => setReloadTrendPeriod(period)}
+                  style={{
+                    minHeight: 32,
+                    padding: '6px 12px',
+                    border: 'none',
+                    borderRadius: 6,
+                    background: active ? 'linear-gradient(to right, #FDE08D, #C48D3A)' : 'transparent',
+                    color: active ? '#111' : 'rgba(255,255,255,0.62)',
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {period === 'days30' ? t('dashboard.last30Days') : t('dashboard.last12Months')}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {reloadRecordsLoading ? (
+          <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : (
+          <TrendChart
+            data={reloadTrendData}
+            isMobile={isMobile}
+            chartId="reload"
+            valueFormatter={value => `RM${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            valueUnit=""
+          />
+        )}
+      </section>
 
       {/* 快速操作 */}
       <div style={{ marginBottom: 16 }}>
