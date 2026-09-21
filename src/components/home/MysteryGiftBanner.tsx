@@ -8,7 +8,6 @@ import { COLLECTIONS } from '../../services/firebase/firestore';
 import { getAppConfig } from '../../services/firebase/appConfig';
 import { useAuth } from '../../hooks/useAuth';
 import { getSuccessfulReferralCount } from '../../services/firebase/firestore';
-import { getUserMembershipPeriod } from '../../services/firebase/membershipFee';
 import { useTranslation } from 'react-i18next';
 import type { AppConfig } from '../../types';
 
@@ -47,8 +46,7 @@ export const MysteryGiftBanner: React.FC<MysteryGiftBannerProps> = ({ style }) =
     setLoading(true);
     const load = async () => {
       try {
-        const period = await getUserMembershipPeriod(user.id);
-        const count = await getSuccessfulReferralCount(user.id, period?.startDate, period?.endDate);
+        const count = await getSuccessfulReferralCount(user.id);
         setReferrals(count);
         setRedeemedMilestones(user.referral?.redeemedMilestones ?? []);
       } catch {
