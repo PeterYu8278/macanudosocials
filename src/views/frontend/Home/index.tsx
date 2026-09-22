@@ -775,7 +775,7 @@ const Home: React.FC = () => {
       {/* 最新活动 列表（真实数据） - 仅在活动功能可见时显示 */}
       {eventsFeatureVisible && (
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 32, marginBottom: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 32, marginBottom: 8 }}>
             <Title level={4} style={{ margin: 0, color: '#f8f8f8', lineHeight: '32px' }}>{t('home.latestEvents')}</Title>
             <Button
               type="link"

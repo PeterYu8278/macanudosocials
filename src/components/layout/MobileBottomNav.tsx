@@ -200,7 +200,7 @@ const MobileBottomNav: React.FC = () => {
           width: '58px',
           height: '32px',
           borderRadius: '18px',
-          background: active ? '#FFD65A' : 'transparent',
+          background: active ? 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)' : 'transparent',
           transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
           boxShadow: active ? '0 3px 10px rgba(255, 214, 90, 0.2)' : 'none'
         }}>
@@ -302,7 +302,7 @@ const MobileBottomNav: React.FC = () => {
               width: '58px',
               height: '32px',
               borderRadius: '18px',
-              background: '#FFD65A',
+              background: 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
