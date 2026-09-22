@@ -6,7 +6,6 @@ import {
   CalendarOutlined,
   ShoppingOutlined,
   TeamOutlined,
-  FireOutlined,
   CrownOutlined,
   StarOutlined,
   TrophyOutlined
@@ -381,7 +380,7 @@ const Home: React.FC = () => {
                 {t('home.welcomeTitle')} {appConfig?.appName || 'Cigar Club'}
               </h1>
 
-              {/* 副标题和火焰图标 - 并排显示 */}
+              {/* 副标题和 App Logo - 并排显示 */}
               <Row align="middle" justify="center" style={{ marginBottom: 3 }}>
                 <Col span={16}>
                   <Paragraph style={{ color: '#c0c0c0', fontSize: '12px', lineHeight: 1.4, textAlign: 'left' }}>
@@ -389,11 +388,18 @@ const Home: React.FC = () => {
                   </Paragraph>
                 </Col>
                 <Col span={8} style={{ textAlign: 'center' }}>
-                  <FireOutlined style={{
-                    fontSize: '55px',
-                    color: 'rgba(255, 215, 0, 0.6)',
-                    filter: 'drop-shadow(0 0 20px rgba(255, 215, 0, 0.3))'
-                  }} />
+                  <img
+                    src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
+                    alt={appConfig?.appName || 'Cigar Club'}
+                    style={{
+                      width: '84px',
+                      height: '64px',
+                      maxWidth: '100%',
+                      objectFit: 'contain',
+                      display: 'inline-block',
+                      filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
+                    }}
+                  />
                 </Col>
               </Row>
             </div>
