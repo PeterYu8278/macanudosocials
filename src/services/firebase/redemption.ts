@@ -268,8 +268,11 @@ export const createPendingRedemptionRecord = async (
       const docSnap = await transaction.get(docRef);
       
       if (docSnap.exists()) {
-        // 文档已存在，使用 arrayUnion 添加新记录
+        // 同时补齐旧版文档缺失的所有权字段。
         transaction.update(docRef, {
+          visitSessionId,
+          userId,
+          userName: userData.displayName,
           redemptions: arrayUnion(recordItem),
           updatedAt: Timestamp.fromDate(now)
         });
@@ -383,8 +386,11 @@ export const createRedemptionRecord = async (
       const docSnap = await transaction.get(docRef);
       
       if (docSnap.exists()) {
-        // 文档已存在，使用 arrayUnion 添加新记录
+        // 同时补齐旧版文档缺失的所有权字段。
         transaction.update(docRef, {
+          visitSessionId,
+          userId,
+          userName: userData.displayName,
           redemptions: arrayUnion(recordItem),
           updatedAt: Timestamp.fromDate(now)
         });

@@ -58,6 +58,14 @@ service cloud.firestore {
     function isOwner(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
+
+    // Redemption document IDs are visit session IDs. Older redemption
+    // documents may not contain a top-level userId, so ownership can be
+    // recovered from the corresponding visit session without widening access.
+    function isVisitSessionOwner(sessionId) {
+      return isSignedIn()
+             && isOwner(get(/databases/$(database)/documents/visitSessions/$(sessionId)).data.userId);
+    }
     
     // 检查用户状态是否活跃
     function isActiveUser() {
@@ -265,17 +273,26 @@ service cloud.firestore {
     // Redemption Records Collection
     // ================================
     match /redemptionRecords/{recordId} {
-      // 读取：用户可以查看自己的兑换记录，任意管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isAnyAdmin();
+      // 兼容缺少顶层 userId 的旧版兑换文档：文档 ID 即 visitSessionId。
+      allow read: if isOwner(resource.data.userId)
+                  || isVisitSessionOwner(recordId)
+                  || isAnyAdmin();
 
-      // Day Pass 事务可创建或合并用户本人的待兑换记录。
+      // 用户只能为自己当前的驻店记录创建兑换文档。
       allow create: if isAnyAdmin()
-                    || (isSignedIn()
-                        && getUserData().status == 'inactive'
-                        && request.resource.data.userId == request.auth.uid);
+                    || (isVisitSessionOwner(recordId)
+                        && request.resource.data.visitSessionId == recordId
+                        && request.resource.data.userId
+                             == get(/databases/$(database)/documents/visitSessions/$(recordId)).data.userId);
       allow update: if isAnyAdmin()
-                    || (isOwner(resource.data.userId)
-                        && request.resource.data.userId == resource.data.userId);
+                    || (isVisitSessionOwner(recordId)
+                        && ((request.resource.data.diff(resource.data).affectedKeys()
+                               .hasOnly(['redemptions', 'updatedAt']))
+                            || (request.resource.data.visitSessionId == recordId
+                                && request.resource.data.userId
+                                     == get(/databases/$(database)/documents/visitSessions/$(recordId)).data.userId
+                                && request.resource.data.diff(resource.data).affectedKeys()
+                                     .hasOnly(['visitSessionId', 'userId', 'userName', 'redemptions', 'updatedAt']))));
       allow delete: if isAnyAdmin();
     }
     
