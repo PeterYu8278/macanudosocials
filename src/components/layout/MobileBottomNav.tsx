@@ -166,6 +166,14 @@ const MobileBottomNav: React.FC = () => {
     return location.pathname === path || location.pathname.startsWith(path + '/')
   }
 
+  const activeNavIndex = navItems.findIndex(item => isActive(item.key))
+  const middleIndex = leftItems.length
+  const activeDisplayIndex = activeNavIndex < 0
+    ? 0
+    : activeNavIndex < middleIndex
+      ? activeNavIndex
+      : activeNavIndex + (showScannerButton ? 1 : 0)
+
   const renderNavItem = (item: typeof navItems[0]) => {
     const active = isActive(item.key)
     return (
@@ -187,6 +195,7 @@ const MobileBottomNav: React.FC = () => {
           height: '64px',
           transition: 'color 0.2s ease',
           position: 'relative',
+          zIndex: 1,
           borderRadius: '8px'
         }}
         className={`mobile-nav-item${active ? ' mobile-nav-item-active' : ''}`}
@@ -200,9 +209,7 @@ const MobileBottomNav: React.FC = () => {
           width: '58px',
           height: '32px',
           borderRadius: '18px',
-          background: active ? 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)' : 'transparent',
-          transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
-          boxShadow: active ? '0 3px 10px rgba(255, 214, 90, 0.2)' : 'none'
+          background: 'transparent'
         }}>
           <div style={{
             fontSize: '20px',
@@ -271,6 +278,42 @@ const MobileBottomNav: React.FC = () => {
       className="mobile-bottom-nav mobile-bottom-action-bar"
       data-nav-count={totalItemsCount}
     >
+      <div
+        aria-hidden="true"
+        className="mobile-nav-highlight-track"
+        style={{
+          position: 'absolute',
+          top: '8px',
+          left: '8px',
+          right: '8px',
+          height: '32px',
+          pointerEvents: 'none',
+          zIndex: 0
+        }}
+      >
+        <span
+          style={{
+            width: `${100 / totalItemsCount}%`,
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            transform: `translateX(${activeDisplayIndex * 100}%)`,
+            transition: 'transform 280ms cubic-bezier(0.22, 1, 0.36, 1)'
+          }}
+        >
+          <span
+            style={{
+              width: '58px',
+              height: '32px',
+              borderRadius: '18px',
+              background: 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)',
+              boxShadow: '0 3px 10px rgba(255, 214, 90, 0.2)'
+            }}
+          />
+        </span>
+      </div>
+
       {/* 左侧导航项 */}
       {leftItems.map(renderNavItem)}
 

@@ -690,6 +690,12 @@ a:hover {
   opacity: 0.55;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .mobile-nav-highlight-track > span {
+    transition: none !important;
+  }
+}
+
 .profile-record-tab {
   appearance: none;
   background-color: transparent !important;

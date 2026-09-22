@@ -466,7 +466,7 @@ const Home: React.FC = () => {
 
       {/* CTA 横幅 - 神秘礼物 - 仅在驻店记录功能可见时显示 */}
       {visitSessionsFeatureVisible && (
-        <MysteryGiftBanner />
+        <MysteryGiftBanner style={{ marginBottom: 12 }} />
       )}
 
       {/* 功能卡片 - 已移除旧"最新活动"卡片，改为下方新列表 */}
