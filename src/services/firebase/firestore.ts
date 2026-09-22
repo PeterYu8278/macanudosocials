@@ -74,11 +74,6 @@ const isEventOpenForRegistration = (event: Event): boolean => {
     return false;
   }
 
-  const registrationDeadline = toDateOrNull((event as any)?.schedule?.registrationDeadline);
-  if (registrationDeadline && now > registrationDeadline) {
-    return false;
-  }
-
   return true;
 };
 

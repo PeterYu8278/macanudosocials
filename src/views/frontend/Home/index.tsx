@@ -768,8 +768,8 @@ const Home: React.FC = () => {
                       {(() => {
                         const isRegistered = isUserRegistered(ev as Event)
                         const isLoading = registeringEvents.has(ev.id)
-                        const isPastDeadline = ev.schedule?.registrationDeadline &&
-                          new Date(ev.schedule.registrationDeadline) < new Date()
+                        const isPastDeadline = ev.schedule?.endDate &&
+                          new Date(ev.schedule.endDate) < new Date()
 
                         return (
                           <Button

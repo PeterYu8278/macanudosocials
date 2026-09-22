@@ -95,7 +95,7 @@ export const CartModal: React.FC<CartModalProps> = ({
           const now = new Date()
           const available = events.filter(event => {
             const isStatusValid = event.status === 'upcoming' || event.status === 'ongoing'
-            const isDeadlineValid = new Date(event.schedule.registrationDeadline) >= now
+            const isDeadlineValid = new Date(event.schedule.endDate) >= now
             return isStatusValid && isDeadlineValid
           })
           setAvailableEvents(available)

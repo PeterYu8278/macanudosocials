@@ -298,9 +298,11 @@ const AdminEvents: React.FC = () => {
           }
           break
         case 'endDate':
+          const nextEndDate = toDateOrNull(editForm.endDate)
           updatedViewing.schedule = {
             ...(viewing as any).schedule,
-            endDate: toDateOrNull(editForm.endDate)
+            endDate: nextEndDate,
+            registrationDeadline: nextEndDate
           }
           break
         case 'locationName':
@@ -345,16 +347,22 @@ const AdminEvents: React.FC = () => {
           updateData.status = editForm.status
           break
         case 'startDate':
+          const nextScheduleEndDate = editForm.endDate !== undefined
+            ? toDateOrNull(editForm.endDate)
+            : (viewing as any).schedule?.endDate
           updateData.schedule = {
             ...(viewing as any).schedule,
             startDate: toDateOrNull(editForm.startDate),
-            endDate: editForm.endDate !== undefined ? toDateOrNull(editForm.endDate) : (viewing as any).schedule?.endDate
+            endDate: nextScheduleEndDate,
+            registrationDeadline: nextScheduleEndDate
           }
           break
         case 'endDate':
+          const nextEndDate = toDateOrNull(editForm.endDate)
           updateData.schedule = {
             ...(viewing as any).schedule,
-            endDate: toDateOrNull(editForm.endDate),
+            endDate: nextEndDate,
+            registrationDeadline: nextEndDate,
             startDate: updateData.schedule?.startDate || (viewing as any).schedule?.startDate
           }
           break

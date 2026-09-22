@@ -27,7 +27,7 @@ const EventSelect: React.FC<EventSelectProps> = ({
     .filter((event: Event) => {
       const now = new Date()
       const isStatusValid = event.status === 'upcoming' || event.status === 'ongoing'
-      const isDeadlineValid = new Date((event as any).schedule?.registrationDeadline) >= now
+      const isDeadlineValid = new Date((event as any).schedule?.endDate) >= now
       return isStatusValid && isDeadlineValid
     })
     .map((event: Event) => ({

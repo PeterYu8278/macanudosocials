@@ -105,16 +105,13 @@ const Events: React.FC = () => {
   }
 
   const isRegistrationClosed = (event: Event): boolean => {
-    const now = new Date()
     const displayStatus = getDisplayStatus(event)
-    const registrationDeadline = toDateOrNull(event.schedule?.registrationDeadline)
 
     return (
       displayStatus === 'completed' ||
       event.status === 'completed' ||
       event.status === 'cancelled' ||
-      event.status === 'draft' ||
-      !!(registrationDeadline && now > registrationDeadline)
+      event.status === 'draft'
     )
   }
 

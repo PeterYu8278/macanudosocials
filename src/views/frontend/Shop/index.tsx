@@ -52,7 +52,7 @@ const Shop: React.FC = () => {
   const availableEvents = allEvents.filter(event => {
     const now = new Date()
     const isStatusValid = event.status === 'upcoming' || event.status === 'ongoing'
-    const isDeadlineValid = new Date(event.schedule.registrationDeadline) >= now
+    const isDeadlineValid = new Date(event.schedule.endDate) >= now
     return isStatusValid && isDeadlineValid
   })
   const { user } = useAuthStore()
