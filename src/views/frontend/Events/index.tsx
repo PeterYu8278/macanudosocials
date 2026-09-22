@@ -383,7 +383,8 @@ const Events: React.FC = () => {
               <div style={{
                 position: 'relative',
                 width: '100%',
-                aspectRatio: '16/9',
+                height: isMobile ? 151 : undefined,
+                aspectRatio: isMobile ? undefined : '16/9',
                 flexShrink: 0,
                 backgroundImage: `url("${(event as any).imageUrl || (event as any).coverImage || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHkrz9j7PM4w5oJ-Ev89VkzHjq_v56FKnoLokAM_pzgzM6iNfbhlUqD41_YlPuL4JuB_cB8FzngJx-Ha2y__35Q0NvH6BwubyOXdY9GvnvbwOpdZ6Edy1OyMJPkfG6-efD4YBYLZSO1BFlMu6u6T3Vujsd4rKIgWOwxgLHVkDsWwS72e271qwxZ4vothKhf_zW-CiGBhoIQQsvWO9zQCYJuVevXIVGOwLdkBIDO_b0EdZISgCxP0RGVW71K71lUAE_lwj27PQZiuVb'}"})`,
                 backgroundSize: 'cover',
