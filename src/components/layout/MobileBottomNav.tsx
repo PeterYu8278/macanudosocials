@@ -1,6 +1,6 @@
 // 手机端底部导航组件 - Cigar Club黑金主题
 import React, { useState, useEffect, useMemo } from 'react'
-import { Layout, Badge } from 'antd'
+import { Badge } from 'antd'
 import { useNavigate, useLocation } from 'react-router-dom'
 import {
   HomeOutlined,
@@ -19,8 +19,6 @@ import { useTranslation } from 'react-i18next'
 import { UniversalScanner } from '../common/UniversalScanner'
 import { getFeaturesVisibility } from '../../services/firebase/featureVisibility'
 import { getFeatureKeyByRoute } from '../../config/featureDefinitions'
-
-const { Footer } = Layout
 
 const MobileBottomNav: React.FC = () => {
   const navigate = useNavigate()
@@ -180,24 +178,43 @@ const MobileBottomNav: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          padding: '4px',
+          padding: '5px 2px 4px',
           width: itemWidth,
-          transition: 'all 0.3s ease',
-          position: 'relative'
+          minWidth: 0,
+          height: '56px',
+          transition: 'color 0.2s ease, background-color 0.2s ease',
+          position: 'relative',
+          borderRadius: '6px'
         }}
         className={`mobile-nav-item${active ? ' mobile-nav-item-active' : ''}`}
       >
+        {active && (
+          <span
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: '50%',
+              width: '24px',
+              height: '2px',
+              transform: 'translateX(-50%)',
+              background: '#FFD700',
+              borderRadius: '0 0 2px 2px'
+            }}
+          />
+        )}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '4px',
+          marginBottom: '2px',
           position: 'relative'
         }}>
           <div style={{
-            fontSize: '24px',
+            fontSize: '21px',
             color: active ? '#FFD700' : '#9ca3af',
-            transition: 'all 0.3s ease'
+            lineHeight: 1,
+            transition: 'color 0.2s ease'
           }}>
             {item.icon}
           </div>
@@ -218,12 +235,12 @@ const MobileBottomNav: React.FC = () => {
         </div>
 
         <div style={{
-          fontSize: '11px',
+          fontSize: '10px',
           color: active ? '#FFD700' : '#9ca3af',
           fontWeight: active ? 600 : 400,
           textAlign: 'center',
           lineHeight: 1.2,
-          transition: 'all 0.3s ease',
+          transition: 'color 0.2s ease',
           whiteSpace: 'nowrap',
           overflow: 'hidden',
           textOverflow: 'ellipsis',
@@ -236,36 +253,29 @@ const MobileBottomNav: React.FC = () => {
   }
 
   return (
-    <Footer
+    <div
+      role="toolbar"
+      aria-label="Bottom actions"
       style={{
         position: 'fixed',
         bottom: 0,
         left: 0,
         right: 0,
-        height: 'calc(70px + env(safe-area-inset-bottom, 0px))',
-        background: 'linear-gradient(180deg, rgba(45, 45, 45, 0.95) 0%, rgba(0, 0, 0, 0.95) 100%)',
-        borderTop: '1px solid rgba(255, 215, 0, 0.3)',
-        backdropFilter: 'blur(8px)',
-        padding: '0 16px calc(4px + env(safe-area-inset-bottom, 0px)) 16px',
+        height: 'calc(62px + env(safe-area-inset-bottom, 0px))',
+        background: 'rgba(16, 16, 16, 0.96)',
+        borderTop: '1px solid rgba(255, 215, 0, 0.22)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        padding: '0 max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px))',
         zIndex: 1000,
         display: 'flex',
-        alignItems: 'flex-end',
-        justifyContent: 'space-around'
+        alignItems: 'center',
+        justifyContent: 'space-around',
+        boxShadow: '0 -6px 20px rgba(0, 0, 0, 0.28)'
       }}
-      className="mobile-bottom-nav"
+      className="mobile-bottom-nav mobile-bottom-action-bar"
       data-nav-count={totalItemsCount}
     >
-      {/* 背景装饰 */}
-      <div style={{
-        position: 'absolute',
-        top: 0,
-        left: 0,
-        right: 0,
-        bottom: 0,
-        background: 'linear-gradient(180deg, rgba(255, 215, 0, 0.03) 0%, transparent 100%)',
-        pointerEvents: 'none'
-      }} />
-
       {/* 左侧导航项 */}
       {leftItems.map(renderNavItem)}
 
@@ -279,7 +289,8 @@ const MobileBottomNav: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           position: 'relative',
-          zIndex: 10
+          zIndex: 10,
+          height: '56px'
         }}
         className="mobile-nav-item"
       >
@@ -290,17 +301,17 @@ const MobileBottomNav: React.FC = () => {
           className="mobile-nav-scan-button"
           style={{
             position: 'relative',
-            top: '-14px',
-            width: '80px', // QR按钮大小
-            height: '80px', // QR按钮大小
+            top: '-7px',
+            width: '54px',
+            height: '54px',
             borderRadius: '50%',
-            border: '4px solid rgba(26, 26, 26, 0.95)',
-            background: 'linear-gradient(135deg, #FDE08D 0%, #FDD017 100%)',
+            border: '3px solid #161616',
+            background: '#FFD65A',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 16px rgba(255, 215, 0, 0.3)',
-            transition: 'all 0.3s ease',
+            boxShadow: '0 4px 12px rgba(255, 215, 0, 0.24)',
+            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
             cursor: 'pointer',
             padding: 0
           }}
@@ -308,7 +319,7 @@ const MobileBottomNav: React.FC = () => {
           <QrcodeOutlined
               className="qr-icon-large"
             style={{
-                fontSize: '50px',
+                fontSize: '30px',
               color: '#111',
             }}
           />
@@ -325,7 +336,7 @@ const MobileBottomNav: React.FC = () => {
         onClose={() => setScannerVisible(false)}
         defaultTab={canAccessQR ? 'qr' : 'ai'} // 管理员和开发者默认扫码(checkin)，普通用户默认AI
       />
-    </Footer>
+    </div>
   )
 }
 

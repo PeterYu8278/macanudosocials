@@ -557,8 +557,8 @@ a:hover {
   .ant-layout-content {
     margin-left: 0 !important;
     padding: 16px;
-    padding-bottom: calc(90px + env(safe-area-inset-bottom, 0px));
-    /* 为底部导航留出空间 */
+    padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px));
+    /* 为底部操作栏留出空间 */
   }
 }
 
@@ -591,41 +591,42 @@ a:hover {
     font-size: 16px !important;
   }
 
-  /* 小屏手机端底部导航优化 */
+  /* 小屏手机端底部操作栏优化 */
   .mobile-bottom-nav {
-    height: 65px !important;
-    padding: 6px 12px !important;
+    height: calc(60px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0 8px calc(4px + env(safe-area-inset-bottom, 0px)) !important;
   }
 
   .mobile-nav-item {
-    min-width: 50px !important;
-    padding: 6px 8px !important;
+    min-width: 0 !important;
+    padding: 4px 2px !important;
   }
 
   .mobile-nav-item .anticon {
-    font-size: 18px !important;
+    font-size: 20px !important;
   }
 
   /* QR 图标特殊大小（不受小屏限制） */
   .qr-icon-large.anticon,
   .qr-icon-large {
-    font-size: 50px !important;
-    width: 50px !important;
-    height: 50px !important;
+    font-size: 30px !important;
+    width: 30px !important;
+    height: 30px !important;
   }
 
   .mobile-nav-item div:last-child {
     font-size: 10px !important;
   }
 
-  /* 5个导航项的特殊优化 */
+  /* 5个操作项的特殊优化 */
   .mobile-bottom-nav[data-nav-count="5"] {
-    padding: 6px 8px !important;
+    padding-left: 4px !important;
+    padding-right: 4px !important;
   }
 
   .mobile-bottom-nav[data-nav-count="5"] .mobile-nav-item {
-    min-width: 45px !important;
-    padding: 6px 6px !important;
+    min-width: 0 !important;
+    padding: 4px 1px !important;
   }
 
   .mobile-bottom-nav[data-nav-count="5"] .mobile-nav-item div:last-child {
@@ -633,7 +634,7 @@ a:hover {
   }
 }
 
-/* 底部导航交互样式 */
+/* 底部操作栏交互样式 */
 .mobile-nav-item {
   background: transparent !important;
   border: none !important;
@@ -644,15 +645,17 @@ a:hover {
 }
 
 .mobile-nav-item:hover {
-  transform: translateY(-2px);
-  background: transparent !important;
+  background: rgba(255, 255, 255, 0.035) !important;
   border: none !important;
 }
 
 .mobile-nav-item:active {
-  transform: translateY(0);
-  background: transparent !important;
+  background: rgba(255, 215, 0, 0.07) !important;
   border: none !important;
+}
+
+.mobile-nav-item-active {
+  background: rgba(255, 215, 0, 0.045) !important;
 }
 
 .mobile-bottom-nav .mobile-nav-item:focus {
