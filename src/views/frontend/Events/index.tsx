@@ -333,40 +333,98 @@ const Events: React.FC = () => {
               <article
                 key={`announcement-${announcement.id}`}
                 style={{
-                  border: `1px solid ${accentColor}55`,
-                  borderRadius: 8,
+                  borderRadius: 12,
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
                   background: '#1a1a1a',
-                  boxShadow: '0 4px 20px rgba(0,0,0,0.35)'
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
+                  transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                }}
+                onMouseEnter={(event) => {
+                  event.currentTarget.style.transform = 'translateY(-3px)'
+                  event.currentTarget.style.boxShadow = '0 8px 28px rgba(0,0,0,0.55)'
+                }}
+                onMouseLeave={(event) => {
+                  event.currentTarget.style.transform = 'translateY(0)'
+                  event.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.4)'
                 }}
               >
                 {announcement.image && (
-                  <img
-                    src={announcement.image}
-                    alt=""
-                    style={{ width: '100%', aspectRatio: '16/9', objectFit: 'cover' }}
-                  />
+                  <div
+                    role="img"
+                    aria-label={announcement.title}
+                    style={{
+                      position: 'relative',
+                      width: '100%',
+                      height: isMobile ? 151 : undefined,
+                      aspectRatio: isMobile ? undefined : '16/9',
+                      flexShrink: 0,
+                      backgroundImage: `url("${announcement.image}")`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }}
+                  >
+                    <span style={{
+                      position: 'absolute',
+                      top: 10,
+                      right: 10,
+                      padding: '2px 10px',
+                      borderRadius: 99,
+                      background: accentColor,
+                      color: '#fff',
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: '0.04em',
+                      backdropFilter: 'blur(4px)',
+                    }}>
+                      {t(`announcements.${announcement.type}`)}
+                    </span>
+                  </div>
                 )}
-                <div style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <div style={{
+                  padding: isMobile ? '12px 14px 14px' : 16,
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: isMobile ? 7 : 9,
+                }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
                     <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
                       <NotificationOutlined />
                       {t('announcements.label')}
                     </span>
-                    <span style={{ padding: '3px 9px', borderRadius: 99, background: `${accentColor}22`, color: accentColor, fontSize: 11, fontWeight: 700 }}>
-                      {t(`announcements.${announcement.type}`)}
-                    </span>
+                    {!announcement.image && (
+                      <span style={{ padding: '3px 9px', borderRadius: 99, background: `${accentColor}22`, color: accentColor, fontSize: 11, fontWeight: 700 }}>
+                        {t(`announcements.${announcement.type}`)}
+                      </span>
+                    )}
                   </div>
 
-                  <h2 style={{ margin: 0, color: '#fff', fontSize: 18, lineHeight: 1.35, fontWeight: 750 }}>
+                  <h2 style={{
+                    margin: 0,
+                    fontSize: 17,
+                    lineHeight: 1.3,
+                    fontWeight: 700,
+                    backgroundImage: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+                    WebkitBackgroundClip: 'text',
+                    color: 'transparent',
+                  }}>
                     {announcement.title}
                   </h2>
-                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.72)', fontSize: 14, lineHeight: 1.65, whiteSpace: 'pre-wrap' }}>
+                  <p style={{
+                    margin: 0,
+                    color: 'rgba(255,255,255,0.68)',
+                    fontSize: 13,
+                    lineHeight: 1.5,
+                    whiteSpace: 'pre-wrap',
+                    display: '-webkit-box',
+                    WebkitBoxOrient: 'vertical',
+                    WebkitLineClamp: isMobile ? 2 : 3,
+                    overflow: 'hidden',
+                  }}>
                     {announcement.content}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
                     <CalendarOutlined style={{ fontSize: 12 }} />
                     <span>{formatDisplayDate(item.date, i18n.language || 'zh-CN')}</span>
                   </div>
