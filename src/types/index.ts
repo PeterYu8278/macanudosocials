@@ -3,6 +3,8 @@ export type { ServiceResponse, ServiceListResponse } from './api'
 
 // 用户相关类型
 export type UserRole = 'superAdmin' | 'admin' | 'storeAdmin' | 'member' | 'guest' | 'vip' | 'developer';
+export type Gender = 'male' | 'female';
+export type Race = 'chinese' | 'indian' | 'malay' | 'other';
 
 export interface User {
   id: string;
@@ -71,6 +73,8 @@ export interface User {
   profile?: {
     avatar?: string;
     phone?: string;
+    gender?: Gender;
+    race?: Race;
   };
   // 用户地址列表
   addresses?: Address[];

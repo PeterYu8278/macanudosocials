@@ -1835,6 +1835,20 @@
     "phoneLabel": "Phone",
     "phoneRequired": "Please enter phone number",
     "phonePlaceholder": "Enter phone number",
+    "gender": "Gender",
+    "selectGender": "Select gender",
+    "genderOptions": {
+      "male": "Male",
+      "female": "Female"
+    },
+    "race": "Race",
+    "selectRace": "Select race",
+    "raceOptions": {
+      "chinese": "Chinese",
+      "indian": "Indian",
+      "malay": "Malay",
+      "other": "Other"
+    },
     "unknown": "Unknown",
     "notificationsToggle": "Enable Notifications",
     "pushNotifications": {

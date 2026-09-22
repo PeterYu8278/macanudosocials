@@ -1836,6 +1836,20 @@
     "phoneLabel": "手机",
     "phoneRequired": "请输入手机号",
     "phonePlaceholder": "请输入手机号码",
+    "gender": "性别",
+    "selectGender": "请选择性别",
+    "genderOptions": {
+      "male": "男性",
+      "female": "女性"
+    },
+    "race": "族群",
+    "selectRace": "请选择族群",
+    "raceOptions": {
+      "chinese": "华人",
+      "indian": "印度裔",
+      "malay": "马来裔",
+      "other": "其他"
+    },
     "unknown": "未知",
     "notificationsToggle": "开启通知",
     "pushNotifications": {

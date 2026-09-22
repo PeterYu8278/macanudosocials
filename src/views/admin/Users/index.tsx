@@ -368,6 +368,8 @@ const AdminUsers: React.FC = () => {
               discountNote: record.discount?.note,
               level: record.membership?.level,
               phone: (record as any)?.profile?.phone,
+              gender: record.profile?.gender,
+              race: record.profile?.race,
             })
           }}>
           </Button>
@@ -946,6 +948,8 @@ const AdminUsers: React.FC = () => {
                                         discountNote: u.discount?.note,
                                         level: u.membership?.level,
                                         phone: (u as any)?.profile?.phone,
+                                        gender: u.profile?.gender,
+                                        race: u.profile?.race,
                                       })
                                     }}>{t('common.viewDetails')}</button>
                                     <button
@@ -1184,6 +1188,8 @@ const AdminUsers: React.FC = () => {
                     discountNote: user.discount?.note,
                     level: user.membership?.level,
                     phone: (user as any)?.profile?.phone,
+                    gender: user.profile?.gender,
+                    race: user.profile?.race,
                   })
                 }}
               />
@@ -1262,7 +1268,7 @@ const AdminUsers: React.FC = () => {
                   email: values.email || undefined, // ✅ 允许email为空
                   role: values.role,
                   membership: { ...editing.membership, level: values.level },
-                  profile: { ...(editing as any).profile, phone: normalizedPhone },
+                  profile: { ...(editing as any).profile, phone: normalizedPhone, gender: values.gender || null, race: values.race || null },
                   ...discountPayload,
                 } as any)
                 if (res.success) message.success(t('usersAdmin.saved'))
@@ -1273,7 +1279,7 @@ const AdminUsers: React.FC = () => {
                   email: values.email || undefined, // ✅ 允许email为空
                   role: values.role,
                   status: 'inactive',  // ✅ 默认状态为非活跃
-                  profile: { phone: normalizedPhone },
+                  profile: { phone: normalizedPhone, gender: values.gender || null, race: values.race || null },
                   preferences: {
                     locale: 'zh',
                     notifications: true,
@@ -1440,6 +1446,41 @@ const AdminUsers: React.FC = () => {
               }}
             />
           </Form.Item>
+
+          <Row gutter={12}>
+            <Col span={12}>
+              <Form.Item
+                label={<span style={{ color: '#FFFFFF' }}>{t('profile.gender')}</span>}
+                name="gender"
+              >
+                <Select
+                  allowClear
+                  placeholder={t('profile.selectGender')}
+                  options={[
+                    { value: 'male', label: t('profile.genderOptions.male') },
+                    { value: 'female', label: t('profile.genderOptions.female') },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item
+                label={<span style={{ color: '#FFFFFF' }}>{t('profile.race')}</span>}
+                name="race"
+              >
+                <Select
+                  allowClear
+                  placeholder={t('profile.selectRace')}
+                  options={[
+                    { value: 'chinese', label: t('profile.raceOptions.chinese') },
+                    { value: 'indian', label: t('profile.raceOptions.indian') },
+                    { value: 'malay', label: t('profile.raceOptions.malay') },
+                    { value: 'other', label: t('profile.raceOptions.other') },
+                  ]}
+                />
+              </Form.Item>
+            </Col>
+          </Row>
 
           {canManageDiscount && (
             <Row gutter={12}>
