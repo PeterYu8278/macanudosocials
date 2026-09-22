@@ -158,26 +158,21 @@ export const updateManifestLink = (manifestUrl?: string): void => {
  * @param iconUrl 图标 URL
  */
 export const updateFavicon = (iconUrl: string): void => {
-  // 更新 SVG favicon
-  let faviconSvg = document.querySelector('link[rel="icon"][type="image/svg+xml"]') as HTMLLinkElement
-  if (!faviconSvg) {
-    faviconSvg = document.createElement('link')
-    faviconSvg.rel = 'icon'
-    faviconSvg.type = 'image/svg+xml'
-    document.head.appendChild(faviconSvg)
-  }
-  faviconSvg.href = iconUrl
+  document.querySelectorAll<HTMLLinkElement>('link[rel="icon"], link[rel="shortcut icon"]')
+    .forEach(link => link.remove())
 
-  // 更新 PNG favicon（192x192）
-  let faviconPng192 = document.querySelector('link[rel="icon"][sizes="192x192"]') as HTMLLinkElement
-  if (!faviconPng192) {
-    faviconPng192 = document.createElement('link')
-    faviconPng192.rel = 'icon'
-    faviconPng192.type = 'image/png'
-    faviconPng192.setAttribute('sizes', '192x192')
-    document.head.appendChild(faviconPng192)
-  }
-  faviconPng192.href = iconUrl
+  const favicon = document.createElement('link')
+  const pathname = new URL(iconUrl, window.location.href).pathname.toLowerCase()
+
+  favicon.rel = 'icon'
+  favicon.href = iconUrl
+
+  if (pathname.endsWith('.svg')) favicon.type = 'image/svg+xml'
+  else if (pathname.endsWith('.png')) favicon.type = 'image/png'
+  else if (pathname.endsWith('.webp')) favicon.type = 'image/webp'
+  else if (pathname.endsWith('.ico')) favicon.type = 'image/x-icon'
+
+  document.head.appendChild(favicon)
 }
 
 /**
@@ -225,4 +220,3 @@ export const applyDynamicIcons = (appConfig: AppConfig | null): (() => void) => 
     // 无需清理
   }
 }
-
