@@ -13,6 +13,7 @@ import type { VisitSession, AppConfig } from '../../types';
 import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
 
 const { Title, Text } = Typography;
 
@@ -233,20 +234,29 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         setCutoffTime(config.cutoffTime);
       }
 
-      // 获取当日兑换记录（只计算已完成的记录）
+      // 获取当日兑换记录（待处理申请也占用限额）
       const today = new Date().toISOString().split('T')[0];
       const dailyRedemptionsData = await getDailyRedemptions(userId, today);
       setDailyRedemptions(dailyRedemptionsData);
-      const completedDailyRedemptions = dailyRedemptionsData.filter(r => r.status === 'completed');
-      const dailyCountValue = completedDailyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+      const dailyCountValue = dailyRedemptionsData.reduce((sum, r) => sum + r.quantity, 0);
       setDailyCount(dailyCountValue);
 
 
-      // 获取总兑换记录（只计算已完成的记录）
+      // 获取总兑换记录（待处理申请也占用限额）
       const totalRedemptions = await getTotalRedemptions(userId);
-      const completedTotalRedemptions = totalRedemptions.filter(r => r.status === 'completed');
-      const totalCountValue = completedTotalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+      const totalCountValue = totalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
       setTotalCount(totalCountValue);
+
+      // Firestore is authoritative so every device shares the same cooldown.
+      const sharedCooldown = getRedemptionCooldownSeconds(totalRedemptions);
+      setCountdownSeconds(sharedCooldown > 0 ? sharedCooldown : null);
+      const storageKey = `redeem_countdown_${userId}`;
+      if (sharedCooldown > 0) {
+        const startedAt = Date.now() - (3600 - sharedCooldown) * 1000;
+        localStorage.setItem(storageKey, startedAt.toString());
+      } else {
+        localStorage.removeItem(storageKey);
+      }
 
       // 获取本小时兑换记录（用于检查每小时限制）
       try {

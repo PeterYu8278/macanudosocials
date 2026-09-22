@@ -19,6 +19,7 @@ import {
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { RedemptionConfig, RedemptionRecord, RedemptionRecordItem, RedemptionRecordDocument, User } from '../../types';
+import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
 
 /**
  * 获取兑换配置
@@ -170,29 +171,26 @@ export const canUserRedeem = async (
     // 获取限额
     const limits = await getUserRedemptionLimits(userId);
 
-    // 检查每日限额（只计算已完成的记录）
+    // 待处理申请也占用限额，避免多设备同时预支同一份额度。
     const dayKey = (targetDate || new Date()).toISOString().split('T')[0]; // YYYY-MM-DD
     const dailyRedemptions = await getDailyRedemptions(userId, dayKey);
-    const completedDailyRedemptions = dailyRedemptions.filter(r => r.status === 'completed');
-    const dailyCount = completedDailyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+    const dailyCount = dailyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
     if (dailyCount + quantity > limits.dailyLimit) {
       return { canRedeem: false, reason: `今日兑换限额为 ${limits.dailyLimit}，已兑换 ${dailyCount}，剩余 ${limits.dailyLimit - dailyCount}` };
     }
 
-    // 检查总限额（只计算已完成的记录）
+    // 检查总限额（包含待处理申请）
     const totalRedemptions = await getTotalRedemptions(userId);
-    const completedTotalRedemptions = totalRedemptions.filter(r => r.status === 'completed');
-    const totalCount = completedTotalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+    const totalCount = totalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
     if (totalCount + quantity > limits.totalLimit) {
       return { canRedeem: false, reason: `总兑换限额为 ${limits.totalLimit}，已兑换 ${totalCount}，剩余 ${limits.totalLimit - totalCount}` };
     }
 
-    // 检查每小时限额（如果没有配置hourlyLimit，默认每小时只能兑换1次，只计算已完成的记录）
+    // 检查每小时限额（包含待处理申请）
     const now = targetDate || new Date();
     const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
     const hourlyRedemptions = await getHourlyRedemptions(userId, hourKey);
-    const completedHourlyRedemptions = hourlyRedemptions.filter(r => r.status === 'completed');
-    const hourlyCount = completedHourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+    const hourlyCount = hourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
     
     // 如果配置了hourlyLimit，使用配置值；否则默认每小时只能兑换1次
     const effectiveHourlyLimit = limits.hourlyLimit !== undefined ? limits.hourlyLimit : 1;
@@ -265,7 +263,35 @@ export const createPendingRedemptionRecord = async (
     // 使用事务确保原子性：将兑换记录添加到同一个 visitSessionId 的文档中
     await runTransaction(db, async (transaction) => {
       const docRef = doc(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS, visitSessionId);
+      const sessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, visitSessionId);
       const docSnap = await transaction.get(docRef);
+      const sessionSnap = await transaction.get(sessionRef);
+
+      if (!sessionSnap.exists()) {
+        throw new Error('驻店记录不存在');
+      }
+
+      const sessionData = sessionSnap.data();
+      if (sessionData.userId !== userId || sessionData.status !== 'pending') {
+        throw new Error('当前驻店记录无法兑换');
+      }
+
+      const existingRedemptions = docSnap.exists()
+        ? ((docSnap.data().redemptions || []) as RedemptionRecordItem[])
+        : [];
+      const remainingCooldown = getRedemptionCooldownSeconds(existingRedemptions, now);
+
+      if (remainingCooldown > 0) {
+        const minutes = Math.ceil(remainingCooldown / 60);
+        throw new Error(`兑换请求已提交，请在 ${minutes} 分钟后再试`);
+      }
+
+      const sessionDailyCount = existingRedemptions
+        .filter(item => item.dayKey === dayKey)
+        .reduce((sum, item) => sum + item.quantity, 0);
+      if (sessionDailyCount + quantity > limits.dailyLimit) {
+        throw new Error(`今日兑换限额为 ${limits.dailyLimit}`);
+      }
       
       if (docSnap.exists()) {
         // 同时补齐旧版文档缺失的所有权字段。
@@ -292,16 +318,18 @@ export const createPendingRedemptionRecord = async (
           updatedAt: Timestamp.fromDate(now)
         });
       }
-    });
 
-    // 同时添加到 visitSessions 文档的 redemptions 数组中
-    const { addRedemptionToSession } = await import('./visitSessions');
-    await addRedemptionToSession(visitSessionId, {
-      recordId: recordItemId,  // 添加 recordId 以便后续更新
-      cigarId: '',  // 待管理员选择
-      cigarName: '待选择',  // 占位符
-      quantity,
-      redeemedBy: userId  // 用户ID（用户发起）
+      transaction.update(sessionRef, {
+        redemptions: arrayUnion({
+          recordId: recordItemId,
+          cigarId: '',
+          cigarName: '待选择',
+          quantity,
+          redeemedBy: userId,
+          redeemedAt: Timestamp.fromDate(now)
+        }),
+        updatedAt: Timestamp.fromDate(now)
+      });
     });
 
     return { success: true, recordId: recordItemId };

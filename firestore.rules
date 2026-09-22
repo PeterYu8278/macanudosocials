@@ -273,6 +273,30 @@ service cloud.firestore {
     // Redemption Records Collection
     // ================================
     match /redemptionRecords/{recordId} {
+      function isValidPendingRedemption(item, sessionUserId) {
+        return item.userId == sessionUserId
+               && item.redeemedBy == sessionUserId
+               && item.status == 'pending'
+               && item.quantity == 1
+               && item.redeemedAt >= request.time - duration.value(5, 'm')
+               && item.redeemedAt <= request.time + duration.value(5, 'm');
+      }
+
+      function createsSinglePendingRedemption(sessionUserId) {
+        return request.resource.data.redemptions.size() == 1
+               && isValidPendingRedemption(request.resource.data.redemptions[0], sessionUserId);
+      }
+
+      function appendsSinglePendingRedemption(sessionUserId) {
+        let before = resource.data.redemptions;
+        let after = request.resource.data.redemptions;
+        let newItem = after[after.size() - 1];
+        return after.size() == before.size() + 1
+               && isValidPendingRedemption(newItem, sessionUserId)
+               && (before.size() == 0
+                   || request.time >= before[before.size() - 1].redeemedAt + duration.value(1, 'h'));
+      }
+
       // 兼容缺少顶层 userId 的旧版兑换文档：文档 ID 即 visitSessionId。
       allow read: if isOwner(resource.data.userId)
                   || isVisitSessionOwner(recordId)
@@ -283,9 +307,12 @@ service cloud.firestore {
                     || (isVisitSessionOwner(recordId)
                         && request.resource.data.visitSessionId == recordId
                         && request.resource.data.userId
-                             == get(/databases/$(database)/documents/visitSessions/$(recordId)).data.userId);
+                             == get(/databases/$(database)/documents/visitSessions/$(recordId)).data.userId
+                        && createsSinglePendingRedemption(request.resource.data.userId));
       allow update: if isAnyAdmin()
                     || (isVisitSessionOwner(recordId)
+                        && appendsSinglePendingRedemption(
+                             get(/databases/$(database)/documents/visitSessions/$(recordId)).data.userId)
                         && ((request.resource.data.diff(resource.data).affectedKeys()
                                .hasOnly(['redemptions', 'updatedAt']))
                             || (request.resource.data.visitSessionId == recordId
