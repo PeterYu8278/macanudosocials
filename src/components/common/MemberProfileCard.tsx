@@ -23,28 +23,40 @@ const TailTruncatedText: React.FC<{ text: string; style?: React.CSSProperties }>
   useEffect(() => {
     const el = containerRef.current
     if (!el || !text) return
-    const canvas = document.createElement('canvas')
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return
-    const computed = window.getComputedStyle(el)
-    ctx.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`
-    const containerWidth = el.clientWidth - 4  // 4px safety buffer for font rendering
-    if (ctx.measureText(text).width <= containerWidth) {
-      setDisplay(text)
-      return
+
+    const updateDisplay = () => {
+      const canvas = document.createElement('canvas')
+      const ctx = canvas.getContext('2d')
+      if (!ctx) return
+      const computed = window.getComputedStyle(el)
+      ctx.font = `${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`
+      const containerWidth = el.clientWidth - 4
+
+      if (ctx.measureText(text).width <= containerWidth) {
+        setDisplay(text)
+        return
+      }
+
+      const tail = text.slice(-3)
+      const ellipsis = '...'
+      let lo = 0, hi = Math.max(0, text.length - 3)
+      while (lo < hi) {
+        const mid = Math.floor((lo + hi + 1) / 2)
+        if (ctx.measureText(text.slice(0, mid) + ellipsis + tail).width <= containerWidth) lo = mid
+        else hi = mid - 1
+      }
+      setDisplay(lo > 0 ? text.slice(0, lo) + ellipsis + tail : ellipsis + tail)
     }
-    const tail = text.slice(-3)
-    const ellipsis = '...'
-    let lo = 0, hi = text.length - 3
-    while (lo < hi) {
-      const mid = Math.floor((lo + hi + 1) / 2)
-      if (ctx.measureText(text.slice(0, mid) + ellipsis + tail).width <= containerWidth) lo = mid
-      else hi = mid - 1
-    }
-    setDisplay(lo > 0 ? text.slice(0, lo) + ellipsis + tail : ellipsis + tail)
+
+    updateDisplay()
+    const observer = new ResizeObserver(updateDisplay)
+    observer.observe(el)
+    document.fonts?.ready.then(updateDisplay)
+
+    return () => observer.disconnect()
   }, [text])
 
-  return <div ref={containerRef} style={{ ...style, overflow: 'hidden', whiteSpace: 'nowrap' }}>{display}</div>
+  return <div ref={containerRef} style={{ width: '100%', ...style, overflow: 'hidden', whiteSpace: 'nowrap' }}>{display}</div>
 }
 
 interface MemberProfileCardProps {
@@ -500,7 +512,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                 </div>
               </div>
               <div style={{ marginTop: 40, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
                   <div style={{
                     width: 56,
                     height: 56,
@@ -513,7 +525,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                     border: '2px solid #D4AF37',
                     boxShadow: '0 6px 16px rgba(0,0,0,0.5)'
                   }} />
-                  <div style={{ minWidth: 0 }}>
+                  <div style={{ minWidth: 0, flex: 1 }}>
                     <TailTruncatedText
                       text={user?.displayName || t('common.member')}
                       style={{
@@ -853,4 +865,3 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
     </>
   )
 }
-
