@@ -14,7 +14,9 @@ import {
   Timestamp,
   arrayUnion,
   runTransaction,
-  FieldValue
+  FieldValue,
+  onSnapshot,
+  type Unsubscribe
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
@@ -610,6 +612,27 @@ export const getRedemptionRecordsBySession = async (
   } catch (error: any) {
     return [];
   }
+};
+
+/**
+ * 实时监听指定驻店记录的兑换变化。
+ * 用于跨设备同步 Redeem 按钮的额度与冷却状态。
+ */
+export const subscribeToRedemptionRecordsBySession = (
+  visitSessionId: string,
+  onChange: () => void,
+  onError?: (error: Error) => void
+): Unsubscribe => {
+  const docRef = doc(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS, visitSessionId);
+
+  return onSnapshot(
+    docRef,
+    () => onChange(),
+    error => {
+      console.warn('[subscribeToRedemptionRecordsBySession] 实时监听失败:', error);
+      onError?.(error);
+    }
+  );
 };
 
 /**

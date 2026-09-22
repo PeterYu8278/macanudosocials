@@ -4,7 +4,7 @@ import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 
 import { ClockCircleOutlined, GiftOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
-import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord } from '../../services/firebase/redemption';
+import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
 import { createMembershipFeeRecord, deductMembershipFee, getUserMembershipPeriod } from '../../services/firebase/membershipFee';
 import { getUserData } from '../../services/firebase/auth';
 import StoreSelect from '../common/StoreSelect';
@@ -290,6 +290,21 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       // 加载失败，静默处理
     }
   };
+
+  // 任一设备提交或确认兑换后，立即同步所有设备上的额度与冷却状态。
+  useEffect(() => {
+    if (!user?.id || !currentSession?.id) return;
+
+    let isInitialSnapshot = true;
+    return subscribeToRedemptionRecordsBySession(currentSession.id, () => {
+      // 首次订阅会立即返回当前数据；初始页面加载已负责这次读取。
+      if (isInitialSnapshot) {
+        isInitialSnapshot = false;
+        return;
+      }
+      void loadData();
+    });
+  }, [user?.id, currentSession?.id]);
 
   // 加载年费金额
   useEffect(() => {
