@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { Typography, Button, App, Spin, Modal, Form, Select, Input, Alert, Drawer } from 'antd'
-import { ReloadOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
+import { ReloadOutlined, PlusOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 import dayjs from 'dayjs'
 import {
@@ -1334,12 +1334,31 @@ const AdminDashboard: React.FC = () => {
           font: inherit;
         }
       `}</style>
-      {/* 顶部 */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+        <h1 style={{ fontSize: 22, fontWeight: 800, backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent', margin: 0 }}>{t('dashboard.overview')}</h1>
+        <a
+          href="/"
+          aria-label={t('navigation.home')}
+          title={t('navigation.home')}
+          style={{
+            width: 40,
+            height: 40,
+            flexShrink: 0,
+            color: 'rgb(192,192,192)',
+            fontSize: 18,
+            border: '1px solid #3a3a3a',
+            borderRadius: 8,
+            padding: 0,
+            background: 'transparent',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <HomeOutlined />
+        </a>
       </div>
-
-      <h1 style={{ fontSize: 22, fontWeight: 800, backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent', marginBottom: 12 }}>{t('dashboard.overview')}</h1>
 
       {/* 概览卡片 */}
       <div style={isMobile ? {

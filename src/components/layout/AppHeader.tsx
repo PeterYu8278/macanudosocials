@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { Layout, Space, Typography, Avatar, Button, Tooltip, Dropdown, MenuProps, App } from 'antd'
-import { HomeOutlined, DashboardOutlined, LogoutOutlined, UserOutlined } from '@ant-design/icons'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { Layout, Space, Typography, Avatar, Dropdown, MenuProps, App } from 'antd'
+import { LogoutOutlined, UserOutlined } from '@ant-design/icons'
+import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/modules/auth'
 import { logoutUser } from '../../services/firebase/auth'
@@ -24,17 +24,12 @@ interface AppHeaderProps {
  * - 通知中心
  * - 购物车徽标
  * - 用户信息（头像、昵称、角色标签）
- * - 管理台/首页切换
  */
 const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop = true, showSider = false }) => {
-  const { user, isAdmin } = useAuthStore()
   const navigate = useNavigate()
-  const location = useLocation()
   const { t } = useTranslation()
   const { message } = App.useApp()
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
-
-  const isInAdmin = location.pathname.startsWith('/admin')
 
   // 加载应用配置
   useEffect(() => {
@@ -46,14 +41,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
     }
     loadAppConfig()
   }, [])
-
-  const handleToggle = () => {
-    if (isInAdmin) {
-      navigate('/')
-    } else {
-      navigate('/admin')
-    }
-  }
 
   const handleLogout = async () => {
     try {
@@ -143,26 +130,8 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
         />
       )}
 
-      {/* 右侧：操作区 */}
-      <Space size="middle" align="center" style={{ position: 'relative' }}>
-        {isAdmin && isInAdmin && (
-          <Tooltip title={isInAdmin ? t('navigation.home') : t('navigation.admin')} placement="bottomRight">
-            <Button
-              type="text"
-              onClick={handleToggle}
-              icon={isInAdmin ? <HomeOutlined /> : <DashboardOutlined />}
-              className="mobile-view-toggle"
-              style={{
-                color: 'rgb(192,192,192)',
-                fontSize: 18,
-                border: '1px solid #333',
-                borderRadius: 8,
-                padding: '8px 12px'
-              }}
-            />
-          </Tooltip>
-        )}
-      </Space>
+      {/* 右侧占位 */}
+      <Space size="middle" align="center" style={{ position: 'relative' }} />
     </Header>
   )
 }
