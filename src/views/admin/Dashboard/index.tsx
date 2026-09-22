@@ -209,8 +209,8 @@ const TrendChart: React.FC<{
   }
 
   return (
-    <div style={{ position: 'relative', background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: 12, border: '1px solid rgba(244,175,37,0.15)', backdropFilter: 'blur(10px)' }}>
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+    <div style={{ position: 'relative', height: isMobile ? 250 : 286, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: 'rgba(255,255,255,0.02)', padding: '16px', borderRadius: 12, border: '1px solid rgba(244,175,37,0.15)', backdropFilter: 'blur(10px)' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ overflow: 'visible', flex: 1, minHeight: 0 }}>
         <defs>
           {/* Background area gradient */}
           <linearGradient id={`${chartId}-area-gradient`} x1="0" y1="0" x2="0" y2="1">
@@ -386,7 +386,7 @@ const GrowthTrendChart: React.FC<{ data: GrowthTrendPoint[]; isMobile: boolean }
   }
 
   return (
-    <div style={{ position: 'relative', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
+    <div style={{ position: 'relative', height: isMobile ? 250 : 286, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
           <span style={{ width: 18, height: 3, borderRadius: 2, background: '#38bdf8' }} />
@@ -398,7 +398,7 @@ const GrowthTrendChart: React.FC<{ data: GrowthTrendPoint[]; isMobile: boolean }
         </span>
       </div>
 
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ overflow: 'visible', flex: 1, minHeight: 0 }}>
         {Array.from({ length: 5 }, (_, index) => {
           const ratio = index / 4
           const y = paddingTop + chartHeight - ratio * chartHeight
@@ -502,7 +502,7 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
     : `RM${Math.round(value)}`
 
   return (
-    <div style={{ position: 'relative', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
+    <div style={{ position: 'relative', height: isMobile ? 250 : 286, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
           <span style={{ width: 18, height: 3, borderRadius: 2, background: '#38bdf8' }} />
@@ -514,7 +514,7 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
         </span>
       </div>
 
-      <svg viewBox={`0 0 ${width} ${height}`} width="100%" height="100%" style={{ overflow: 'visible' }}>
+      <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ overflow: 'visible', flex: 1, minHeight: 0 }}>
         {Array.from({ length: 5 }, (_, index) => {
           const ratio = index / 4
           const y = paddingTop + chartHeight - ratio * chartHeight
@@ -1085,6 +1085,14 @@ const AdminDashboard: React.FC = () => {
     })
   }, [users, annualPassRecords, growthTrendPeriod])
 
+  const growthTrendTotals = growthTrendData.reduce(
+    (totals, item) => ({
+      newUsers: totals.newUsers + item.newUsers,
+      annualPasses: totals.annualPasses + item.annualPasses
+    }),
+    { newUsers: 0, annualPasses: 0 }
+  )
+
   const occupancyTrendData = useMemo(() => {
     const now = dayjs()
     const toDate = (value: any): Date | null => {
@@ -1524,9 +1532,21 @@ const AdminDashboard: React.FC = () => {
       {/* Customer growth trend */}
       <section style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
-          <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
-            {t('dashboard.customerGrowthTrend')}
-          </h2>
+          <div>
+            <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
+              {t('dashboard.customerGrowthTrend')}
+            </h2>
+            <div style={{ display: 'flex', gap: 10, marginTop: 3, color: 'rgba(255,255,255,0.5)', fontSize: 12, flexWrap: 'wrap' }}>
+              <span>
+                {t('dashboard.newUsers')}:{' '}
+                <strong style={{ color: '#38bdf8' }}>{growthTrendTotals.newUsers}</strong>
+              </span>
+              <span>
+                {t('dashboard.annualPassActivated')}:{' '}
+                <strong style={{ color: '#FDE08D' }}>{growthTrendTotals.annualPasses}</strong>
+              </span>
+            </div>
+          </div>
 
           <div style={{ display: 'flex', padding: 4, borderRadius: 8, background: 'rgba(255,255,255,0.05)' }}>
             {(['days30', 'months12'] as const).map(period => {
