@@ -2,7 +2,6 @@
 import React, { useState, useEffect, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Layout, App as AntApp } from 'antd'
-import AppHeader from './components/layout/AppHeader'
 import AppSider from './components/layout/AppSider'
 import AppFooter from './components/layout/AppFooter'
 import MobileBottomNav from './components/layout/MobileBottomNav'
@@ -100,7 +99,7 @@ const AppContent: React.FC = () => {
   const noPaddingPages = ['/register', '/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
   const needsPadding = !noPaddingPages.includes(location.pathname)
 
-  // 认证页面（不显示 header/footer，且需要居中显示）
+  // 认证页面（不显示 footer/navigation，且需要居中显示）
   const authPages = ['/register', '/auth/complete-profile']
   const isAuthPage = authPages.includes(location.pathname)
   const shouldCenter = isAuthPage
@@ -252,7 +251,6 @@ const AppContent: React.FC = () => {
         zIndex: -1
       }} />
 
-      {user && !isAuthPage && <AppHeader siderCollapsed={siderCollapsed} isDesktop={isDesktop} showSider={showSider} />}
       <Layout style={{
         background: 'transparent',
         flex: 1,
