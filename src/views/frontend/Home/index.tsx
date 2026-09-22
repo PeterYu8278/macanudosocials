@@ -88,6 +88,7 @@ const Home: React.FC = () => {
   const [visitSessionsFeatureVisible, setVisitSessionsFeatureVisible] = useState<boolean>(true)
   const [roomsBookingFeatureVisible, setRoomsBookingFeatureVisible] = useState<boolean>(false)
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
+  const [appConfigLoaded, setAppConfigLoaded] = useState(false)
   const activeBrands = brands.filter(brand => brand.status === 'active')
   const carouselAutoplay = prefersReducedMotion ? false : {
     delay: 0,
@@ -221,9 +222,13 @@ const Home: React.FC = () => {
   // 加载应用配置
   useEffect(() => {
     const loadAppConfig = async () => {
-      const config = await getAppConfig()
-      if (config) {
-        setAppConfig(config)
+      try {
+        const config = await getAppConfig()
+        if (config) {
+          setAppConfig(config)
+        }
+      } finally {
+        setAppConfigLoaded(true)
       }
     }
     loadAppConfig()
@@ -392,6 +397,7 @@ const Home: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => navigate('/admin')}
+                      disabled={!appConfigLoaded}
                       aria-label={t('navigation.admin')}
                       title={t('navigation.admin')}
                       style={{
@@ -401,7 +407,7 @@ const Home: React.FC = () => {
                         padding: 0,
                         border: 'none',
                         background: 'transparent',
-                        cursor: 'pointer',
+                        cursor: appConfigLoaded ? 'pointer' : 'default',
                       }}
                     >
                       <img
@@ -412,6 +418,8 @@ const Home: React.FC = () => {
                           height: '100%',
                           objectFit: 'contain',
                           display: 'block',
+                          opacity: appConfigLoaded ? 1 : 0,
+                          transition: 'opacity 0.15s ease',
                           filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
                         }}
                       />
@@ -426,6 +434,8 @@ const Home: React.FC = () => {
                         maxWidth: '100%',
                         objectFit: 'contain',
                         display: 'inline-block',
+                        opacity: appConfigLoaded ? 1 : 0,
+                        transition: 'opacity 0.15s ease',
                         filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
                       }}
                     />
