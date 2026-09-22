@@ -912,11 +912,11 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   <div
                     aria-label="Cigar image placeholder"
                     style={{
-                      width: 58,
-                      height: 58,
+                      width: 72,
+                      alignSelf: 'stretch',
                       flexShrink: 0,
-                      marginRight: 12,
-                      borderRadius: 8,
+                      margin: '-12px 12px -12px -16px',
+                      borderRadius: '11px 0 0 11px',
                       border: '1px solid rgba(244, 175, 37, 0.25)',
                       background: 'linear-gradient(145deg, rgba(244, 175, 37, 0.09), rgba(255, 255, 255, 0.03))',
                       display: 'flex',
