@@ -53,7 +53,7 @@ const CompleteProfile = lazy(() => import('./views/auth/CompleteProfile'))
 const { Content } = Layout
 
 const AppContent: React.FC = () => {
-  const { user, isAdmin, initializeAuth } = useAuthStore()
+  const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
   const location = useLocation()
   const [isDesktop, setIsDesktop] = useState(() => {
     if (typeof window === 'undefined') return true
@@ -103,7 +103,7 @@ const AppContent: React.FC = () => {
   const authPages = ['/register', '/auth/complete-profile']
   const isAuthPage = authPages.includes(location.pathname)
   const shouldCenter = isAuthPage
-  const isLandingPage = !user && location.pathname === '/'
+  const isLandingPage = !authLoading && !user && location.pathname === '/'
   const isClippedLayout = !isLandingPage && !isAuthPage
 
   // 侧边栏显示逻辑：手机端商城页面隐藏，电脑端商城页面显示
@@ -224,6 +224,21 @@ const AppContent: React.FC = () => {
       }
     }
   }, [])
+
+  if (authLoading) {
+    return (
+      <Layout style={{
+        height: viewportHeight,
+        minHeight: '100vh',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'radial-gradient(ellipse at top, #3c2f1a, #121212)',
+      }}>
+        <PageLoading />
+      </Layout>
+    )
+  }
 
   return (
     <Layout style={{
