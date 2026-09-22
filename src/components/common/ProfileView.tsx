@@ -478,6 +478,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 padding: '10px 0',
                 fontWeight: 800,
                 fontSize: 12,
+                lineHeight: 1.35,
+                minHeight: 52,
+                whiteSpace: 'normal',
                 borderBottom: isActive ? '2px solid transparent' : '2px solid transparent',
                 cursor: 'pointer',
                 border: 'none',
@@ -505,6 +508,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 }
               }
 
+              const label = getTabLabel(tabKey)
+              const labelLines = label.endsWith('记录')
+                ? [label.slice(0, -2), '记录']
+                : (() => {
+                    const lastSpace = label.lastIndexOf(' ')
+                    return lastSpace > 0
+                      ? [label.slice(0, lastSpace), label.slice(lastSpace + 1)]
+                      : [label, '\u00A0']
+                  })()
+
               return (
                 <button
                   key={tabKey}
@@ -517,7 +530,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   }}
                   onClick={() => setActiveTab(tabKey)}
                 >
-                  {getTabLabel(tabKey)}
+                  {labelLines[0]}
+                  <br />
+                  {labelLines[1]}
                   {isActive && (
                     <div style={{
                       position: 'absolute',
