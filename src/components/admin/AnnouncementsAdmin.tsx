@@ -427,8 +427,8 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
               showPreview
               enableCrop
               cropAspectRatio={16 / 9}
-              cropMinWidth={320}
-              cropMinHeight={180}
+              cropMinWidth={64}
+              cropMinHeight={36}
               cropMaxWidth={1200}
               cropMaxHeight={675}
             />
