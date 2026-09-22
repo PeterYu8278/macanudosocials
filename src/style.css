@@ -1091,3 +1091,14 @@ a:hover {
   background: linear-gradient(to right, #FFE9A0, #D4A050) !important;
 }
 
+.ant-select-dropdown .ant-select-item-option-active,
+.ant-select-dropdown .ant-select-item-option-selected {
+  background: linear-gradient(90deg, #FDE08D 0%, #C48D3A 100%) !important;
+  color: #111111 !important;
+  font-weight: 600;
+}
+
+.ant-select-dropdown .ant-select-item-option-active .ant-select-item-option-content,
+.ant-select-dropdown .ant-select-item-option-selected .ant-select-item-option-content {
+  color: #111111 !important;
+}
