@@ -48,9 +48,6 @@ const MobileBottomNav: React.FC = () => {
   // 普通会员：如果 AI识茄 功能被隐藏，则隐藏扫码按钮
   // 管理员/开发者：始终显示扫码按钮
   const showScannerButton = canAccessQR || aiCigarVisible
-  const scannerLabel = canAccessQR
-    ? t('navigation.scan', { defaultValue: 'Scan' })
-    : t('navigation.aiScanner', { defaultValue: 'AI Scan' })
 
   // 普通用户导航项
   const frontendNavItemsBase = [
@@ -319,60 +316,46 @@ const MobileBottomNav: React.FC = () => {
 
       {/* 中间的扫描按钮（仅在显示时渲染） */}
       {showScannerButton && (
-        <button
-          type="button"
-          onClick={handleScanClick}
-          aria-label={canAccessQR ? 'Open QR scanner' : 'Open AI cigar scanner'}
-          className="mobile-nav-item mobile-nav-scan-button"
+        <div
+          className="mobile-nav-scan-slot"
           style={{
             width: itemWidth,
             display: 'flex',
-            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
             position: 'relative',
             zIndex: 10,
-            height: '64px',
-            minWidth: 0,
-            padding: '4px 2px 3px',
-            cursor: 'pointer',
-            borderRadius: '8px'
+            height: '64px'
           }}
         >
-          <span
-            aria-hidden="true"
+          <button
+            type="button"
+            onClick={handleScanClick}
+            aria-label={canAccessQR ? 'Open QR scanner' : 'Open AI cigar scanner'}
+            className="mobile-nav-scan-button"
             style={{
-              width: '58px',
-              height: '32px',
-              borderRadius: '18px',
+              position: 'relative',
+              top: '-7px',
+              width: '54px',
+              height: '54px',
+              borderRadius: '50%',
+              border: '3px solid #161616',
               background: 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              marginBottom: '3px',
-              boxShadow: '0 3px 10px rgba(255, 214, 90, 0.2)'
+              boxShadow: '0 4px 12px rgba(255, 215, 0, 0.24)',
+              transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+              cursor: 'pointer',
+              padding: 0
             }}
           >
             <QrcodeOutlined
               className="qr-icon-large"
-              style={{ fontSize: '23px', color: '#111' }}
+              style={{ fontSize: '30px', color: '#111' }}
             />
-          </span>
-          <span
-            style={{
-              maxWidth: '100%',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              color: '#FFD65A',
-              fontSize: '10.5px',
-              fontWeight: 600,
-              lineHeight: 1.2
-            }}
-          >
-            {scannerLabel}
-          </span>
-        </button>
+          </button>
+        </div>
       )}
 
       {/* 右侧导航项 */}

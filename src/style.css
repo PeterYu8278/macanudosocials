@@ -609,9 +609,9 @@ a:hover {
   /* QR 图标特殊大小（不受小屏限制） */
   .qr-icon-large.anticon,
   .qr-icon-large {
-    font-size: 23px !important;
-    width: 23px !important;
-    height: 23px !important;
+    font-size: 30px !important;
+    width: 30px !important;
+    height: 30px !important;
   }
 
   .mobile-nav-item div:last-child {
@@ -680,9 +680,9 @@ a:hover {
 }
 
 .mobile-nav-scan-button:focus-visible {
-  outline: 2px solid rgba(255, 215, 0, 0.9);
-  outline-offset: 2px;
-  box-shadow: none !important;
+  outline: 3px solid rgba(255, 255, 255, 0.95);
+  outline-offset: 3px;
+  box-shadow: 0 4px 16px rgba(255, 215, 0, 0.3), 0 0 0 6px rgba(255, 215, 0, 0.35) !important;
 }
 
 .mobile-nav-scan-button:disabled {
