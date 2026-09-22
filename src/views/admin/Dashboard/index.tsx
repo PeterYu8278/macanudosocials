@@ -1471,6 +1471,85 @@ const AdminDashboard: React.FC = () => {
         </Form>
       </Modal>
 
+      {/* 快速操作 */}
+      <div style={{ marginBottom: 16 }}>
+        <style>
+          {`
+            .dashboard-quick-action:hover {
+              transform: translateY(-1px);
+              border-color: rgba(253, 224, 141, 0.45) !important;
+            }
+
+            .dashboard-quick-action:focus-visible {
+              box-shadow: 0 0 0 3px rgba(253, 224, 141, 0.32), 0 4px 15px rgba(244, 175, 37, 0.24) !important;
+              border-color: rgba(253, 224, 141, 0.75) !important;
+            }
+
+            .dashboard-quick-action:active {
+              transform: translateY(0);
+            }
+          `}
+        </style>
+        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#EAEAEA', paddingInline: 8 }}>{t('dashboard.quickActions')}</h2>
+        <div style={{
+          marginTop: 8,
+          display: 'grid',
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: isMobile ? 6 : 12,
+          paddingInline: 8,
+        }}>
+          {(() => {
+            const primaryGradient = appConfig?.colorTheme?.primaryButton
+              ? `linear-gradient(to right, ${appConfig.colorTheme.primaryButton.startColor}, ${appConfig.colorTheme.primaryButton.endColor})`
+              : 'linear-gradient(to right,#FDE08D,#C48D3A)'
+            const secondaryBackground = appConfig?.colorTheme?.secondaryButton?.backgroundColor || 'rgba(255,255,255,0.05)'
+            const secondaryColor = appConfig?.colorTheme?.secondaryButton?.textColor || '#EAEAEA'
+            const quickActionSharedProps = {
+              primaryGradient,
+              secondaryBackground,
+              secondaryColor,
+              isMobile,
+            }
+
+            return (
+              <>
+                {eventsAdminFeatureVisible && (
+                  <QuickActionButton
+                    {...quickActionSharedProps}
+                    variant="primary"
+                    label={t('dashboard.event')}
+                    onClick={() => navigate('/admin/events')}
+                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v6h6a1 1 0 110 2h-6v6a1 1 0 11-2 0v-6H3a1 1 0 110-2h6V3a1 1 0 011-1z" /></svg>}
+                  />
+                )}
+                {ordersFeatureVisible && (
+                  <QuickActionButton
+                    {...quickActionSharedProps}
+                    label={t('dashboard.orders')}
+                    onClick={() => navigate('/admin/orders')}
+                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm12 11H5V5h10v9z" fillRule="evenodd"></path><path d="M9 7a1 1 0 100 2h2a1 1 0 100-2H9z"></path></svg>}
+                  />
+                )}
+                <QuickActionButton
+                  {...quickActionSharedProps}
+                  label={t('dashboard.user')}
+                  onClick={() => navigate('/admin/users')}
+                  icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd"></path></svg>}
+                />
+                {inventoryFeatureVisible && (
+                  <QuickActionButton
+                    {...quickActionSharedProps}
+                    label={t('dashboard.inventory')}
+                    onClick={() => navigate('/admin/inventory')}
+                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 8a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z"></path><path clipRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm2 2v10h10V5H5z" fillRule="evenodd"></path></svg>}
+                  />
+                )}
+              </>
+            )
+          })()}
+        </div>
+      </div>
+
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: 18, paddingInline: 8, marginBottom: 16, alignItems: 'start' }}>
       {/* Reload trend */}
       <section style={{ minWidth: 0 }}>
@@ -1669,85 +1748,6 @@ const AdminDashboard: React.FC = () => {
           <OrdersRevenueTrendChart data={ordersRevenueTrendData} isMobile={isMobile} />
         )}
       </section>
-      </div>
-
-      {/* 快速操作 */}
-      <div style={{ marginBottom: 16 }}>
-        <style>
-          {`
-            .dashboard-quick-action:hover {
-              transform: translateY(-1px);
-              border-color: rgba(253, 224, 141, 0.45) !important;
-            }
-
-            .dashboard-quick-action:focus-visible {
-              box-shadow: 0 0 0 3px rgba(253, 224, 141, 0.32), 0 4px 15px rgba(244, 175, 37, 0.24) !important;
-              border-color: rgba(253, 224, 141, 0.75) !important;
-            }
-
-            .dashboard-quick-action:active {
-              transform: translateY(0);
-            }
-          `}
-        </style>
-        <h2 style={{ fontSize: 16, fontWeight: 800, color: '#EAEAEA', paddingInline: 8 }}>{t('dashboard.quickActions')}</h2>
-        <div style={{
-          marginTop: 8,
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
-          gap: isMobile ? 6 : 12,
-          paddingInline: 8,
-        }}>
-          {(() => {
-            const primaryGradient = appConfig?.colorTheme?.primaryButton
-              ? `linear-gradient(to right, ${appConfig.colorTheme.primaryButton.startColor}, ${appConfig.colorTheme.primaryButton.endColor})`
-              : 'linear-gradient(to right,#FDE08D,#C48D3A)'
-            const secondaryBackground = appConfig?.colorTheme?.secondaryButton?.backgroundColor || 'rgba(255,255,255,0.05)'
-            const secondaryColor = appConfig?.colorTheme?.secondaryButton?.textColor || '#EAEAEA'
-            const quickActionSharedProps = {
-              primaryGradient,
-              secondaryBackground,
-              secondaryColor,
-              isMobile,
-            }
-
-            return (
-              <>
-                {eventsAdminFeatureVisible && (
-                  <QuickActionButton
-                    {...quickActionSharedProps}
-                    variant="primary"
-                    label={t('dashboard.event')}
-                    onClick={() => navigate('/admin/events')}
-                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v6h6a1 1 0 110 2h-6v6a1 1 0 11-2 0v-6H3a1 1 0 110-2h6V3a1 1 0 011-1z" /></svg>}
-                  />
-                )}
-                {ordersFeatureVisible && (
-                  <QuickActionButton
-                    {...quickActionSharedProps}
-                    label={t('dashboard.orders')}
-                    onClick={() => navigate('/admin/orders')}
-                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm12 11H5V5h10v9z" fillRule="evenodd"></path><path d="M9 7a1 1 0 100 2h2a1 1 0 100-2H9z"></path></svg>}
-                  />
-                )}
-                <QuickActionButton
-                  {...quickActionSharedProps}
-                  label={t('dashboard.user')}
-                  onClick={() => navigate('/admin/users')}
-                  icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd"></path></svg>}
-                />
-                {inventoryFeatureVisible && (
-                  <QuickActionButton
-                    {...quickActionSharedProps}
-                    label={t('dashboard.inventory')}
-                    onClick={() => navigate('/admin/inventory')}
-                    icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M5 8a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z"></path><path clipRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v14a1 1 0 01-1 1H4a1 1 0 01-1-1V3zm2 2v10h10V5H5z" fillRule="evenodd"></path></svg>}
-                  />
-                )}
-              </>
-            )
-          })()}
-        </div>
       </div>
 
       {/* 订单标签页 - 仅在订单管理功能可见时显示 */}
