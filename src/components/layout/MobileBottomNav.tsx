@@ -335,16 +335,16 @@ const MobileBottomNav: React.FC = () => {
             className="mobile-nav-scan-button"
             style={{
               position: 'relative',
-              top: '-7px',
-              width: '54px',
-              height: '54px',
+              top: '-20px',
+              width: '64px',
+              height: '64px',
               borderRadius: '50%',
               border: '3px solid #161616',
               background: 'linear-gradient(135deg, #FDE08D 0%, #D69D3D 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              boxShadow: '0 4px 12px rgba(255, 215, 0, 0.24)',
+              boxShadow: '0 0 0 2px rgba(255, 214, 90, 0.18), 0 8px 20px rgba(0, 0, 0, 0.5)',
               transition: 'transform 0.2s ease, box-shadow 0.2s ease',
               cursor: 'pointer',
               padding: 0
@@ -352,7 +352,7 @@ const MobileBottomNav: React.FC = () => {
           >
             <QrcodeOutlined
               className="qr-icon-large"
-              style={{ fontSize: '30px', color: '#111' }}
+              style={{ fontSize: '32px', color: '#111' }}
             />
           </button>
         </div>

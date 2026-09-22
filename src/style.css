@@ -609,9 +609,9 @@ a:hover {
   /* QR 图标特殊大小（不受小屏限制） */
   .qr-icon-large.anticon,
   .qr-icon-large {
-    font-size: 30px !important;
-    width: 30px !important;
-    height: 30px !important;
+    font-size: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
   }
 
   .mobile-nav-item div:last-child {
@@ -620,8 +620,8 @@ a:hover {
 
   /* 5个操作项的特殊优化 */
   .mobile-bottom-nav[data-nav-count="5"] {
-    padding-left: 4px !important;
-    padding-right: 4px !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
   }
 
   .mobile-bottom-nav[data-nav-count="5"] .mobile-nav-item {
@@ -899,10 +899,10 @@ a:hover {
 /* QR 图标大小（全局，确保在所有情况下都生效） */
 .qr-icon-large.anticon,
 .qr-icon-large {
-  font-size: 40px !important;
-  width: 40px !important;
-  height: 40px !important;
-  line-height: 54px !important;
+  font-size: 32px !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
 }
 
 /* 积分配置页面表单和表格样式 */
