@@ -5,7 +5,6 @@ import {
   CalendarOutlined,
   ClockCircleOutlined,
   EnvironmentOutlined,
-  RightOutlined,
   NotificationOutlined,
   UserOutlined,
 } from '@ant-design/icons'
@@ -567,39 +566,6 @@ const Events: React.FC = () => {
 
                 {/* Button row */}
                 <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
-                  <button
-                    type="button"
-                    style={{
-                      flex: 1,
-                      background: 'transparent',
-                      border: '1px solid rgba(255,255,255,0.2)',
-                      color: 'rgba(255,255,255,0.75)',
-                      borderRadius: 8,
-                      padding: isMobile ? '6px 0' : '7px 0',
-                      fontSize: 13,
-                      cursor: 'pointer',
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      gap: 4,
-                      transition: 'border-color 0.2s, color 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.borderColor = '#FDE08D'
-                      e.currentTarget.style.color = '#FDE08D'
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.borderColor = 'rgba(255,255,255,0.2)'
-                      e.currentTarget.style.color = 'rgba(255,255,255,0.75)'
-                    }}
-                    onClick={() => {
-                      message.info(t('events.viewMoreComingSoon', 'Coming soon'))
-                    }}
-                  >
-                    {t('events.viewMore', 'View More')}
-                    <RightOutlined style={{ fontSize: 10 }} />
-                  </button>
-
                   <button
                     type="button"
                     disabled={closed || loadingId === event.id}
