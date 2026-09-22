@@ -598,11 +598,11 @@ const QuickActionButton: React.FC<QuickActionButtonProps> = ({
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    gap: isMobile ? 6 : 8,
     minWidth: 0,
-    minHeight: isMobile ? 84 : 92,
+    minHeight: isMobile ? 76 : 92,
     borderRadius: 12,
-    padding: isMobile ? '10px 8px' : '12px 10px',
+    padding: isMobile ? '9px 4px' : '12px 10px',
     border: isPrimary ? '1px solid rgba(253,224,141,0.55)' : '1px solid rgba(255,255,255,0.08)',
     background: isPrimary ? primaryGradient : secondaryBackground,
     color,
@@ -624,7 +624,7 @@ const QuickActionButton: React.FC<QuickActionButtonProps> = ({
       <span style={{
         maxWidth: '100%',
         color,
-        fontSize: isMobile ? 12 : 13,
+        fontSize: isMobile ? 11 : 13,
         lineHeight: 1.25,
         textAlign: 'center',
         overflowWrap: 'anywhere',
@@ -1674,8 +1674,8 @@ const AdminDashboard: React.FC = () => {
         <div style={{
           marginTop: 8,
           display: 'grid',
-          gridTemplateColumns: `repeat(auto-fit, minmax(${isMobile ? 128 : 150}px, 1fr))`,
-          gap: isMobile ? 10 : 12,
+          gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+          gap: isMobile ? 6 : 12,
           paddingInline: 8,
         }}>
           {(() => {
