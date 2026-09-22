@@ -132,7 +132,7 @@ export const createVisitSession = async (
       }
     }
 
-    const initialDeduction = useRealtimeDeductions ? Math.round(hourlyRate) : 0; // 1 小时
+    const initialDeduction = useRealtimeDeductions ? hourlyRate : 0; // 1 小时，保留配置费率精度
     const nextDeductionAt = useRealtimeDeductions
       ? new Date(now.getTime() + 60 * 60 * 1000) // checkInAt + 60 min
       : undefined;
@@ -223,7 +223,9 @@ export const processSessionRealtimeDeduction = async (
     console.error('[processSessionRealtimeDeduction] 获取费率失败', e);
   }
 
-  const halfHourPoints = Math.round(hourlyRate / 2);
+  // 分段扣费必须保留精度，否则奇数费率会在每个半小时重复向上取整。
+  // 例如 25 积分/小时应按 12.5 积分/半小时计费，而不是 13。
+  const halfHourPoints = hourlyRate / 2;
 
   // 计算漏扣次数
   const msOverdue = now.getTime() - nextDeductionAt.getTime();
