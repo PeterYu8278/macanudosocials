@@ -4,6 +4,22 @@ import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { PointsRecord } from '../../types';
 import { saveAuditLog } from './auditLog';
+import { consolidateVisitPointsRecords } from '../../utils/pointsRecordDisplay';
+
+const getPendingVisitSessionIds = async (userId: string): Promise<Set<string>> => {
+  try {
+    const pendingSessionsQuery = query(
+      collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+      where('userId', '==', userId),
+      where('status', '==', 'pending')
+    );
+    const snapshot = await getDocs(pendingSessionsQuery);
+    return new Set(snapshot.docs.map(session => session.id));
+  } catch (error) {
+    console.warn('[getUserPointsRecords] Failed to resolve pending visit sessions:', error);
+    return new Set();
+  }
+};
 
 /**
  * 获取所有积分记录
@@ -50,7 +66,8 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
       } as PointsRecord;
     });
     
-    return records;
+    const pendingSessionIds = await getPendingVisitSessionIds(userId);
+    return consolidateVisitPointsRecords(records, pendingSessionIds);
   } catch (error: any) {
     
     // 如果是索引错误，尝试降级查询（不使用 orderBy）
@@ -82,7 +99,8 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
         });
         
         // 限制返回数量
-        const limitedRecords = records.slice(0, limitCount);
+        const pendingSessionIds = await getPendingVisitSessionIds(userId);
+        const limitedRecords = consolidateVisitPointsRecords(records, pendingSessionIds).slice(0, limitCount);
         return limitedRecords;
       } catch (fallbackError) {
         throw fallbackError;
@@ -127,4 +145,3 @@ export const createPointsRecord = async (
     return null;
   }
 };
-

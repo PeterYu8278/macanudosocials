@@ -168,24 +168,12 @@ export const createVisitSession = async (
     // 初始扣费：立即扣除 1 小时积分
     if (initialDeduction > 0) {
       try {
-        const { createPointsRecord } = await import('./pointsRecords');
         const currentPoints = userData.membership?.points || 0;
         const newPoints = currentPoints - initialDeduction;
         await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId), {
           'membership.points': newPoints,
           'membership.totalVisitHours': (userData.membership?.totalVisitHours || 0) + 1,
           updatedAt: Timestamp.fromDate(now)
-        });
-        await createPointsRecord({
-          userId,
-          userName: userName || userData.displayName,
-          type: 'spend',
-          amount: initialDeduction,
-          source: 'visit',
-          description: `驻店开始扣费 (1小时 × ${hourlyRate}积分)`,
-          relatedId: docRef.id,
-          balance: newPoints,
-          createdBy: checkInBy
         });
       } catch (e) {
         console.error('[createVisitSession] 初始扣费失败', e);
@@ -257,23 +245,6 @@ export const processSessionRealtimeDeduction = async (
     'membership.points': newPoints,
     'membership.totalVisitHours': (userData.membership?.totalVisitHours || 0) + 0.5 * totalIntervals,
     updatedAt: Timestamp.fromDate(now)
-  });
-
-  // 积分记录（合并为一条）
-  const { createPointsRecord } = await import('./pointsRecords');
-  const description = totalIntervals === 1
-    ? `驻店计时扣费 (0.5小时 × ${hourlyRate}积分)`
-    : `驻店计时扣费 (0.5小时 × ${hourlyRate}积分 × ${totalIntervals}次，含漏扣补算)`;
-  await createPointsRecord({
-    userId,
-    userName: userData.displayName,
-    type: 'spend',
-    amount: totalNewDeduction,
-    source: 'visit',
-    description,
-    relatedId: sessionId,
-    balance: newPoints,
-    createdBy: 'system'
   });
 
   // 更新 session
@@ -360,6 +331,7 @@ export const completeVisitSession = async (
 
     // 计算应扣除的积分
     let pointsDeducted = 0;
+    let realtimeBilledHours: number | undefined;
     if (!session.isFirstVisitAfterRenewal) {
       if (session.dayPass?.isPurchased) {
         // Day Pass 逻辑（checkout 时一次性结算）
@@ -373,7 +345,10 @@ export const completeVisitSession = async (
         await processSessionRealtimeDeduction(sessionId, session.userId);
         // 读取最新已扣总量，写入 session 作为 pointsDeducted 汇总字段
         const latestDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
-        pointsDeducted = latestDoc.exists() ? (latestDoc.data()?.realtimePointsDeducted || 0) : (session.realtimePointsDeducted || 0);
+        const latestData = latestDoc.exists() ? latestDoc.data() : undefined;
+        pointsDeducted = latestData?.realtimePointsDeducted || session.realtimePointsDeducted || 0;
+        const deductionCount = latestData?.deductionCount || session.deductionCount || 0;
+        realtimeBilledHours = deductionCount > 0 ? 1 + Math.max(0, deductionCount - 1) * 0.5 : 0;
       } else {
         // 旧逻辑：按总时长一次性扣费
         pointsDeducted = Math.round(durationHours * hourlyRate);
@@ -389,7 +364,24 @@ export const completeVisitSession = async (
     let pointsRecordId: string | undefined;
 
     if (session.realtimeDeductionsEnabled) {
-      // 实时扣费模式：积分和 totalVisitHours 已在各阶段实时累加，checkout 只清除 session 引用
+      // 实时扣费模式：余额已实时扣除，checkout 时才生成一条可见的汇总流水
+      if (pointsDeducted > 0) {
+        const { createPointsRecord } = await import('./pointsRecords');
+        const billedHours = realtimeBilledHours ?? durationHours;
+        const pointsRecord = await createPointsRecord({
+          userId: session.userId,
+          userName: session.userName,
+          type: 'spend',
+          amount: pointsDeducted,
+          source: 'visit',
+          description: `驻店计时扣费 (${billedHours}小时，共${pointsDeducted}积分)`,
+          relatedId: sessionId,
+          balance: userData.membership?.points || 0,
+          createdBy: checkOutBy
+        });
+        pointsRecordId = pointsRecord?.id;
+      }
+
       await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, session.userId), {
         'membership.currentVisitSessionId': null,
         updatedAt: Timestamp.fromDate(now)
@@ -705,9 +697,9 @@ export const completeVisitSession = async (
       }
     }
 
-    // 实时扣费模式下，用已扣积分反推计费时长，确保 durationHours 与 pointsDeducted 一致
-    const billedHours = (session.realtimeDeductionsEnabled && hourlyRate > 0)
-      ? pointsDeducted / hourlyRate
+    // 实时扣费模式下，按已执行的 0.5 小时扣费次数记录计费时长
+    const billedHours = session.realtimeDeductionsEnabled
+      ? (realtimeBilledHours ?? durationHours)
       : durationHours;
 
     // 更新驻店记录
