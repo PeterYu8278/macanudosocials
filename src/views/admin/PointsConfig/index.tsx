@@ -822,8 +822,14 @@ const PointsConfigPage: React.FC = () => {
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
-                              {dayjs(recordDate).isValid() ? dayjs(recordDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm') : '-'}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
+                              <span style={{ whiteSpace: 'nowrap' }}>
+                                {dayjs(recordDate).isValid() ? dayjs(recordDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm') : '-'}
+                              </span>
+                              <span aria-hidden="true">•</span>
+                              <span style={{ color: '#f4cf72', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {record.userName || record.userId.slice(0, 12)}
+                              </span>
                             </div>
                             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
                               {record.description || '-'}

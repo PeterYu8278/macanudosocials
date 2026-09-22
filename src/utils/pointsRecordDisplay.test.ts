@@ -36,6 +36,43 @@ describe('consolidateVisitPointsRecords', () => {
     ])
   })
 
+  it('uses the checkout cumulative summary instead of adding earlier charges again', () => {
+    const records = [
+      record({
+        id: 'checkout-summary',
+        relatedId: 'session-1',
+        amount: 62.5,
+        balance: 528.5,
+        description: '驻店计时扣费 (2.5小时，共62.5积分)',
+        isVisitSessionSummary: true
+      }),
+      record({
+        id: 'initial-charge',
+        relatedId: 'session-1',
+        amount: 25,
+        balance: 566,
+        description: '驻店开始扣费 (1小时 × 25积分)'
+      })
+    ]
+
+    expect(consolidateVisitPointsRecords(records, new Set())).toEqual([
+      expect.objectContaining({
+        id: 'checkout-summary',
+        amount: 62.5,
+        balance: 528.5
+      })
+    ])
+  })
+
+  it('does not merge unrelated visit charges that share a related id', () => {
+    const records = [
+      record({ id: 'deposit', relatedId: 'booking-1', amount: 50, description: '房间预订订金' }),
+      record({ id: 'balance', relatedId: 'booking-1', amount: 50, description: '包厢签到扣除余款' })
+    ]
+
+    expect(consolidateVisitPointsRecords(records, new Set())).toHaveLength(2)
+  })
+
   it('keeps deductions from different sessions separate', () => {
     const records = [
       record({ id: 'session-1-record', relatedId: 'session-1' }),

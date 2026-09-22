@@ -1,8 +1,10 @@
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import dayjs from 'dayjs'
 import type { Event } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/modules/auth'
+import { CalendarOutlined, DollarCircleOutlined, EditOutlined, EnvironmentOutlined, LineChartOutlined, PictureOutlined, TeamOutlined } from '@ant-design/icons'
+import { Tooltip } from 'antd'
 
 interface EventCardProps {
   event: Event
@@ -25,6 +27,12 @@ const EventCard: React.FC<EventCardProps> = ({
 }) => {
   const { t } = useTranslation()
   const { user } = useAuthStore()
+  const eventImage = event.image || (event as any).imageUrl || event.coverImage || ''
+  const [imageFailed, setImageFailed] = useState(false)
+
+  useEffect(() => {
+    setImageFailed(false)
+  }, [eventImage])
 
   // 计算参与者社交关系（基于当前登录用户）
   const getSocialRelationTag = (): { color: string } | null => {
@@ -92,7 +100,7 @@ const EventCard: React.FC<EventCardProps> = ({
       position: 'relative', 
       overflow: 'hidden', 
       border: '1px solid rgba(244,175,37,0.2)', 
-      borderRadius: 16 
+      borderRadius: 10
     }}>
       <div style={{ 
         position: 'absolute', 
@@ -101,114 +109,63 @@ const EventCard: React.FC<EventCardProps> = ({
       }} />
       <div style={{ 
         position: 'relative', 
-        padding: 12, 
+        padding: 10,
         display: 'flex', 
-        flexDirection: 'column', 
-        gap: 8 
+        gap: 10
       }}>
         <div style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
-          gap: 12, 
-          alignItems: 'flex-start' 
+          gap: 10,
+          alignItems: 'stretch',
+          width: '100%',
+          minWidth: 0
         }}>
           <div style={{ 
-            width: 96, 
-            height: 96, 
-            borderRadius: 10, 
-            border: '2px solid rgba(244,175,37,0.3)', 
+            width: 82,
+            height: 82,
+            borderRadius: 8,
+            border: '1px solid rgba(244,175,37,0.35)',
             overflow: 'hidden', 
             flexShrink: 0, 
             background: 'rgba(255,255,255,0.08)' 
           }}>
-            <img
-              alt="Cigar tasting event"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuD3TPYA6HpEVbfOqeAlldyTpfRbZwZ9wVZj9g8I86EoGVp8OK7y3oaPnOiU6GHKmfigRsbbWXOQwVYSJCIbWhineKZyQ_uhh7CJnxR77vabe8ahQ9evdKcCVOKrY_vTtZMJ-ROZjjwVtgXWgMUOb0oLSUYvKJwxxaMvS07GvaklyNsDauAMi0All4B5FdXY5GJd5aUXsIcZ0qgD7FM9qbryFWovrU9DUGHTSTTPHjBKGzOc9q_DNLQ8HVfN70au4uIyFXy9D5Az6Rnt"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-          </div>
-          
-          <div style={{ flex: 1, display: 'flex', gap: 8, alignItems: 'flex-start' }}>
-            <div style={{ flex: 1 }}>
-              {/* 活动名称 */}
-              <div style={{ 
-                display: 'flex', 
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: 8 
-              }}>
-                <div style={{ 
-                  fontSize: 16, 
-                  fontWeight: 800, 
-                  color: '#fff', 
-                  flex: 1, 
-                  marginRight: 8,
+            {eventImage && !imageFailed ? (
+              <img
+                alt={event.title}
+                src={eventImage}
+                onError={() => setImageFailed(true)}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            ) : (
+              <div
+                aria-label={t('events.noImage', { defaultValue: 'No event image' })}
+                style={{
+                  width: '100%',
+                  height: '100%',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 6
-                }}>
-                  {event.title}
-                  {/* 社交关系 tag */}
-                  {socialTag && (
-                    <span style={{ 
-                      width: 8,
-                      height: 8,
-                      borderRadius: '50%',
-                      background: socialTag.color,
-                      flexShrink: 0,
-                      display: 'inline-block'
-                    }} />
-                  )}
-                </div>
+                  justifyContent: 'center',
+                  color: 'rgba(244,175,37,0.65)',
+                  background: 'rgba(244,175,37,0.06)'
+                }}
+              >
+                <PictureOutlined style={{ fontSize: 30 }} />
               </div>
-              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.75)' }}>
-                <div style={{ 
-                  fontSize: 12, 
-                  color: '#f4af25', 
-                  fontWeight: 600, 
-                  marginBottom: 4 
-                }}>
-                  {t('events.participants')}: {((event as any)?.participants?.registered || []).length}
-                </div>
-                {(() => {
-                  const s = (event as any)?.schedule?.startDate
-                  const e = (event as any)?.schedule?.endDate
-                  const sd = (s as any)?.toDate ? (s as any).toDate() : s
-                  const ed = (e as any)?.toDate ? (e as any).toDate() : e
-                  const time = sd && ed ? `${dayjs(sd).format('YYYY-MM-DD HH:mm')} - ${dayjs(ed).format('HH:mm')}` : '-'
-                  const loc = (event as any)?.location?.name || ''
-                  return (
-                    <div>
-                      <div>{time}</div>
-                      {loc && <div>{loc}</div>}
-                    </div>
-                  )
-                })()}
-                {/* 总收入和净利润 */}
-                <div style={{ marginTop: 8, display: 'flex', flexDirection: 'row', gap: 12, alignItems: 'center' }}>
-                  <div style={{ fontSize: 12, fontWeight: 600, color: '#389e0d' }}>
-                    RM{revenue.toFixed(2)}
-                  </div>
-                  <div style={{ 
-                    fontSize: 12, 
-                    fontWeight: 600,
-                    color: '#1890ff'
-                  }}>
-                    RM{profit.toFixed(2)}
-                  </div>
-                </div>
+            )}
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'space-between', gap: 4 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 800, color: '#fff', flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {event.title}
+                {socialTag && (
+                  <span style={{ width: 7, height: 7, marginLeft: 6, borderRadius: '50%', background: socialTag.color, display: 'inline-block' }} />
+                )}
               </div>
-            </div>
-            <div style={{ 
-              display: 'flex', 
-              flexDirection: 'column',
-              alignItems: 'flex-end',
-              gap: 8
-            }}>
-              {/* 状态标签 */}
               <span style={{ 
-                fontSize: 12, 
-                padding: '2px 8px', 
+                fontSize: 11,
+                padding: '2px 7px',
                 borderRadius: 9999, 
                 background: event.status === 'published' ? 'rgba(34,197,94,0.2)' : 
                            event.status === 'ongoing' ? 'rgba(56,189,248,0.2)' : 
@@ -222,23 +179,65 @@ const EventCard: React.FC<EventCardProps> = ({
               }}>
                 {getStatusText(event.status)}
               </span>
-              {/* 编辑按钮 */}
-              <button 
-                style={{ 
-                  padding: '4px 8px', 
-                  borderRadius: 6, 
-                  background: 'linear-gradient(to right,#FDE08D,#C48D3A)', 
-                  color: '#221c10', 
-                  fontWeight: 600, 
-                  fontSize: 12, 
-                  cursor: 'pointer', 
-                  transition: 'all 0.2s ease',
-                  whiteSpace: 'nowrap'
-                }} 
-                onClick={() => onView(event)}
-              >
-                {t('common.edit')}
-              </button>
+              <Tooltip title={t('common.edit')}>
+                <button
+                  aria-label={t('common.edit')}
+                  title={t('common.edit')}
+                  onClick={() => onView(event)}
+                  style={{
+                    width: 28,
+                    height: 28,
+                    padding: 0,
+                    borderRadius: 6,
+                    border: 'none',
+                    background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
+                    color: '#221c10',
+                    cursor: 'pointer',
+                    flexShrink: 0
+                  }}
+                >
+                  <EditOutlined />
+                </button>
+              </Tooltip>
+            </div>
+
+            {(() => {
+              const start = (event as any)?.schedule?.startDate
+              const end = (event as any)?.schedule?.endDate
+              const startDate = (start as any)?.toDate ? (start as any).toDate() : start
+              const endDate = (end as any)?.toDate ? (end as any).toDate() : end
+              const time = startDate && endDate
+                ? `${dayjs(startDate).format('DD MMM, HH:mm')}-${dayjs(endDate).format('HH:mm')}`
+                : '-'
+              const location = (event as any)?.location?.name || '-'
+              return (
+                <>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,0.72)', fontSize: 11, minWidth: 0 }}>
+                    <span style={{ color: '#f4af25', fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      <TeamOutlined /> {((event as any)?.participants?.registered || []).length}
+                    </span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      <CalendarOutlined /> {time}
+                    </span>
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 11, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <EnvironmentOutlined /> {location}
+                  </div>
+                </>
+              )
+            })()}
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, fontSize: 11, fontWeight: 700 }}>
+              <Tooltip title={t('participants.totalRevenue')}>
+                <span style={{ color: '#52c41a', whiteSpace: 'nowrap' }}>
+                  <DollarCircleOutlined /> RM{revenue.toFixed(2)}
+                </span>
+              </Tooltip>
+              <Tooltip title={t('participants.totalProfit')}>
+                <span style={{ color: '#40a9ff', whiteSpace: 'nowrap' }}>
+                  <LineChartOutlined /> RM{profit.toFixed(2)}
+                </span>
+              </Tooltip>
             </div>
           </div>
         </div>

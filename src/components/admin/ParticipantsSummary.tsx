@@ -3,6 +3,7 @@ import { InputNumber, App } from 'antd'
 import type { Event, Cigar } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { updateDocument, COLLECTIONS } from '../../services/firebase/firestore'
+import { calculateEventFeeStats } from '../../utils/eventFeeStats'
 
 interface ParticipantsSummaryProps {
   event: Event | null
@@ -88,25 +89,7 @@ const ParticipantsSummary: React.FC<ParticipantsSummaryProps> = ({
 
   // 计算活动费用统计
   const feeStats = useMemo(() => {
-    if (!event) return { payerCount: 0, feeQuantity: 0, feeUnit: 0, feeTotal: 0 }
-    const registeredParticipants = (event as any)?.participants?.registered || []
-    let payerCount = 0
-    let feeQuantity = 0
-    let feeTotal = 0
-    let feeUnitFallback = Number((event as any)?.participants?.fee || 0)
-    registeredParticipants.forEach((uid: string) => {
-      const alloc = (event as any)?.allocations?.[uid]
-      if (!alloc) return
-      const qty = (alloc as any)?.feeQuantity != null ? Number((alloc as any).feeQuantity) : 1
-      const unit = (alloc as any)?.feeUnitPrice != null ? Number((alloc as any).feeUnitPrice) : feeUnitFallback
-      const line = unit * (qty > 0 ? qty : 1)
-      if (unit > 0) {
-        payerCount += 1
-        feeQuantity += qty > 0 ? qty : 1
-        feeTotal += line
-      }
-    })
-    return { payerCount, feeQuantity, feeUnit: feeUnitFallback, feeTotal }
+    return calculateEventFeeStats(event as any)
   }, [event])
 
   // 计算产品总金额（不含活动费用）

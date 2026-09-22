@@ -635,7 +635,9 @@ const VisitSessionsPage: React.FC = () => {
                                             key: 'action',
                                             width: 100,
                                             render: (_: any, redemptionRecord: any) => {
-                                              // 允许管理员编辑所有兑换记录（无论状态如何）
+                                              const canEdit = record.status === 'pending' || redemptionRecord.status === 'pending';
+                                              if (!canEdit) return null;
+
                                               return (
                                                 <Button
                                                   type="link"
@@ -918,7 +920,7 @@ const VisitSessionsPage: React.FC = () => {
                                                 </div>
                                               )}
                                             </div>
-                                            {record.status === 'pending' && (
+                                            {(record.status === 'pending' || redemptionRecord.status === 'pending') && (
                                               <Button
                                                 type="link"
                                                 size="small"

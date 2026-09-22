@@ -15,6 +15,7 @@ import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import { getModalThemeStyles, getModalWidth, getModalTheme, getResponsiveModalConfig } from '../../../config/modalTheme'
 import { calculateFifoProfit, aggregateProfitByPeriod, ProfitRecord } from '../../../utils/finance'
+import { reconcileOrderOutboundMovements } from '../../../utils/inventoryMovementReconciliation'
 import { useAuthStore } from '../../../store/modules/auth'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
@@ -99,6 +100,11 @@ const AdminFinance: React.FC = () => {
     income: number
     expense: number
   }>>([])
+
+  const effectiveInventoryMovements = useMemo(
+    () => reconcileOrderOutboundMovements(inventoryMovements, orders),
+    [inventoryMovements, orders]
+  )
 
   const parseLooseDate = (raw: string): Date | null => {
     if (!raw) return null
@@ -797,13 +803,13 @@ const AdminFinance: React.FC = () => {
 
   // 计算 FIFO 利润数据
   const profitData = useMemo(() => {
-    if (!inventoryMovements.length || !cigars.length) return { records: [], rowSpanMap: {}, totalProfit: 0, totalCogs: 0, totalRevenue: 0, margin: 0, trendData: [], maxVal: 1 }
+    if (!effectiveInventoryMovements.length || !cigars.length) return { records: [], rowSpanMap: {}, totalProfit: 0, totalCogs: 0, totalRevenue: 0, margin: 0, trendData: [], maxVal: 1 }
 
     const cigarMap = new Map(cigars.map(c => [c.id, c]))
     const inboundMap = new Map(inboundOrders.map(o => [o.id, o]))
 
     // 1. 同步实际成交价：使变动记录的价格与订单/进货单对齐，并修复产品名称显示
-    const syncedMovements = inventoryMovements.map(m => {
+    const syncedMovements = effectiveInventoryMovements.map(m => {
       // 获取关联订单或进货单
       const order = m.referenceNo ? orders.find(o => o.id === m.referenceNo) : null
       const ibOrder = m.inboundOrderId ? inboundMap.get(m.inboundOrderId) : null
@@ -984,7 +990,7 @@ const AdminFinance: React.FC = () => {
       trendData,
       maxVal
     }
-  }, [inventoryMovements, orders, users, cigars, inboundOrders, selectedDateRange, dateRange, isMobile, keyword, profitTypeFilter])
+  }, [effectiveInventoryMovements, orders, users, cigars, inboundOrders, selectedDateRange, dateRange, isMobile, keyword, profitTypeFilter])
 
   // 已移除类别统计
 

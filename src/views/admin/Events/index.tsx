@@ -21,6 +21,7 @@ import { getResponsiveModalConfig, getModalTheme } from '../../../config/modalTh
 import { useAuthStore } from '../../../store/modules/auth'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
+import { calculateEventFeeStats } from '../../../utils/eventFeeStats'
 
 const { Option } = Select
 
@@ -494,17 +495,7 @@ const AdminEvents: React.FC = () => {
       })
       
       // 计算活动费用总收入（基于 allocations）
-      let feeRevenue = 0
-      const feeUnitFallback = Number((event as any)?.participants?.fee || 0)
-      registeredParticipants.forEach((uid: string) => {
-        const alloc = (event as any)?.allocations?.[uid]
-        if (!alloc) return
-        const qty = (alloc as any)?.feeQuantity != null ? Number((alloc as any).feeQuantity) : 1
-        const unit = (alloc as any)?.feeUnitPrice != null ? Number((alloc as any).feeUnitPrice) : feeUnitFallback
-        if (unit > 0) {
-          feeRevenue += unit * (qty > 0 ? qty : 1)
-        }
-      })
+      const feeRevenue = calculateEventFeeStats(event as any).feeTotal
       
       // 总收入 = 产品收入 + 活动费用收入
       const totalRevenue = productRevenue + feeRevenue

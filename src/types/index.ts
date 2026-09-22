@@ -632,6 +632,7 @@ export interface PointsRecord {
   source: 'reload' | 'membership_fee' | 'visit' | 'event_registration' | 'purchase';  // 来源
   description: string;      // 描述
   relatedId?: string;       // 关联ID（订单ID、活动ID、驻店记录ID、年费记录ID、充值记录ID等）
+  isVisitSessionSummary?: boolean; // checkout 生成的驻店累计汇总流水
   balance?: number;         // 操作后余额
   createdAt: Date;
   createdBy?: string;       // 创建人（管理员手动调整时）

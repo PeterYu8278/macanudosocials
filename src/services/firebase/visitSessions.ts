@@ -205,7 +205,9 @@ export const processSessionRealtimeDeduction = async (
   userId: string
 ): Promise<{ deducted: number; count: number }> => {
   const now = new Date();
-  const sessionDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
+  const sessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId);
+  const userRef = doc(db, GLOBAL_COLLECTIONS.USERS, userId);
+  const sessionDoc = await getDoc(sessionRef);
   if (!sessionDoc.exists()) return { deducted: 0, count: 0 };
 
   const data = sessionDoc.data() as any;
@@ -224,43 +226,50 @@ export const processSessionRealtimeDeduction = async (
     console.error('[processSessionRealtimeDeduction] 获取费率失败', e);
   }
 
-  // 分段扣费必须保留精度，否则奇数费率会在每个半小时重复向上取整。
-  // 例如 25 积分/小时应按 12.5 积分/半小时计费，而不是 13。
-  const halfHourPoints = hourlyRate / 2;
+  return runTransaction(db, async transaction => {
+    // The session is the idempotency lock. Concurrent devices retry against its
+    // updated nextDeductionAt and therefore cannot charge the same interval twice.
+    const latestSessionDoc = await transaction.get(sessionRef);
+    if (!latestSessionDoc.exists()) return { deducted: 0, count: 0 };
 
-  // 计算漏扣次数
-  const msOverdue = now.getTime() - nextDeductionAt.getTime();
-  const missedIntervals = Math.floor(msOverdue / (30 * 60 * 1000));
-  const totalIntervals = 1 + missedIntervals; // 当前到期 + 漏扣
+    const latestData = latestSessionDoc.data() as any;
+    if (!latestData.realtimeDeductionsEnabled || latestData.status !== 'pending') {
+      return { deducted: 0, count: 0 };
+    }
 
-  const totalNewDeduction = halfHourPoints * totalIntervals;
-  const newNextDeductionAt = new Date(nextDeductionAt.getTime() + totalIntervals * 30 * 60 * 1000);
+    const latestNextDeductionAt: Date | null = latestData.nextDeductionAt?.toDate?.() ?? null;
+    if (!latestNextDeductionAt || now < latestNextDeductionAt) {
+      return { deducted: 0, count: 0 };
+    }
 
-  // 用户扣分
-  const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId));
-  if (!userDoc.exists()) return { deducted: 0, count: 0 };
+    const userDoc = await transaction.get(userRef);
+    if (!userDoc.exists()) return { deducted: 0, count: 0 };
 
-  const userData = userDoc.data() as User;
-  const currentPoints = userData.membership?.points || 0;
-  const newPoints = currentPoints - totalNewDeduction;
+    // Preserve fractional precision: 25 points/hour is 12.5 points/half-hour.
+    const halfHourPoints = hourlyRate / 2;
+    const msOverdue = now.getTime() - latestNextDeductionAt.getTime();
+    const missedIntervals = Math.floor(msOverdue / (30 * 60 * 1000));
+    const totalIntervals = 1 + missedIntervals;
+    const totalNewDeduction = halfHourPoints * totalIntervals;
+    const newNextDeductionAt = new Date(
+      latestNextDeductionAt.getTime() + totalIntervals * 30 * 60 * 1000
+    );
 
-  await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId), {
-    'membership.points': newPoints,
-    'membership.totalVisitHours': (userData.membership?.totalVisitHours || 0) + 0.5 * totalIntervals,
-    updatedAt: Timestamp.fromDate(now)
+    const userData = userDoc.data() as User;
+    transaction.update(userRef, {
+      'membership.points': (userData.membership?.points || 0) - totalNewDeduction,
+      'membership.totalVisitHours': (userData.membership?.totalVisitHours || 0) + 0.5 * totalIntervals,
+      updatedAt: Timestamp.fromDate(now)
+    });
+    transaction.update(sessionRef, {
+      realtimePointsDeducted: (latestData.realtimePointsDeducted || 0) + totalNewDeduction,
+      nextDeductionAt: Timestamp.fromDate(newNextDeductionAt),
+      deductionCount: (latestData.deductionCount || 1) + totalIntervals,
+      updatedAt: Timestamp.fromDate(now)
+    });
+
+    return { deducted: totalNewDeduction, count: totalIntervals };
   });
-
-  // 更新 session
-  const prevDeducted = data.realtimePointsDeducted || 0;
-  const prevCount = data.deductionCount || 1;
-  await updateDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId), {
-    realtimePointsDeducted: prevDeducted + totalNewDeduction,
-    nextDeductionAt: Timestamp.fromDate(newNextDeductionAt),
-    deductionCount: prevCount + totalIntervals,
-    updatedAt: Timestamp.fromDate(now)
-  });
-
-  return { deducted: totalNewDeduction, count: totalIntervals };
 };
 
 /**
@@ -379,6 +388,7 @@ export const completeVisitSession = async (
           source: 'visit',
           description: `驻店计时扣费 (${billedHours}小时，共${pointsDeducted}积分)`,
           relatedId: sessionId,
+          isVisitSessionSummary: true,
           balance: userData.membership?.points || 0,
           createdBy: checkOutBy
         });
@@ -796,12 +806,20 @@ export const reconcileCompletedSessionRedemptions = async (
       }
     }
 
-    const existingOutboundSnapshot = await getDocs(query(
+    const existingOutboundByOrderId = await getDocs(query(
       collection(db, COLLECTIONS.OUTBOUND_ORDERS),
       where('orderId', '==', orderId)
     ));
+    const existingOutboundByReference = await getDocs(query(
+      collection(db, COLLECTIONS.OUTBOUND_ORDERS),
+      where('referenceNo', '==', orderId)
+    ));
+    const existingOutboundDocs = new Map(
+      [...existingOutboundByOrderId.docs, ...existingOutboundByReference.docs]
+        .map(outbound => [outbound.id, outbound] as const)
+    );
     const existingOutboundTotals = new Map<string, number>();
-    existingOutboundSnapshot.docs.forEach(outbound => {
+    existingOutboundDocs.forEach(outbound => {
       ((outbound.data().items || []) as OutboundOrder['items']).forEach(item => {
         existingOutboundTotals.set(item.cigarId, (existingOutboundTotals.get(item.cigarId) || 0) + item.quantity);
       });
@@ -832,7 +850,7 @@ export const reconcileCompletedSessionRedemptions = async (
       .filter(item => item.quantity > 0)
       .map(item => ({ ...item, subtotal: (item.unitPrice || 0) * item.quantity }));
 
-    let outboundOrderId = session.outboundOrderId || existingOutboundSnapshot.docs[0]?.id;
+    let outboundOrderId = session.outboundOrderId || existingOutboundDocs.values().next().value?.id;
     if (deltaItems.length > 0) {
       outboundOrderId = await createOutboundOrder({
         referenceNo: orderId,

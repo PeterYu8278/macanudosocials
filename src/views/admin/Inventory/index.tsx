@@ -19,6 +19,7 @@ import { getAggregatedCigarData, saveRecognitionToCigarDatabase, generateProduct
 import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../../config/firebase'
 import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections'
+import { reconcileOrderOutboundMovements } from '../../../utils/inventoryMovementReconciliation'
 
 import { useAuthStore } from '../../../store/modules/auth'
 const { Title } = Typography
@@ -41,6 +42,10 @@ const AdminInventory: React.FC = () => {
   const { data: inboundOrders, refresh: refreshInboundOrders } = useFirestoreQuery<InboundOrder>(() => getAllInboundOrders(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
   const { data: outboundOrders, refresh: refreshOutboundOrders } = useFirestoreQuery<OutboundOrder>(() => getAllOutboundOrders(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
   const { data: inventoryMovements, refresh: refreshInventoryMovements } = useFirestoreQuery<InventoryMovement>(() => getAllInventoryMovements(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
+  const effectiveInventoryMovements = useMemo(
+    () => reconcileOrderOutboundMovements(inventoryMovements, orders),
+    [inventoryMovements, orders]
+  )
   const [loading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [editing, setEditing] = useState<Cigar | null>(null)
@@ -374,7 +379,7 @@ const AdminInventory: React.FC = () => {
     // Calculation: sum(IN) - sum(OUT) without intermediate zeroing to avoid order dependency
     const map = new Map<string, number>()
 
-    for (const movement of inventoryMovements) {
+    for (const movement of effectiveInventoryMovements) {
       const id = movement.cigarId
       if (!id) continue
 
@@ -403,7 +408,7 @@ const AdminInventory: React.FC = () => {
     }
 
     return map
-  }, [inventoryMovements, inboundOrders, outboundOrders])
+  }, [effectiveInventoryMovements, inboundOrders, outboundOrders])
 
   const getComputedStock = (cigarId?: string) => {
     if (!cigarId) return 0
@@ -416,7 +421,7 @@ const AdminInventory: React.FC = () => {
   const totalsByCigarId = useMemo(() => {
     const map = new Map<string, { totalIn: number; totalOut: number }>()
 
-    for (const movement of inventoryMovements) {
+    for (const movement of effectiveInventoryMovements) {
       const id = movement.cigarId
       if (!id) continue
 
@@ -444,7 +449,7 @@ const AdminInventory: React.FC = () => {
     }
 
     return map
-  }, [inventoryMovements, inboundOrders, outboundOrders])
+  }, [effectiveInventoryMovements, inboundOrders, outboundOrders])
 
   const getTotals = (cigarId?: string) => {
     if (!cigarId) return { totalIn: 0, totalOut: 0 }

@@ -6,13 +6,18 @@ import type { PointsRecord } from '../../types';
 import { saveAuditLog } from './auditLog';
 import { consolidateVisitPointsRecords } from '../../utils/pointsRecordDisplay';
 
-const getPendingVisitSessionIds = async (userId: string): Promise<Set<string>> => {
+const getPendingVisitSessionIds = async (userId?: string): Promise<Set<string>> => {
   try {
-    const pendingSessionsQuery = query(
-      collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
-      where('userId', '==', userId),
-      where('status', '==', 'pending')
-    );
+    const pendingSessionsQuery = userId
+      ? query(
+          collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+          where('userId', '==', userId),
+          where('status', '==', 'pending')
+        )
+      : query(
+          collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+          where('status', '==', 'pending')
+        );
     const snapshot = await getDocs(pendingSessionsQuery);
     return new Set(snapshot.docs.map(session => session.id));
   } catch (error) {
@@ -30,7 +35,7 @@ export const getAllPointsRecords = async (limitCount: number = 100): Promise<Poi
     const q = query(recordsRef, orderBy('createdAt', 'desc'), limit(limitCount));
     const snapshot = await getDocs(q);
     
-    return snapshot.docs.map(doc => {
+    const records = snapshot.docs.map(doc => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -38,6 +43,9 @@ export const getAllPointsRecords = async (limitCount: number = 100): Promise<Poi
         createdAt: data.createdAt?.toDate?.() || new Date(data.createdAt)
       } as PointsRecord;
     });
+
+    const pendingSessionIds = await getPendingVisitSessionIds();
+    return consolidateVisitPointsRecords(records, pendingSessionIds);
   } catch (error) {
     return [];
   }

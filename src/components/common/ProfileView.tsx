@@ -1,6 +1,6 @@
 // Common User Profile View Component
 import React, { useMemo, useState, useEffect } from 'react'
-import { Row, Col, Card, Typography, Tag, Button, Space, Spin, App } from 'antd'
+import { Row, Col, Card, Typography, Tag, Button, Space, Spin, App, Drawer } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
@@ -19,7 +19,7 @@ import { getEventsByUser, getOrdersByUser, getCigarById, getReferredUsers, getDo
 import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
-import type { User, Event, Order, Cigar, PointsRecord } from '../../types'
+import type { User, Event, Order, Cigar, PointsRecord, VisitSession } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { MemberProfileCard } from './MemberProfileCard'
@@ -61,6 +61,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [referredUsers, setReferredUsers] = useState<User[]>([])
   const [loadingReferrals, setLoadingReferrals] = useState(false)
   const [pointsRecords, setPointsRecords] = useState<PointsRecord[]>([])
+  const [selectedPointsRecord, setSelectedPointsRecord] = useState<PointsRecord | null>(null)
+  const [selectedVisitSession, setSelectedVisitSession] = useState<VisitSession | null>(null)
+  const [pointsRecordDrawerOpen, setPointsRecordDrawerOpen] = useState(false)
+  const [loadingPointsRecordDetails, setLoadingPointsRecordDetails] = useState(false)
   const canViewDiscount = authUser?.role === 'developer' || authUser?.role === 'superAdmin'
   const [loadingPointsRecords, setLoadingPointsRecords] = useState(false)
   const [referralActivationMap, setReferralActivationMap] = useState<Record<string, Date | null>>({})
@@ -308,6 +312,47 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     )
   }
 
+  const toDateValue = (value: any): Date | null => {
+    if (!value) return null
+    const date = value instanceof Date ? value : value?.toDate?.() || new Date(value)
+    return Number.isNaN(date.getTime()) ? null : date
+  }
+
+  const formatDateTime = (value: any): string => {
+    const date = toDateValue(value)
+    if (!date) return '-'
+    return i18n.language === 'en-US'
+      ? `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
+      : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+  }
+
+  const openPointsRecordDetails = async (record: PointsRecord) => {
+    setSelectedPointsRecord(record)
+    setSelectedVisitSession(null)
+    setPointsRecordDrawerOpen(true)
+
+    if (record.source !== 'visit' || !record.relatedId) return
+
+    setLoadingPointsRecordDetails(true)
+    try {
+      const sessionData = await getDocument('visitSessions', record.relatedId) as any
+      if (sessionData) {
+        setSelectedVisitSession({
+          id: record.relatedId,
+          ...sessionData,
+          checkInAt: toDateValue(sessionData.checkInAt) || new Date(),
+          checkOutAt: toDateValue(sessionData.checkOutAt) || undefined,
+          createdAt: toDateValue(sessionData.createdAt) || new Date(),
+          updatedAt: toDateValue(sessionData.updatedAt) || new Date()
+        } as VisitSession)
+      }
+    } catch (error) {
+      console.error('[ProfileView] Failed to load visit session details:', error)
+    } finally {
+      setLoadingPointsRecordDetails(false)
+    }
+  }
+
   const useCompactProfileHeader = isMobile && Boolean(onLogout) && !showMemberCard
 
   const profileActions = showEditButton && onEdit ? (
@@ -360,6 +405,73 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   return (
     <div style={{ color: '#FFFFFF' }}>
+      <Drawer
+        title={t('profile.pointsRecords')}
+        placement="bottom"
+        open={pointsRecordDrawerOpen}
+        onClose={() => setPointsRecordDrawerOpen(false)}
+        height={isMobile ? '62vh' : 420}
+        styles={{
+          content: { background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)' },
+          header: { borderBottom: '1px solid rgba(244,175,37,0.25)' },
+          body: { padding: isMobile ? 16 : 24 }
+        }}
+      >
+        {selectedPointsRecord && (
+          <div style={{ maxWidth: 640, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 18 }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ color: '#fff', fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
+                  {selectedPointsRecord.description}
+                </div>
+                <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 5 }}>
+                  {formatDateTime(selectedPointsRecord.createdAt)}
+                </div>
+              </div>
+              <div style={{ color: selectedPointsRecord.type === 'earn' ? '#52c41a' : '#ff4d4f', fontSize: 24, fontWeight: 800, whiteSpace: 'nowrap' }}>
+                {selectedPointsRecord.type === 'earn' ? '+' : '-'}{selectedPointsRecord.amount}
+                <span style={{ fontSize: 11, marginLeft: 4, fontWeight: 500 }}>pts</span>
+              </div>
+            </div>
+
+            <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
+              {[
+                [t('pointsConfig.records.source'), t(`pointsConfig.records.sources.${selectedPointsRecord.source}`) || selectedPointsRecord.source],
+                [t('pointsConfig.records.balance'), selectedPointsRecord.balance ?? '-']
+              ].map(([label, value]) => (
+                <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
+                  <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{label}</span>
+                  <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{value}</span>
+                </div>
+              ))}
+            </div>
+
+            {loadingPointsRecordDetails ? (
+              <div style={{ textAlign: 'center', padding: 24 }}><Spin /></div>
+            ) : selectedVisitSession && (
+              <div style={{ marginTop: 14 }}>
+                <div style={{ color: '#f4cf72', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                  {t('navigation.visitSessions')}
+                </div>
+                <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
+                  {[
+                    [t('visitSessions.checkIn'), formatDateTime(selectedVisitSession.checkInAt)],
+                    [t('visitSessions.checkOut'), formatDateTime(selectedVisitSession.checkOutAt)],
+                    [t('visitSessions.duration'), selectedVisitSession.durationHours != null ? `${selectedVisitSession.durationHours} ${t('visitSessions.hours')}` : '-'],
+                    [t('visitSessions.status'), t(`visitSessions.status${selectedVisitSession.status.charAt(0).toUpperCase()}${selectedVisitSession.status.slice(1)}`)]
+                  ].map(([label, value]) => (
+                    <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
+                      <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{label}</span>
+                      <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600, textAlign: 'right' }}>{value}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Drawer>
+
       {/* User Profile Section */}
       <div style={{
         maxWidth: '640px',
@@ -830,9 +942,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   const accentBg = isEarn ? 'rgba(82,196,26,0.06)' : 'rgba(255,77,79,0.06)'
 
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={record.id}
+                      aria-label={`${t('profile.pointsRecords')}: ${record.description}`}
+                      onClick={() => openPointsRecordDetails(record)}
                       style={{
+                        width: '100%',
                         display: 'flex',
                         alignItems: 'center',
                         gap: isMobile ? 12 : 16,
@@ -841,6 +957,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         background: accentBg,
                         border: '1px solid rgba(255,255,255,0.07)',
                         borderLeft: `3px solid ${accentColor}`,
+                        color: 'inherit',
+                        font: 'inherit',
+                        textAlign: 'left',
+                        cursor: 'pointer'
                       }}
                     >
                       {/* Icon */}
@@ -917,7 +1037,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           pts
                         </div>
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
