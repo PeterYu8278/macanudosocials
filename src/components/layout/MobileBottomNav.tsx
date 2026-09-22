@@ -283,7 +283,7 @@ const MobileBottomNav: React.FC = () => {
         className="mobile-nav-highlight-track"
         style={{
           position: 'absolute',
-          top: '8px',
+          top: '12px',
           left: '8px',
           right: '8px',
           height: '32px',

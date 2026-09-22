@@ -594,7 +594,7 @@ a:hover {
   /* 小屏手机端底部操作栏优化 */
   .mobile-bottom-nav {
     height: 72px !important;
-    padding: 4px 6px !important;
+    padding: 4px 8px !important;
   }
 
   .mobile-nav-item {
