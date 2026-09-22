@@ -904,12 +904,28 @@ const AdminEvents: React.FC = () => {
           },
           {
             key: 'announcements',
-            label: <span><NotificationOutlined /> {t('announcements.management', { defaultValue: 'Announcements' })}</span>,
+            label: (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <NotificationOutlined style={{ color: '#E7B54A' }} />
+                <span
+                  style={{
+                    backgroundImage: 'linear-gradient(90deg, #FDE08D 0%, #E7B54A 52%, #C48D3A 100%)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                    color: 'transparent',
+                    fontWeight: 700,
+                  }}
+                >
+                  {t('announcements.management', { defaultValue: 'Announcements' })}
+                </span>
+              </span>
+            ),
           },
         ]}
       />
 
-      {pageTab === 'announcements' && <AnnouncementsAdmin />}
+      {pageTab === 'announcements' && <AnnouncementsAdmin isMobile={isMobile} />}
 
       <div
         style={{
