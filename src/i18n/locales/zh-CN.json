@@ -460,6 +460,8 @@
     "cloudinaryConfig": "Cloudinary 配置",
     "fcmConfig": "FCM 配置（可选）",
     "geminiApiConfig": "Gemini API 配置（可选）",
+    "groqApiConfig": "Groq API 配置（可选）",
+    "groqKeyDesc": "配置服务器端 Groq API Key，优先用于 AI 雪茄文字搜索；Groq 不可用时回退到 Gemini。",
     "netlifyConfig": "Netlify 配置（可选）",
     "deploySummary": "部署摘要：",
     "deployDetailedResults": "详细结果：",

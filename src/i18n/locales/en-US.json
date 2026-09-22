@@ -460,6 +460,8 @@
     "cloudinaryConfig": "Cloudinary Configuration",
     "fcmConfig": "FCM Configuration (Optional)",
     "geminiApiConfig": "Gemini API Configuration (Optional)",
+    "groqApiConfig": "Groq API Configuration (Optional)",
+    "groqKeyDesc": "Configure the server-side Groq API key as the primary AI cigar text search provider, with Gemini as fallback.",
     "netlifyConfig": "Netlify Configuration (Optional)",
     "deploySummary": "Deploy Summary:",
     "deployDetailedResults": "Detailed Results:",

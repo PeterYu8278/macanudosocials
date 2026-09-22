@@ -541,6 +541,7 @@ const FeatureManagement: React.FC = () => {
     appName: string;
     fcmVapidKey?: string;
     geminiApiKey?: string;
+    groqApiKey?: string;
   }): string => {
     const measurementIdLine = values.firebaseMeasurementId
       ? `VITE_FIREBASE_MEASUREMENT_ID=${values.firebaseMeasurementId}\n`
@@ -552,6 +553,10 @@ const FeatureManagement: React.FC = () => {
 
     const geminiApiKeyLine = values.geminiApiKey
       ? `\n# Gemini API 配置\nVITE_GEMINI_API_KEY=${values.geminiApiKey}`
+      : '';
+
+    const groqApiKeyLine = values.groqApiKey
+      ? `\n# Groq API 配置（仅限服务器端）\nGROQ_API_KEY=${values.groqApiKey}\nGROQ_MODEL=llama-3.3-70b-versatile`
       : '';
 
     // FIREBASE_SERVICE_ACCOUNT 是服务器端环境变量，需要单独处理（JSON 格式）
@@ -585,7 +590,7 @@ VITE_CLOUDINARY_UPLOAD_PRESET=${values.cloudinaryUploadPreset}
 VITE_CLOUDINARY_BASE_FOLDER=${values.cloudinaryBaseFolder}
 
 # 应用配置
-VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''}${geminiApiKeyLine}`;
+VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''}${geminiApiKeyLine}${groqApiKeyLine}`;
   };
 
   // 部署到 Netlify
@@ -631,6 +636,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       // 如果提供了 Gemini API Key，添加到环境变量数组
       if (values.geminiApiKey) {
         envVars.push({ key: 'VITE_GEMINI_API_KEY', value: values.geminiApiKey, scopes: ['all'] });
+      }
+
+      // Groq is called only by the server-side function, so never expose it to builds.
+      if (values.groqApiKey) {
+        envVars.push({ key: 'GROQ_API_KEY', value: values.groqApiKey, scopes: ['functions'] });
+        envVars.push({ key: 'GROQ_MODEL', value: 'llama-3.3-70b-versatile', scopes: ['functions'] });
       }
 
       // 如果提供了 Firebase Service Account，添加到环境变量数组（服务器端变量，不使用 VITE_ 前缀）
@@ -2109,6 +2120,42 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                       type="text"
                       icon={showSecrets.geminiApiKey ? <EyeOutlined style={{ color: '#ffd700' }} /> : <EyeInvisibleOutlined style={{ color: '#ffd700' }} />}
                       onClick={() => setShowSecrets(prev => ({ ...prev, geminiApiKey: !prev.geminiApiKey }))}
+                      style={{ border: 'none', color: '#ffd700' }}
+                    />
+                  }
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    border: '1px solid rgba(255, 255, 255, 0.1)',
+                    color: '#f8f8f8',
+                  }}
+                />
+              </Form.Item>
+            </div>
+
+            <Divider style={{ borderColor: 'rgba(244, 175, 37, 0.2)', margin: '24px 0' }} />
+
+            {/* Groq 配置 */}
+            <div style={{ marginBottom: 24 }}>
+              <Text style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600, display: 'block', marginBottom: 16 }}>
+                {t('featureManagement.groqApiConfig')}
+              </Text>
+              <Text style={{ color: '#c0c0c0', fontSize: '12px', display: 'block', marginBottom: 16 }}>
+                {t('featureManagement.groqKeyDesc')}
+              </Text>
+
+              <Form.Item
+                label={<span style={{ color: '#c0c0c0' }}>API Key</span>}
+                name="groqApiKey"
+                rules={[{ required: false, message: '请输入 Groq API Key' }]}
+              >
+                <Input
+                  type={showSecrets.groqApiKey ? 'text' : 'password'}
+                  placeholder="gsk_..."
+                  suffix={
+                    <Button
+                      type="text"
+                      icon={showSecrets.groqApiKey ? <EyeOutlined style={{ color: '#ffd700' }} /> : <EyeInvisibleOutlined style={{ color: '#ffd700' }} />}
+                      onClick={() => setShowSecrets(prev => ({ ...prev, groqApiKey: !prev.groqApiKey }))}
                       style={{ border: 'none', color: '#ffd700' }}
                     />
                   }

@@ -527,6 +527,61 @@ service cloud.firestore {
     }
 
     // ================================
+    // AI Cigar Recognition Database
+    // ================================
+    match /cigar_database/{cigarId} {
+      // The member history view reads this shared aggregate collection.
+      allow read: if isSignedIn();
+
+      // Administrators may curate or repair aggregate records manually.
+      allow create, update, delete: if isAnyAdmin();
+
+      // Members may create only the aggregate shape produced by the scanner.
+      // contributors may be empty when the account has no display name, or it
+      // may contain only the authenticated member's entry.
+      allow create: if isSignedIn()
+                    && request.resource.data.normalizedName == cigarId
+                    && request.resource.data.totalRecognitions == 1
+                    && request.resource.data.contributors is map
+                    && request.resource.data.contributors.keys()
+                         .hasOnly([request.auth.uid])
+                    && request.resource.data.keys().hasOnly([
+                         'productName', 'normalizedName',
+                         'brandStats', 'originStats', 'strengthStats',
+                         'wrapperStats', 'binderStats', 'fillerStats',
+                         'flavorProfileStats', 'footTasteNotesStats',
+                         'bodyTasteNotesStats', 'headTasteNotesStats',
+                         'ratingSum', 'ratingCount',
+                         'description', 'descriptionConfidence',
+                         'descriptionUpdatedAt', 'totalRecognitions',
+                         'lastRecognizedAt', 'createdAt', 'updatedAt',
+                         'contributors'
+                       ]);
+
+      // A member recognition may increment the aggregate once and update only
+      // scanner-owned statistics. Product identity and createdAt stay immutable.
+      allow update: if isSignedIn()
+                    && request.resource.data.totalRecognitions
+                         == resource.data.totalRecognitions + 1
+                    && request.resource.data.contributors is map
+                    && resource.data.contributors is map
+                    && request.resource.data.contributors
+                         .diff(resource.data.contributors).affectedKeys()
+                         .hasOnly([request.auth.uid])
+                    && request.resource.data.diff(resource.data).affectedKeys()
+                         .hasOnly([
+                           'totalRecognitions', 'lastRecognizedAt', 'updatedAt',
+                           'contributors', 'brandStats', 'originStats',
+                           'strengthStats', 'wrapperStats', 'binderStats',
+                           'fillerStats', 'ratingSum', 'ratingCount',
+                           'flavorProfileStats', 'footTasteNotesStats',
+                           'bodyTasteNotesStats', 'headTasteNotesStats',
+                           'description', 'descriptionConfidence',
+                           'descriptionUpdatedAt'
+                         ]);
+    }
+
+    // ================================
     // 默认拒绝规则
     // ================================
     match /{document=**} {

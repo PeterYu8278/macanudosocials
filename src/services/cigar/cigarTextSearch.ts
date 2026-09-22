@@ -13,6 +13,108 @@ import { searchCigarImageWithGoogle } from '../gemini/googleImageSearch';
 import { getAppConfig } from '../firebase/appConfig';
 import { analyzeCigarByName } from '../gemini/cigarRecognition';
 import type { CigarAnalysisResult } from '../gemini/cigarRecognition';
+import { searchCigarWithGroq } from '../groq/cigarSearch';
+
+const COMMON_BRANDS = [
+  'Cohiba', 'Montecristo', 'Romeo y Julieta', 'Partagas', 'Davidoff',
+  'Padron', 'Arturo Fuente', 'Oliva', 'My Father', 'Drew Estate',
+  'Macanudo', 'Rocky Patel', 'Ashton', 'Perdomo', 'CAO',
+  'Liga Privada', 'Undercrown', 'Plasencia', 'Alec Bradley', 'Tatuaje'
+];
+
+const editDistance = (left: string, right: string): number => {
+  const previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    let diagonal = previous[0];
+    previous[0] = leftIndex;
+
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      const above = previous[rightIndex];
+      previous[rightIndex] = left[leftIndex - 1] === right[rightIndex - 1]
+        ? diagonal
+        : Math.min(diagonal, previous[rightIndex - 1], above) + 1;
+      diagonal = above;
+    }
+  }
+
+  return previous[right.length];
+};
+
+export function parseCigarSearchInput(inputValue: string): { brand: string; name: string } {
+  const input = inputValue.trim().replace(/\s+/g, ' ');
+  const parts = input.split(' ');
+
+  if (parts.length === 1) {
+    return { brand: '', name: input };
+  }
+
+  const exactBrand = [...COMMON_BRANDS]
+    .sort((left, right) => right.length - left.length)
+    .find(candidate => {
+      const prefix = input.slice(0, candidate.length);
+      return prefix.toLowerCase() === candidate.toLowerCase()
+        && (input.length === candidate.length || input[candidate.length] === ' ');
+    });
+
+  if (exactBrand) {
+    return {
+      brand: exactBrand,
+      name: input.slice(exactBrand.length).trim(),
+    };
+  }
+
+  const firstWord = parts[0];
+  const correctedBrand = COMMON_BRANDS
+    .filter(candidate => !candidate.includes(' '))
+    .map(candidate => ({
+      candidate,
+      distance: editDistance(firstWord.toLowerCase(), candidate.toLowerCase()),
+    }))
+    .sort((left, right) => left.distance - right.distance)[0];
+
+  return {
+    brand: correctedBrand && correctedBrand.distance <= 2
+      ? correctedBrand.candidate
+      : firstWord,
+    name: parts.slice(1).join(' '),
+  };
+}
+
+async function finalizeAiSearchResult(
+  result: CigarAnalysisResult,
+  searchBrand: string,
+  searchName: string
+): Promise<CigarAnalysisResult> {
+  if (!result.imageUrl) {
+    const appConfig = await getAppConfig();
+    const imageSearchEnabled = appConfig?.aiCigar?.enableImageSearch ?? true;
+
+    if (imageSearchEnabled) {
+      try {
+        const imageUrl = await searchCigarImageWithGoogle(
+          result.brand || searchBrand,
+          result.name || searchName
+        );
+        if (imageUrl) {
+          result.imageUrl = imageUrl;
+        }
+      } catch {
+        // Image search does not block the cigar result.
+      }
+    }
+  }
+
+  updateRecognitionStats({
+    brand: result.brand,
+    name: result.name,
+    confidence: result.confidence,
+    imageUrlFound: !!result.imageUrl,
+    hasDetailedInfo: false
+  }).catch(() => {});
+
+  return result;
+}
 
 /**
  * 通过文本搜索雪茄信息
@@ -26,32 +128,7 @@ export async function searchCigarByText(brandAndName: string): Promise<CigarAnal
   }
   
   const input = brandAndName.trim();
-  
-  // 尝试解析品牌和名称
-  // 策略：假设第一个单词是品牌，其余是名称
-  const parts = input.split(/\s+/);
-  let brand = parts[0];
-  let name = input;
-  
-  // 如果输入包含多个单词，尝试更智能的拆分
-  if (parts.length > 1) {
-    // 常见品牌列表（用于智能识别）
-    const commonBrands = [
-      'Cohiba', 'Montecristo', 'Romeo y Julieta', 'Partagas', 'Davidoff',
-      'Padron', 'Arturo Fuente', 'Oliva', 'My Father', 'Drew Estate',
-      'Macanudo', 'Rocky Patel', 'Ashton', 'Perdomo', 'CAO',
-      'Liga Privada', 'Undercrown', 'Plasencia', 'Alec Bradley', 'Tatuaje'
-    ];
-    
-    // 检查是否以常见品牌开头
-    for (const commonBrand of commonBrands) {
-      if (input.toLowerCase().startsWith(commonBrand.toLowerCase())) {
-        brand = commonBrand;
-        name = input.substring(commonBrand.length).trim();
-        break;
-      }
-    }
-  }
+  const { brand, name } = parseCigarSearchInput(input);
   
   // 1. 查询数据库
   try {
@@ -114,47 +191,28 @@ export async function searchCigarByText(brandAndName: string): Promise<CigarAnal
     // Database query failed
   }
   
-  // 2. 数据库未找到，使用 Gemini API 推理详细信息
+  // 2. 数据库未找到，优先使用 Groq。
   try {
-    // 调用 Gemini API 根据品牌和名称获取详细信息
-    const geminiResult = await analyzeCigarByName(name, brand);
-    
-    // 标注为 AI 推理结果（非数据库验证）
+    const groqResult = await searchCigarWithGroq(input);
+    return await finalizeAiSearchResult(groqResult, brand, name);
+  } catch (groqError) {
+    console.warn('[searchCigarByText] Groq search failed, trying Gemini:', groqError);
+  }
+
+  // 3. Groq 不可用时回退到 Gemini。
+  try {
+    const geminiResult = await analyzeCigarByName(name, brand || undefined);
     const result: CigarAnalysisResult = {
       ...geminiResult,
-      hasDetailedInfo: false, // 标注为非数据库数据
-      confidence: geminiResult.confidence * 0.9 // 文本搜索的置信度略降低
+      hasDetailedInfo: false,
+      confidence: geminiResult.confidence * 0.9
     };
-    
-    // 如果 Gemini 没有返回图片，尝试搜索图片 URL
-    if (!result.imageUrl) {
-      const appConfig = await getAppConfig();
-      const imageSearchEnabled = appConfig?.aiCigar?.enableImageSearch ?? true;
-      
-      if (imageSearchEnabled) {
-        try {
-          const imageUrl = await searchCigarImageWithGoogle(brand, name);
-          if (imageUrl) {
-            result.imageUrl = imageUrl;
-          }
-        } catch (error) {
-          // Silently fail
-        }
-      }
-    }
-    
-    // 更新统计
-    updateRecognitionStats({
-      brand: result.brand,
-      name: result.name,
-      confidence: result.confidence,
-      imageUrlFound: !!result.imageUrl,
-      hasDetailedInfo: false
-    }).catch(() => {});
-    
-    return result;
-  } catch (error) {
-    // Gemini API 失败，返回基础信息
+
+    return await finalizeAiSearchResult(result, brand, name);
+  } catch (geminiError) {
+    console.warn('[searchCigarByText] Gemini search failed, using basic result:', geminiError);
+
+    // Both AI providers failed; return the parsed input without duplicating the brand.
     
     const basicResult: CigarAnalysisResult = {
       brand,
@@ -163,7 +221,7 @@ export async function searchCigarByText(brandAndName: string): Promise<CigarAnal
       brandDescription: '',
       flavorProfile: [],
       strength: 'Unknown',
-      description: `${brand} ${name}`,
+      description: `${brand} ${name}`.trim(),
       confidence: 0.5, // 文本输入且 API 失败，低置信度
       hasDetailedInfo: false
     };
