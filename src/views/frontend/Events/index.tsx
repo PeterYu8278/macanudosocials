@@ -401,6 +401,10 @@ const Events: React.FC = () => {
                   }}>
                     {announcement.title}
                   </h2>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                    <CalendarOutlined style={{ fontSize: 12 }} />
+                    {formatDisplayDate(item.date, i18n.language || 'zh-CN')}
+                  </span>
                   <p style={{
                     margin: 0,
                     color: 'rgba(255,255,255,0.68)',
@@ -414,11 +418,7 @@ const Events: React.FC = () => {
                   }}>
                     {announcement.content}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-                      <CalendarOutlined style={{ fontSize: 12 }} />
-                      {formatDisplayDate(item.date, i18n.language || 'zh-CN')}
-                    </span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                     <button
                       type="button"
                       onClick={() => setSelectedAnnouncement(announcement)}
@@ -556,11 +556,6 @@ const Events: React.FC = () => {
                   {event.title}
                 </h2>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.68)', fontSize: 13, minWidth: 0 }}>
-                  <EnvironmentOutlined style={{ fontSize: 13, flexShrink: 0 }} />
-                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venue}</span>
-                </div>
-
                 <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 14, rowGap: 4, color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>
                   <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
                     <CalendarOutlined style={{ fontSize: 12 }} />
@@ -570,6 +565,11 @@ const Events: React.FC = () => {
                     <ClockCircleOutlined style={{ fontSize: 12 }} />
                     {formattedTimeRange}
                   </span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.68)', fontSize: 13, minWidth: 0 }}>
+                  <EnvironmentOutlined style={{ fontSize: 13, flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venue}</span>
                 </div>
 
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: isMobile ? 26 : 30 }}>
