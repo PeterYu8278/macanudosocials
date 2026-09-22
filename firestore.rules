@@ -83,7 +83,7 @@ service cloud.firestore {
              && get(/databases/$(database)/documents/users/$(referredUserId)).data.referral.referredByUserId == referrerId;
     }
 
-    // 会员只能在活动报名名单中增加自己；任何已登录用户都可以移除自己。
+    // 所有已登录用户只能在活动报名名单中增加或移除自己。
     function isSelfEventRegistrationUpdate() {
       let before = resource.data.participants.registered.toSet();
       let after = request.resource.data.participants.registered.toSet();
@@ -94,8 +94,7 @@ service cloud.firestore {
                   .hasOnly(['participants', 'updatedAt'])
              && request.resource.data.participants.diff(resource.data.participants).affectedKeys()
                   .hasOnly(['registered'])
-             && ((isActiveMember()
-                  && added.size() == 1
+             && ((added.size() == 1
                   && added.hasOnly([request.auth.uid])
                   && removed.size() == 0)
                  || (removed.size() == 1
@@ -217,13 +216,13 @@ service cloud.firestore {
 
       // 用户购买 Annual Pass / Day Pass 时可为自己写入消费记录。
       allow create: if isAnyAdmin()
-                    || (isSignedIn()
+                    || (isActiveMember()
                         && request.resource.data.userId == request.auth.uid
                         && request.resource.data.type == 'spend'
                         && request.resource.data.source in ['membership_fee', 'visit']
                         && request.resource.data.amount > 0
                         && request.resource.data.balance >= 0)
-                    || (isActiveMember()
+                    || (isSignedIn()
                         && recordId == 'event-registration_' + request.resource.data.relatedId + '_' + request.auth.uid
                         && request.resource.data.userId == request.auth.uid
                         && request.resource.data.type == 'earn'

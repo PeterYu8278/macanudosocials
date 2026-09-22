@@ -404,6 +404,9 @@ export const registerForEvent = async (eventId: string, userId: string) => {
           if (!userSnap.exists() || rewardSnap.exists()) return;
 
           const userData = userSnap.data();
+          const rewardEligibleRoles = ['member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'];
+          if (!rewardEligibleRoles.includes(userData?.role)) return;
+
           const currentPoints = userData?.membership?.points ?? 0;
           const newPoints = currentPoints + registrationPoints;
           transaction.update(userRef, {

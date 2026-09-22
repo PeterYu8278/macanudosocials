@@ -5,7 +5,7 @@ import type { UserRole, Permission } from '../types';
 export const ROLE_PERMISSIONS: Record<UserRole, Permission> = {
   guest: {
     canViewEvents: true,
-    canRegisterEvent: false,
+    canRegisterEvent: true,
     canPurchase: false,
     canViewProfile: false,
     canCreateEvent: false,
