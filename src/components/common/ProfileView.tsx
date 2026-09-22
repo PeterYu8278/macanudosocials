@@ -391,35 +391,37 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           </div>
 
           {/* User Info */}
-          <div style={{
-            minWidth: 0,
-            marginTop: useCompactProfileHeader ? 0 : '16px',
-            textAlign: useCompactProfileHeader ? 'left' : 'center',
-          }}>
-          <h2 style={{
-            fontSize: useCompactProfileHeader ? '18px' : '16px',
-            fontWeight: 'bold',
-            color: '#FFFFFF',
-            margin: '0 0 8px 0'
-          }}>
-            {user.displayName || t('profile.noNameSet')}
-          </h2>
-          <div style={{
-            fontSize: useCompactProfileHeader ? '12px' : '14px',
-            lineHeight: 1.45,
-            color: 'rgba(255, 255, 255, 0.6)',
-          }}>
-            <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }}>{t('auth.email')}: {user.email || '-'}</p>
-            <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }}>{t('auth.phone')}: {(user as any)?.profile?.phone || '-'}</p>
-            {canViewDiscount && (user.discount?.rate !== undefined || user.discount?.note) && (
-              <p style={{ margin: '4px 0', color: '#FDE08D' }}>
-                {t('profile.discount')}: {user.discount?.rate !== undefined ? `${user.discount?.rate}%` : '—'}
-                {user.discount?.note ? ` (${user.discount.note})` : ''}
-              </p>
-            )}
-          </div>
-            {useCompactProfileHeader && profileActions}
-          </div>
+          {!(onLogout && showMemberCard) && (
+            <div style={{
+              minWidth: 0,
+              marginTop: useCompactProfileHeader ? 0 : '16px',
+              textAlign: useCompactProfileHeader ? 'left' : 'center',
+            }}>
+              <h2 style={{
+                fontSize: useCompactProfileHeader ? '18px' : '16px',
+                fontWeight: 'bold',
+                color: '#FFFFFF',
+                margin: '0 0 8px 0'
+              }}>
+                {user.displayName || t('profile.noNameSet')}
+              </h2>
+              <div style={{
+                fontSize: useCompactProfileHeader ? '12px' : '14px',
+                lineHeight: 1.45,
+                color: 'rgba(255, 255, 255, 0.6)',
+              }}>
+                <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }}>{t('auth.email')}: {user.email || '-'}</p>
+                <p style={{ margin: '4px 0', overflowWrap: 'anywhere' }}>{t('auth.phone')}: {(user as any)?.profile?.phone || '-'}</p>
+                {canViewDiscount && (user.discount?.rate !== undefined || user.discount?.note) && (
+                  <p style={{ margin: '4px 0', color: '#FDE08D' }}>
+                    {t('profile.discount')}: {user.discount?.rate !== undefined ? `${user.discount?.rate}%` : '—'}
+                    {user.discount?.note ? ` (${user.discount.note})` : ''}
+                  </p>
+                )}
+              </div>
+              {useCompactProfileHeader && profileActions}
+            </div>
+          )}
         </div>
 
         {!useCompactProfileHeader && profileActions}
