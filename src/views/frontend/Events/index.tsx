@@ -749,12 +749,18 @@ const Events: React.FC = () => {
             )}
             <div style={{ padding: isMobile ? '18px 16px' : '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
-                  {t(`announcements.${selectedAnnouncement.type}`)}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                    {t(`announcements.${selectedAnnouncement.type}`)}
+                  </span>
+                  {selectedAnnouncement.pinned && (
+                    <span style={{ color: '#FDE08D', fontSize: 12 }}>{t('announcements.pinned')}</span>
+                  )}
                 </span>
-                {selectedAnnouncement.pinned && (
-                  <span style={{ color: '#FDE08D', fontSize: 12 }}>{t('announcements.pinned')}</span>
-                )}
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.55)', fontSize: 12, whiteSpace: 'nowrap' }}>
+                  <CalendarOutlined />
+                  {formatDisplayDate(selectedAnnouncement.publishedAt, i18n.language || 'zh-CN')}
+                </span>
               </div>
               <h2 style={{ margin: 0, color: '#fff', fontSize: isMobile ? 22 : 26, lineHeight: 1.3 }}>
                 {selectedAnnouncement.title}
@@ -762,18 +768,14 @@ const Events: React.FC = () => {
               <p style={{ margin: 0, color: 'rgba(255,255,255,0.78)', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
                 {selectedAnnouncement.content}
               </p>
-              <div style={{ display: 'grid', gap: 8, paddingTop: 4, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <CalendarOutlined />
-                  {t('announcements.publishedAt')}: {formatDisplayDate(selectedAnnouncement.publishedAt, i18n.language || 'zh-CN')}
-                </span>
-                {selectedAnnouncement.expiresAt && (
+              {selectedAnnouncement.expiresAt && (
+                <div style={{ display: 'grid', gap: 8, paddingTop: 4, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                     <ClockCircleOutlined />
                     {t('announcements.expiresAt')}: {formatDisplayDate(selectedAnnouncement.expiresAt, i18n.language || 'zh-CN')}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
             </div>
           </article>
         )}
