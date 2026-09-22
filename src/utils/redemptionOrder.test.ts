@@ -1,5 +1,16 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateCompletedRedemptions } from './redemptionOrder'
+import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement } from './redemptionOrder'
+
+describe('areRedemptionsReadyForSettlement', () => {
+  it('requires at least one redemption and no pending choices', () => {
+    expect(areRedemptionsReadyForSettlement([])).toBe(false)
+    expect(areRedemptionsReadyForSettlement([{ status: 'completed' }])).toBe(true)
+    expect(areRedemptionsReadyForSettlement([
+      { status: 'completed' },
+      { status: 'pending' }
+    ])).toBe(false)
+  })
+})
 
 describe('aggregateCompletedRedemptions', () => {
   it('uses completed redemption quantities and combines the same cigar', () => {

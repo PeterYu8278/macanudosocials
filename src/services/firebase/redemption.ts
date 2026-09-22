@@ -571,6 +571,17 @@ export const updateRedemptionRecord = async (
       });
     }
 
+    // If checkout happened first, finalize the single redemption order once
+    // every pending cigar choice for this session has been completed.
+    const { reconcileCompletedSessionRedemptions } = await import('./visitSessions');
+    const reconciliation = await reconcileCompletedSessionRedemptions(foundDoc.data.visitSessionId, confirmedBy);
+    if (!reconciliation.success) {
+      return {
+        success: false,
+        error: `兑换记录已更新，但订单同步失败：${reconciliation.error || '未知错误'}`
+      };
+    }
+
     return { success: true };
   } catch (error: any) {
     return { success: false, error: error.message || '更新兑换记录失败' };

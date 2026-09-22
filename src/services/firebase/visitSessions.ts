@@ -20,7 +20,7 @@ import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { VisitSession, User, Order, OutboundOrder } from '../../types';
 import { COLLECTIONS, createOutboundOrder, getCigarById } from './firestore';
-import { aggregateCompletedRedemptions } from '../../utils/redemptionOrder';
+import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement } from '../../utils/redemptionOrder';
 
 /**
  * 处理 visit session 数据，转换日期字段和 redemptions
@@ -555,7 +555,9 @@ export const completeVisitSession = async (
         }
 
         // 1. 以 redemptionRecords 的已确认记录作为订单与出库的唯一数量来源。
-        const confirmedRedemptions = aggregateCompletedRedemptions(canonicalRecords);
+        const confirmedRedemptions = areRedemptionsReadyForSettlement(canonicalRecords)
+          ? aggregateCompletedRedemptions(canonicalRecords)
+          : [];
 
         // 2. 获取雪茄信息并准备订单项
         const orderItems: Array<{ cigarId: string; quantity: number; price: number }> = [];
@@ -715,6 +717,150 @@ export const completeVisitSession = async (
     return { success: true, pointsDeducted };
   } catch (error: any) {
     return { success: false, error: error.message || '完成驻店记录失败' };
+  }
+};
+
+/**
+ * Finalize redemption orders once a checked-out session has no pending choices.
+ * Safe to call after checkout and after every redemption confirmation.
+ */
+export const reconcileCompletedSessionRedemptions = async (
+  sessionId: string,
+  operatorId: string
+): Promise<{ success: boolean; deferred?: boolean; orderId?: string; error?: string }> => {
+  try {
+    const sessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId);
+    const sessionSnap = await getDoc(sessionRef);
+    if (!sessionSnap.exists()) return { success: false, error: '驻店记录不存在' };
+
+    const session = processVisitSessionData(sessionSnap.data(), sessionSnap.id);
+    if (session.status !== 'completed') return { success: true, deferred: true };
+
+    const { getRedemptionRecordsBySession } = await import('./redemption');
+    const canonicalRecords = await getRedemptionRecordsBySession(sessionId);
+    if (!areRedemptionsReadyForSettlement(canonicalRecords)) {
+      return { success: true, deferred: true };
+    }
+
+    const confirmedRedemptions = aggregateCompletedRedemptions(canonicalRecords);
+    if (confirmedRedemptions.length === 0) return { success: true, deferred: true };
+
+    const checkoutAt = session.checkOutAt instanceof Date ? session.checkOutAt : new Date();
+    const sourceNote = `驻店兑换订单 (Session: ${sessionId})`;
+    const orderItems: Order['items'] = [];
+    const desiredOutboundItems: OutboundOrder['items'] = [];
+
+    for (const redemption of confirmedRedemptions) {
+      const cigar = await getCigarById(redemption.cigarId);
+      if (!cigar) return { success: false, error: `雪茄不存在: ${redemption.cigarName}` };
+
+      const unitPrice = cigar.price || 0;
+      orderItems.push({ cigarId: cigar.id, quantity: redemption.quantity, price: 0 });
+      desiredOutboundItems.push({
+        cigarId: cigar.id,
+        cigarName: cigar.name,
+        itemType: 'cigar',
+        quantity: redemption.quantity,
+        unitPrice,
+        subtotal: unitPrice * redemption.quantity
+      });
+    }
+
+    let orderId = session.orderId;
+    if (!orderId) {
+      const userOrders = await getDocs(query(
+        collection(db, COLLECTIONS.ORDERS),
+        where('userId', '==', session.userId)
+      ));
+      const existingOrder = userOrders.docs.find(order => order.data()?.source?.note === sourceNote);
+      orderId = existingOrder?.id;
+    }
+
+    if (!orderId) {
+      const year = checkoutAt.getFullYear();
+      const month = String(checkoutAt.getMonth() + 1).padStart(2, '0');
+      const prefix = `ORD-${year}-${month}-`;
+      const startOfMonth = new Date(year, checkoutAt.getMonth(), 1, 0, 0, 0, 0);
+      const endOfMonth = new Date(year, checkoutAt.getMonth() + 1, 0, 23, 59, 59, 999);
+      const monthlyOrders = await getDocs(query(
+        collection(db, COLLECTIONS.ORDERS),
+        where('createdAt', '>=', Timestamp.fromDate(startOfMonth)),
+        where('createdAt', '<=', Timestamp.fromDate(endOfMonth))
+      ));
+
+      let sequence = monthlyOrders.size + 1;
+      orderId = `${prefix}${String(sequence).padStart(4, '0')}-R`;
+      while ((await getDoc(doc(db, COLLECTIONS.ORDERS, orderId))).exists()) {
+        sequence += 1;
+        orderId = `${prefix}${String(sequence).padStart(4, '0')}-R`;
+      }
+    }
+
+    const existingOutboundSnapshot = await getDocs(query(
+      collection(db, COLLECTIONS.OUTBOUND_ORDERS),
+      where('orderId', '==', orderId)
+    ));
+    const existingOutboundTotals = new Map<string, number>();
+    existingOutboundSnapshot.docs.forEach(outbound => {
+      ((outbound.data().items || []) as OutboundOrder['items']).forEach(item => {
+        existingOutboundTotals.set(item.cigarId, (existingOutboundTotals.get(item.cigarId) || 0) + item.quantity);
+      });
+    });
+
+    for (const [cigarId, existingQuantity] of existingOutboundTotals) {
+      const desiredQuantity = desiredOutboundItems.find(item => item.cigarId === cigarId)?.quantity || 0;
+      if (existingQuantity > desiredQuantity) {
+        return { success: false, error: '现有兑换出库数量高于兑换记录，请管理员检查库存记录' };
+      }
+    }
+
+    await setDoc(doc(db, COLLECTIONS.ORDERS, orderId), {
+      userId: session.userId,
+      items: orderItems,
+      total: 0,
+      status: 'completed',
+      source: { type: 'direct', note: sourceNote },
+      payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(checkoutAt) },
+      shipping: { address: '店内兑换' },
+      ...(session.storeId ? { storeId: session.storeId } : {}),
+      createdAt: Timestamp.fromDate(checkoutAt),
+      updatedAt: Timestamp.fromDate(new Date())
+    }, { merge: true });
+
+    const deltaItems = desiredOutboundItems
+      .map(item => ({ ...item, quantity: item.quantity - (existingOutboundTotals.get(item.cigarId) || 0) }))
+      .filter(item => item.quantity > 0)
+      .map(item => ({ ...item, subtotal: (item.unitPrice || 0) * item.quantity }));
+
+    let outboundOrderId = session.outboundOrderId || existingOutboundSnapshot.docs[0]?.id;
+    if (deltaItems.length > 0) {
+      outboundOrderId = await createOutboundOrder({
+        referenceNo: orderId,
+        type: 'sale',
+        reason: `驻店兑换出库 (Session: ${sessionId})`,
+        items: deltaItems,
+        totalQuantity: deltaItems.reduce((sum, item) => sum + item.quantity, 0),
+        totalValue: deltaItems.reduce((sum, item) => sum + (item.subtotal || 0), 0),
+        orderId,
+        userId: session.userId,
+        userName: session.userName,
+        status: 'completed',
+        operatorId,
+        ...(session.storeId ? { storeId: session.storeId } : {}),
+        createdAt: checkoutAt
+      });
+    }
+
+    await updateDoc(sessionRef, {
+      orderId,
+      outboundOrderId: outboundOrderId || null,
+      updatedAt: Timestamp.fromDate(new Date())
+    });
+
+    return { success: true, orderId };
+  } catch (error: any) {
+    console.error('[reconcileCompletedSessionRedemptions] 兑换订单同步失败:', error);
+    return { success: false, error: error.message || '兑换订单同步失败' };
   }
 };
 

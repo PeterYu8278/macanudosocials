@@ -6,6 +6,10 @@ export interface AggregatedRedemption {
   quantity: number
 }
 
+export const areRedemptionsReadyForSettlement = (
+  records: Array<Pick<RedemptionRecordItem, 'status'>>
+): boolean => records.length > 0 && records.every(record => record.status === 'completed')
+
 export const aggregateCompletedRedemptions = (
   records: Array<Pick<RedemptionRecordItem, 'cigarId' | 'cigarName' | 'quantity' | 'status'>>
 ): AggregatedRedemption[] => {
