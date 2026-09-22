@@ -82,6 +82,26 @@ service cloud.firestore {
              && get(/databases/$(database)/documents/users/$(referredUserId)).data.status == 'active'
              && get(/databases/$(database)/documents/users/$(referredUserId)).data.referral.referredByUserId == referrerId;
     }
+
+    // 会员只能在活动报名名单中增加自己；任何已登录用户都可以移除自己。
+    function isSelfEventRegistrationUpdate() {
+      let before = resource.data.participants.registered.toSet();
+      let after = request.resource.data.participants.registered.toSet();
+      let added = after.difference(before);
+      let removed = before.difference(after);
+      return isSignedIn()
+             && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['participants', 'updatedAt'])
+             && request.resource.data.participants.diff(resource.data.participants).affectedKeys()
+                  .hasOnly(['registered'])
+             && ((isActiveMember()
+                  && added.size() == 1
+                  && added.hasOnly([request.auth.uid])
+                  && removed.size() == 0)
+                 || (removed.size() == 1
+                     && removed.hasOnly([request.auth.uid])
+                     && added.size() == 0));
+    }
     
     // ================================
     // Users Collection
@@ -147,8 +167,9 @@ service cloud.firestore {
       // 读取：所有已认证用户都可以查看活动
       allow read: if isSignedIn();
       
-      // 创建/更新/删除：任意管理员（含 storeAdmin）
-      allow create, update, delete: if isAnyAdmin();
+      // 管理员可完整管理；会员只能修改自己的报名状态。
+      allow create, delete: if isAnyAdmin();
+      allow update: if isAnyAdmin() || isSelfEventRegistrationUpdate();
     }
 
     // ================================
@@ -201,7 +222,20 @@ service cloud.firestore {
                         && request.resource.data.type == 'spend'
                         && request.resource.data.source in ['membership_fee', 'visit']
                         && request.resource.data.amount > 0
-                        && request.resource.data.balance >= 0);
+                        && request.resource.data.balance >= 0)
+                    || (isActiveMember()
+                        && recordId == 'event-registration_' + request.resource.data.relatedId + '_' + request.auth.uid
+                        && request.resource.data.userId == request.auth.uid
+                        && request.resource.data.type == 'earn'
+                        && request.resource.data.source == 'event_registration'
+                        && request.resource.data.amount == get(/databases/$(database)/documents/config/points).data.event.registration
+                        && request.resource.data.amount > 0
+                        && get(/databases/$(database)/documents/events/$(request.resource.data.relatedId)).data.participants.registered.hasAny([request.auth.uid])
+                        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.membership.points
+                             == get(/databases/$(database)/documents/users/$(request.auth.uid)).data.membership.points
+                                + request.resource.data.amount
+                        && request.resource.data.balance
+                             == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.membership.points);
       allow update, delete: if isAnyAdmin();
     }
     

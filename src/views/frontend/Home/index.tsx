@@ -32,6 +32,7 @@ import { getAppConfig } from '../../../services/firebase/appConfig'
 import type { AppConfig } from '../../../types'
 import { CigarRatingBadge } from '../../../components/common/CigarRatingBadge'
 import { RoomBookingSection } from '../../../components/home/RoomBookingSection'
+import { hasPermission } from '../../../config/permissions'
 
 const usePrefersReducedMotion = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
@@ -169,6 +170,10 @@ const Home: React.FC = () => {
   const handleEventRegistration = async (eventId: string, isRegistered: boolean) => {
     if (!user?.id) {
       message.warning(t('auth.pleaseLogin'))
+      return
+    }
+    if (!isRegistered && !hasPermission(user.role, 'canRegisterEvent')) {
+      message.warning(t('common.noPermission'))
       return
     }
 

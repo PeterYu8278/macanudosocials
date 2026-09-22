@@ -14,11 +14,10 @@ import {
   limit,
   onSnapshot,
   Timestamp,
-  arrayUnion,
-  arrayRemove,
   FieldValue,
   documentId,
-  QueryConstraint
+  QueryConstraint,
+  runTransaction
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
@@ -369,45 +368,49 @@ export const getUpcomingEvents = async (): Promise<Event[]> => {
 export const registerForEvent = async (eventId: string, userId: string) => {
   try {
     const eventRef = doc(db, COLLECTIONS.EVENTS, eventId);
-    const eventSnap = await getDoc(eventRef);
+    const registration = await runTransaction(db, async transaction => {
+      const eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists()) throw new Error('Event not found');
 
-    if (!eventSnap.exists()) {
-      return { success: false, error: new Error('Event not found') };
-    }
+      const event = { id: eventSnap.id, ...eventSnap.data() } as Event;
+      if (!isEventOpenForRegistration(event)) throw new Error('Event registration is closed');
 
-    const event = { id: eventSnap.id, ...eventSnap.data() } as Event;
-    if (!isEventOpenForRegistration(event)) {
-      return { success: false, error: new Error('Event registration is closed') };
-    }
+      const registeredUsers = event.participants?.registered || [];
+      if (registeredUsers.includes(userId)) return { event, newlyRegistered: false };
 
-    const registeredUsers = event.participants?.registered || [];
-    const maxParticipants = event.participants?.maxParticipants || 0;
-    if (maxParticipants > 0 && registeredUsers.length >= maxParticipants && !registeredUsers.includes(userId)) {
-      return { success: false, error: new Error('Event is full') };
-    }
+      const maxParticipants = event.participants?.maxParticipants || 0;
+      if (maxParticipants > 0 && registeredUsers.length >= maxParticipants) {
+        throw new Error('Event is full');
+      }
 
-    await updateDoc(eventRef, {
-      'participants.registered': arrayUnion(userId),
-      updatedAt: new Date(),
+      transaction.update(eventRef, {
+        'participants.registered': [...registeredUsers, userId],
+        updatedAt: new Date(),
+      });
+      return { event, newlyRegistered: true };
     });
 
-    // 奖励报名积分（异步，不阻塞主流程）
+    // 每个用户在同一活动最多获得一次报名积分。
     try {
       const { getPointsConfig } = await import('./pointsConfig');
-      const { createPointsRecord } = await import('./pointsRecords');
       const config = await getPointsConfig();
       const registrationPoints = config?.event?.registration ?? 0;
       if (registrationPoints > 0) {
-        const userSnap = await getDoc(doc(db, COLLECTIONS.USERS, userId));
-        if (userSnap.exists()) {
+        const userRef = doc(db, COLLECTIONS.USERS, userId);
+        const rewardRef = doc(db, GLOBAL_COLLECTIONS.POINTS_RECORDS, `event-registration_${eventId}_${userId}`);
+        await runTransaction(db, async transaction => {
+          const userSnap = await transaction.get(userRef);
+          const rewardSnap = await transaction.get(rewardRef);
+          if (!userSnap.exists() || rewardSnap.exists()) return;
+
           const userData = userSnap.data();
           const currentPoints = userData?.membership?.points ?? 0;
           const newPoints = currentPoints + registrationPoints;
-          await updateDoc(doc(db, COLLECTIONS.USERS, userId), {
+          transaction.update(userRef, {
             'membership.points': newPoints,
             updatedAt: new Date(),
           });
-          await createPointsRecord({
+          transaction.set(rewardRef, {
             userId,
             userName: userData?.displayName || '',
             type: 'earn',
@@ -416,8 +419,9 @@ export const registerForEvent = async (eventId: string, userId: string) => {
             description: `活动报名积分奖励`,
             relatedId: eventId,
             balance: newPoints,
+            createdAt: Timestamp.fromDate(new Date()),
           });
-        }
+        });
       }
     } catch (pointsError) {
       console.warn('[registerForEvent] 积分奖励失败:', pointsError);
@@ -425,10 +429,9 @@ export const registerForEvent = async (eventId: string, userId: string) => {
 
     // 发送活动提醒（异步，不阻塞主流程）
     try {
-      const event = await getEventById(eventId);
-      if (event) {
+      if (registration.newlyRegistered) {
         const { sendEventReminderToUser } = await import('../whapi/integrations');
-        sendEventReminderToUser(userId, event).catch(error => {
+        sendEventReminderToUser(userId, registration.event).catch(error => {
           console.warn('[registerForEvent] 发送活动提醒失败:', error);
         });
       }
@@ -445,9 +448,17 @@ export const registerForEvent = async (eventId: string, userId: string) => {
 export const unregisterFromEvent = async (eventId: string, userId: string) => {
   try {
     const eventRef = doc(db, COLLECTIONS.EVENTS, eventId);
-    await updateDoc(eventRef, {
-      'participants.registered': arrayRemove(userId),
-      updatedAt: new Date(),
+    await runTransaction(db, async transaction => {
+      const eventSnap = await transaction.get(eventRef);
+      if (!eventSnap.exists()) throw new Error('Event not found');
+
+      const registeredUsers = (eventSnap.data()?.participants?.registered || []) as string[];
+      if (!registeredUsers.includes(userId)) return;
+
+      transaction.update(eventRef, {
+        'participants.registered': registeredUsers.filter(id => id !== userId),
+        updatedAt: new Date(),
+      });
     });
     return { success: true };
   } catch (error) {

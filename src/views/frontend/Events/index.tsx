@@ -12,6 +12,7 @@ import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useAuthStore } from '../../../store/modules/auth'
 import type { Announcement, Event } from '../../../types'
 import { useTranslation } from 'react-i18next'
+import { hasPermission } from '../../../config/permissions'
 
 const toDateOrNull = (value: any): Date | null => {
   if (!value) return null
@@ -344,6 +345,7 @@ const Events: React.FC = () => {
           const socialTag = getSocialRelationTag(event)
           const registeredIds = event.participants?.registered || []
           const isUserRegistered = user ? registeredIds.includes(user.id) : false
+          const canCurrentUserRegister = user ? hasPermission(user.role, 'canRegisterEvent') : false
           const closed = isRegistrationClosed(event)
           const displayStatus = getDisplayStatus(event)
 
@@ -518,6 +520,9 @@ const Events: React.FC = () => {
                     onClick={async () => {
                       if (!user) { message.info(t('auth.pleaseLogin')); return }
                       if (closed) { message.warning(getRegistrationClosedText(event)); return }
+                      if (!isUserRegistered && !canCurrentUserRegister) {
+                        message.warning(t('common.noPermission')); return
+                      }
                       const max = (event as any)?.participants?.maxParticipants || 0
                       if (!isUserRegistered && max > 0 && registeredIds.length >= max) {
                         message.warning(t('events.fullCapacity')); return
