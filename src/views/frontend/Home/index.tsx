@@ -375,7 +375,7 @@ const Home: React.FC = () => {
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
-                fontWeight: 700,
+                fontWeight: 900,
                 textAlign: 'left',
                 margin: 0,
                 padding: 0
