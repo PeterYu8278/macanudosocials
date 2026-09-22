@@ -23,6 +23,7 @@ import {
   deleteAnnouncement,
 } from '../../services/firebase/announcements'
 import { useAuthStore } from '../../store/modules/auth'
+import ImageUpload from '../common/ImageUpload'
 
 const { TextArea } = Input
 const { Option } = Select
@@ -96,6 +97,7 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
     form.setFieldsValue({
       title: record.title,
       content: record.content,
+      image: record.image || null,
       type: record.type,
       status: record.status,
       pinned: record.pinned,
@@ -175,7 +177,14 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
       dataIndex: 'title',
       key: 'title',
       render: (v: string, r: Announcement) => (
-        <Space>
+        <Space size={10}>
+          {r.image && (
+            <img
+              src={r.image}
+              alt=""
+              style={{ width: 48, height: 36, borderRadius: 4, objectFit: 'cover', flexShrink: 0 }}
+            />
+          )}
           {r.pinned && <PushpinOutlined style={{ color: '#FDE08D' }} />}
           <span style={{ color: '#fff' }}>{v}</span>
         </Space>
@@ -316,6 +325,13 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
                   boxShadow: '0 4px 18px rgba(0,0,0,0.28)',
                 }}
               >
+                {record.image && (
+                  <img
+                    src={record.image}
+                    alt=""
+                    style={{ width: '100%', height: 128, objectFit: 'cover', display: 'block' }}
+                  />
+                )}
                 <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
                     <div style={{ minWidth: 0 }}>
@@ -402,6 +418,21 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
         centered
       >
         <Form form={form} layout="vertical" style={{ marginTop: 16 }}>
+          <Form.Item name="image" label={t('announcements.image', { defaultValue: 'Announcement Image' })}>
+            <ImageUpload
+              folder="announcements"
+              maxSize={5 * 1024 * 1024}
+              width={isMobile ? 280 : 320}
+              height={isMobile ? 158 : 180}
+              showPreview
+              enableCrop
+              cropAspectRatio={16 / 9}
+              cropMinWidth={320}
+              cropMinHeight={180}
+              cropMaxWidth={1200}
+              cropMaxHeight={675}
+            />
+          </Form.Item>
           <Form.Item name="title" label={t('announcements.title', { defaultValue: 'Title' })} rules={[{ required: true }]}>
             <Input placeholder={t('announcements.titlePlaceholder', { defaultValue: 'Announcement title' })} />
           </Form.Item>

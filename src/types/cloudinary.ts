@@ -33,6 +33,14 @@ export const CLOUDINARY_FOLDERS: Record<string, CloudinaryFolder> = {
     dimensions: '800x600',
     usage: '活动管理表单'
   },
+  announcements: {
+    name: 'announcements',
+    description: '公告封面图片',
+    maxSize: 5 * 1024 * 1024,
+    formats: ['jpg', 'jpeg', 'png', 'webp'],
+    dimensions: '1200x675',
+    usage: '公告管理表单'
+  },
   users: {
     name: 'users',
     description: '用户头像',

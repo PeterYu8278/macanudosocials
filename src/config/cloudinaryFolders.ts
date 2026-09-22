@@ -46,6 +46,14 @@ export const UPLOAD_CONFIG = {
       crop: 'fill',
       gravity: 'center'
     },
+    announcements: {
+      folder: 'announcements',
+      maxSize: 5 * 1024 * 1024,
+      width: 1200,
+      height: 675,
+      crop: 'fill',
+      gravity: 'center'
+    },
     users: {
       folder: 'users',
       maxSize: 2 * 1024 * 1024, // 2MB
