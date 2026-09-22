@@ -20,6 +20,7 @@ import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { VisitSession, User, Order, OutboundOrder } from '../../types';
 import { COLLECTIONS, createOutboundOrder, getCigarById } from './firestore';
+import { aggregateCompletedRedemptions } from '../../utils/redemptionOrder';
 
 /**
  * 处理 visit session 数据，转换日期字段和 redemptions
@@ -432,18 +433,16 @@ export const completeVisitSession = async (
     let orderId: string | undefined;
     let outboundOrderId: string | undefined;
     
-    if (session.redemptions && session.redemptions.length > 0) {
+    // redemptionRecords 是兑换事实来源；即使 session 镜像同步失败，也必须据此生成订单。
+    {
       try {
         // 0. 确保所有兑换记录都保存到redemptionRecords集合的同一个文档中
         // 文档ID = visitSessionId，包含该session的所有兑换记录
         const { getRedemptionRecordsBySession } = await import('./redemption');
-        const existingRecords = await getRedemptionRecordsBySession(sessionId);
-        const existingRecordMap = new Map<string, boolean>();
-        existingRecords.forEach(record => {
-          // 使用 cigarId + quantity + redeemedAt 作为唯一标识
-          // record 是 RedemptionRecordItem 类型（包含 visitSessionId）
-          const key = `${record.cigarId}-${record.quantity}-${record.redeemedAt?.getTime()}`;
-          existingRecordMap.set(key, true);
+        let canonicalRecords = await getRedemptionRecordsBySession(sessionId);
+        const canonicalCompletedTotals = new Map<string, number>();
+        aggregateCompletedRedemptions(canonicalRecords).forEach(record => {
+          canonicalCompletedTotals.set(record.cigarId, record.quantity);
         });
 
         // 收集需要添加到redemptionRecords文档的记录项
@@ -464,38 +463,50 @@ export const completeVisitSession = async (
           createdAt: Date;
         }> = [];
 
-        for (const redemption of session.redemptions) {
-          const key = `${redemption.cigarId}-${redemption.quantity}-${redemption.redeemedAt?.getTime()}`;
-          if (!existingRecordMap.has(key)) {
-            // 该兑换记录在redemptionRecords文档中不存在，需要添加
-            const redemptionDate = redemption.redeemedAt || now;
-            const dayKey = redemptionDate.toISOString().split('T')[0];
-            const hourKey = redemptionDate.toISOString().split(':')[0];
-            
-            // 获取当日兑换次数
-            const { getDailyRedemptions } = await import('./redemption');
-            const dailyRedemptions = await getDailyRedemptions(session.userId, dayKey);
-            const completedRedemptions = dailyRedemptions.filter(r => r.status === 'completed');
-            const redemptionIndex = completedRedemptions.length + 1;
+        const sessionTotals = new Map<string, { cigarName: string; quantity: number; redemption: NonNullable<VisitSession['redemptions']>[number] }>();
+        for (const redemption of session.redemptions || []) {
+          const cigarId = redemption.cigarId?.trim();
+          if (!cigarId || redemption.quantity <= 0) continue;
 
-            const recordItemId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-            recordsToAdd.push({
-              id: recordItemId,
-              userId: session.userId,
-              userName: session.userName,
-              cigarId: redemption.cigarId,
+          const existing = sessionTotals.get(cigarId);
+          if (existing) {
+            existing.quantity += redemption.quantity;
+          } else {
+            sessionTotals.set(cigarId, {
               cigarName: redemption.cigarName,
               quantity: redemption.quantity,
-              status: 'completed',
-              dayKey,
-              hourKey,
-              redemptionIndex,
-              isDayPass: !!session.dayPass?.isPurchased,
-              redeemedAt: redemptionDate,
-              redeemedBy: redemption.redeemedBy || checkOutBy,
-              createdAt: redemptionDate
+              redemption
             });
           }
+        }
+
+        for (const [cigarId, sessionTotal] of sessionTotals) {
+          const missingQuantity = sessionTotal.quantity - (canonicalCompletedTotals.get(cigarId) || 0);
+          if (missingQuantity <= 0) continue;
+
+          const redemptionDate = sessionTotal.redemption.redeemedAt || now;
+          const dayKey = redemptionDate.toISOString().split('T')[0];
+          const hourKey = redemptionDate.toISOString().split(':')[0];
+          const { getDailyRedemptions } = await import('./redemption');
+          const dailyRedemptions = await getDailyRedemptions(session.userId, dayKey);
+          const redemptionIndex = dailyRedemptions.filter(r => r.status === 'completed').length + 1;
+
+          recordsToAdd.push({
+            id: sessionTotal.redemption.recordId || `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            userId: session.userId,
+            userName: session.userName,
+            cigarId,
+            cigarName: sessionTotal.cigarName,
+            quantity: missingQuantity,
+            status: 'completed',
+            dayKey,
+            hourKey,
+            redemptionIndex,
+            isDayPass: !!session.dayPass?.isPurchased,
+            redeemedAt: redemptionDate,
+            redeemedBy: sessionTotal.redemption.redeemedBy || checkOutBy,
+            createdAt: redemptionDate
+          });
         }
 
         // 如果有需要添加的记录，使用事务更新文档
@@ -536,33 +547,15 @@ export const completeVisitSession = async (
                 transaction.set(docRef, newDoc);
               }
             });
+            canonicalRecords = await getRedemptionRecordsBySession(sessionId);
           } catch (error: any) {
             console.warn(`[completeVisitSession] 创建兑换记录到redemptionRecords失败:`, error);
             // 不阻断流程，继续处理
           }
         }
 
-        // 1. 统计兑换的雪茄（按 cigarId 分组）
-        // 只统计已确认的兑换记录（cigarId 不为空）
-        const redemptionMap = new Map<string, { cigarName: string; quantity: number }>();
-        
-        for (const redemption of session.redemptions) {
-          // 跳过未确认的兑换记录（cigarId 为空表示待管理员选择）
-          if (!redemption.cigarId || redemption.cigarId.trim() === '') {
-            console.warn(`[completeVisitSession] 跳过未确认的兑换记录: ${redemption.cigarName}`);
-            continue;
-          }
-          
-          const existing = redemptionMap.get(redemption.cigarId);
-          if (existing) {
-            existing.quantity += redemption.quantity;
-          } else {
-            redemptionMap.set(redemption.cigarId, {
-              cigarName: redemption.cigarName,
-              quantity: redemption.quantity
-            });
-          }
-        }
+        // 1. 以 redemptionRecords 的已确认记录作为订单与出库的唯一数量来源。
+        const confirmedRedemptions = aggregateCompletedRedemptions(canonicalRecords);
 
         // 2. 获取雪茄信息并准备订单项
         const orderItems: Array<{ cigarId: string; quantity: number; price: number }> = [];
@@ -578,7 +571,7 @@ export const completeVisitSession = async (
         let outboundTotalQty = 0;
         let outboundTotalValue = 0;
 
-        for (const [cigarId, { cigarName, quantity }] of redemptionMap.entries()) {
+        for (const { cigarId, cigarName, quantity } of confirmedRedemptions) {
           const cigar = await getCigarById(cigarId);
           if (!cigar) {
             console.warn(`[completeVisitSession] 雪茄不存在: ${cigarId}`);

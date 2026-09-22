@@ -443,6 +443,7 @@ export const createRedemptionRecord = async (
     // 添加到visit session的redemptions数组
     const { addRedemptionToSession } = await import('./visitSessions');
     await addRedemptionToSession(visitSessionId, {
+      recordId: recordItemId,
       cigarId,
       cigarName,
       quantity,
