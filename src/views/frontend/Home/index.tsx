@@ -59,7 +59,7 @@ const Home: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { message } = App.useApp()
-  const { user } = useAuthStore()
+  const { user, isAdmin } = useAuthStore()
   const isMobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 991px)').matches : false
   const prefersReducedMotion = usePrefersReducedMotion()
   const [featuresReady, setFeaturesReady] = useState<boolean>(false)
@@ -388,18 +388,48 @@ const Home: React.FC = () => {
                   </Paragraph>
                 </Col>
                 <Col span={8} style={{ textAlign: 'center' }}>
-                  <img
-                    src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
-                    alt={appConfig?.appName || 'Cigar Club'}
-                    style={{
-                      width: '84px',
-                      height: '64px',
-                      maxWidth: '100%',
-                      objectFit: 'contain',
-                      display: 'inline-block',
-                      filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
-                    }}
-                  />
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      onClick={() => navigate('/admin')}
+                      aria-label={t('navigation.admin')}
+                      title={t('navigation.admin')}
+                      style={{
+                        width: '92px',
+                        height: '68px',
+                        maxWidth: '100%',
+                        padding: 0,
+                        border: 'none',
+                        background: 'transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <img
+                        src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
+                        alt=""
+                        style={{
+                          width: '100%',
+                          height: '100%',
+                          objectFit: 'contain',
+                          display: 'block',
+                          filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
+                        }}
+                      />
+                    </button>
+                  ) : (
+                    <img
+                      src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
+                      alt={appConfig?.appName || 'Cigar Club'}
+                      style={{
+                        width: '84px',
+                        height: '64px',
+                        maxWidth: '100%',
+                        objectFit: 'contain',
+                        display: 'inline-block',
+                        filter: 'drop-shadow(0 0 18px rgba(255, 215, 0, 0.22))'
+                      }}
+                    />
+                  )}
                 </Col>
               </Row>
             </div>

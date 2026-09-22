@@ -145,7 +145,7 @@ const AppHeader: React.FC<AppHeaderProps> = ({ siderCollapsed = false, isDesktop
 
       {/* 右侧：操作区 */}
       <Space size="middle" align="center" style={{ position: 'relative' }}>
-        {isAdmin && (
+        {isAdmin && isInAdmin && (
           <Tooltip title={isInAdmin ? t('navigation.home') : t('navigation.admin')} placement="bottomRight">
             <Button
               type="text"
