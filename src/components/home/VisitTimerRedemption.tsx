@@ -1,7 +1,7 @@
 // 合并后的驻店计时器和兑换模块组件
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 'antd';
-import { ClockCircleOutlined, GiftOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
@@ -909,7 +909,26 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   backdropFilter: 'blur(10px)',
                   transition: 'all 0.3s ease'
                 }} className="history-card-item">
-                  <div style={{ flex: 1 }}>
+                  <div
+                    aria-label="Cigar image placeholder"
+                    style={{
+                      width: 58,
+                      height: 58,
+                      flexShrink: 0,
+                      marginRight: 12,
+                      borderRadius: 8,
+                      border: '1px solid rgba(244, 175, 37, 0.25)',
+                      background: 'linear-gradient(145deg, rgba(244, 175, 37, 0.09), rgba(255, 255, 255, 0.03))',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'rgba(253, 224, 141, 0.5)',
+                    }}
+                  >
+                    <PictureOutlined style={{ fontSize: 24 }} />
+                  </div>
+
+                  <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                       <ClockCircleOutlined style={{ color: 'rgba(244, 175, 37, 0.5)', fontSize: 10 }} />
                       <Text style={{ color: 'rgba(255, 255, 255, 0.45)', fontSize: 11 }}>
