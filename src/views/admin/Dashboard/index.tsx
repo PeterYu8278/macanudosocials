@@ -413,9 +413,8 @@ const GrowthTrendChart: React.FC<{ data: GrowthTrendPoint[]; isMobile: boolean }
         })}
 
         {data.map((point, index) => {
-          const showLabel = isMobile
-            ? index % Math.max(1, Math.ceil(data.length / 6)) === 0 || index === data.length - 1
-            : index % 2 === 0 || index === data.length - 1
+          const stride = Math.max(1, Math.ceil(data.length / (isMobile ? 6 : 8)))
+          const showLabel = index % stride === 0 || index === data.length - 1
           if (!showLabel) return null
           return (
             <text key={point.label} x={newUserPoints[index].x} y={paddingTop + chartHeight + 16} fill="rgba(255,255,255,0.45)" fontSize="9" textAnchor="middle">
@@ -533,7 +532,7 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
         })}
 
         {data.map((point, index) => {
-          const stride = isMobile ? Math.max(1, Math.ceil(data.length / 6)) : 2
+          const stride = Math.max(1, Math.ceil(data.length / (isMobile ? 6 : 8)))
           const showLabel = index % stride === 0 || index === data.length - 1
           if (!showLabel) return null
           return (
@@ -1464,8 +1463,9 @@ const AdminDashboard: React.FC = () => {
         </Form>
       </Modal>
 
+      <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: 18, paddingInline: 8, marginBottom: 16, alignItems: 'start' }}>
       {/* Reload trend */}
-      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+      <section style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
@@ -1516,12 +1516,13 @@ const AdminDashboard: React.FC = () => {
             chartId="reload"
             valueFormatter={value => `RM${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             valueUnit=""
+            xLabelStride={reloadTrendPeriod === 'days30' ? (isMobile ? 5 : 4) : 2}
           />
         )}
       </section>
 
       {/* Customer growth trend */}
-      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+      <section style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
             {t('dashboard.customerGrowthTrend')}
@@ -1562,7 +1563,7 @@ const AdminDashboard: React.FC = () => {
       </section>
 
       {/* In-store occupancy trend */}
-      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+      <section style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
             {t('dashboard.occupancyTrend')}
@@ -1609,7 +1610,7 @@ const AdminDashboard: React.FC = () => {
       </section>
 
       {/* Orders and revenue trend */}
-      <section style={{ marginBottom: 16, paddingInline: 8 }}>
+      <section style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <h2 style={{ margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
             {t('dashboard.ordersRevenueTrend')}
@@ -1648,6 +1649,7 @@ const AdminDashboard: React.FC = () => {
           <OrdersRevenueTrendChart data={ordersRevenueTrendData} isMobile={isMobile} />
         )}
       </section>
+      </div>
 
       {/* 快速操作 */}
       <div style={{ marginBottom: 16 }}>
