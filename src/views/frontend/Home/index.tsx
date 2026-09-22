@@ -405,7 +405,7 @@ const Home: React.FC = () => {
                       }}
                     >
                       <img
-                        src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
+                        src={appConfig?.logoUrl || '/icons/icon-96x96.svg'}
                         alt=""
                         style={{
                           width: '100%',
@@ -418,7 +418,7 @@ const Home: React.FC = () => {
                     </button>
                   ) : (
                     <img
-                      src={appConfig?.logoUrl || '/icons/icon-96x96.png'}
+                      src={appConfig?.logoUrl || '/icons/icon-96x96.svg'}
                       alt={appConfig?.appName || 'Cigar Club'}
                       style={{
                         width: '84px',
