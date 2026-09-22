@@ -45,9 +45,30 @@ const formatDisplayTime = (value: unknown, language: string): string => {
   if (!date) return '-'
 
   return date.toLocaleTimeString(language.startsWith('zh') ? 'zh-CN' : 'en-US', {
-    hour: '2-digit',
+    hour: 'numeric',
     minute: '2-digit',
   })
+}
+
+const formatDisplayDateRange = (startValue: unknown, endValue: unknown, language: string): string => {
+  const start = toDateOrNull(startValue)
+  const end = toDateOrNull(endValue)
+  if (!start || !end) return `${formatDisplayDate(start, language)} - ${formatDisplayDate(end, language)}`
+
+  if (language.startsWith('zh')) {
+    if (start.getFullYear() === end.getFullYear()) {
+      return `${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()} - ${end.getMonth() + 1}/${end.getDate()}`
+    }
+    return `${start.getFullYear()}/${start.getMonth() + 1}/${start.getDate()} - ${end.getFullYear()}/${end.getMonth() + 1}/${end.getDate()}`
+  }
+
+  if (start.getFullYear() === end.getFullYear() && start.getMonth() === end.getMonth()) {
+    return `${start.getDate()} - ${end.getDate()} ${end.toLocaleString('en-US', { month: 'short' })} ${end.getFullYear()}`
+  }
+  if (start.getFullYear() === end.getFullYear()) {
+    return `${start.getDate()} ${start.toLocaleString('en-US', { month: 'short' })} - ${end.getDate()} ${end.toLocaleString('en-US', { month: 'short' })} ${end.getFullYear()}`
+  }
+  return `${formatDisplayDate(start, language)} - ${formatDisplayDate(end, language)}`
 }
 
 type FeedItem =
@@ -366,14 +387,14 @@ const Events: React.FC = () => {
           const language = i18n.language || 'zh-CN'
           const startDate = toDateOrNull(event.schedule?.startDate)
           const endDate = toDateOrNull(event.schedule?.endDate)
-          const formattedDateRange = `${formatDisplayDate(startDate, language)} - ${formatDisplayDate(endDate, language)}`
+          const formattedDateRange = formatDisplayDateRange(startDate, endDate, language)
           const formattedTimeRange = `${formatDisplayTime(startDate, language)} - ${formatDisplayTime(endDate, language)}`
           const venue = event.location?.name || event.location?.address || '-'
           const maxParticipants = event.participants?.maxParticipants || 0
           const availablePax = maxParticipants > 0
             ? Math.max(maxParticipants - registeredIds.length, 0)
             : null
-          const visibleRegistrantIds = registeredIds.slice(0, 5)
+          const visibleRegistrantIds = registeredIds.slice(0, isMobile ? 4 : 5)
           const currentUserAvatar = user?.profile?.avatar || user?.photoURL
 
           const statusColors: Record<string, string> = {
@@ -449,11 +470,10 @@ const Events: React.FC = () => {
 
               {/* Details */}
               <div style={{
-                flex: 1,
                 display: 'flex',
                 flexDirection: 'column',
-                padding: '16px',
-                gap: 8,
+                padding: isMobile ? '12px 14px 13px' : '16px',
+                gap: isMobile ? 6 : 8,
               }}>
                 <h2 style={{
                   fontSize: 17,
@@ -472,17 +492,18 @@ const Events: React.FC = () => {
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venue}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                  <CalendarOutlined style={{ fontSize: 12, flexShrink: 0 }} />
-                  <span>{formattedDateRange}</span>
+                <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 14, rowGap: 4, color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                    <CalendarOutlined style={{ fontSize: 12 }} />
+                    {formattedDateRange}
+                  </span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                    <ClockCircleOutlined style={{ fontSize: 12 }} />
+                    {formattedTimeRange}
+                  </span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                  <ClockCircleOutlined style={{ fontSize: 12, flexShrink: 0 }} />
-                  <span>{formattedTimeRange}</span>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 30 }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: isMobile ? 26 : 30 }}>
                   <span style={{ color: '#FDE08D', fontSize: 13, fontWeight: 650, whiteSpace: 'nowrap' }}>
                     {availablePax === null
                       ? t('events.availablePaxUnlimited')
@@ -502,9 +523,9 @@ const Events: React.FC = () => {
                           <span
                             key={participantId}
                             style={{
-                              width: 30,
-                              height: 30,
-                              marginLeft: index === 0 ? 0 : -10,
+                              width: isMobile ? 26 : 30,
+                              height: isMobile ? 26 : 30,
+                              marginLeft: index === 0 ? 0 : isMobile ? -9 : -10,
                               borderRadius: '50%',
                               border: '2px solid #1a1a1a',
                               background: avatarUrl ? `url("${avatarUrl}") center/cover` : '#4a4337',
@@ -517,15 +538,15 @@ const Events: React.FC = () => {
                               zIndex: visibleRegistrantIds.length - index,
                             }}
                           >
-                            {!avatarUrl && <UserOutlined style={{ fontSize: 14 }} />}
+                            {!avatarUrl && <UserOutlined style={{ fontSize: isMobile ? 12 : 14 }} />}
                           </span>
                         )
                       })}
                       {registeredIds.length > visibleRegistrantIds.length && (
                         <span style={{
-                          width: 30,
-                          height: 30,
-                          marginLeft: -10,
+                          width: isMobile ? 26 : 30,
+                          height: isMobile ? 26 : 30,
+                          marginLeft: isMobile ? -9 : -10,
                           borderRadius: '50%',
                           border: '2px solid #1a1a1a',
                           background: '#C48D3A',
@@ -544,11 +565,8 @@ const Events: React.FC = () => {
                   )}
                 </div>
 
-                {/* Spacer */}
-                <div style={{ flex: 1 }} />
-
                 {/* Button row */}
-                <div style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 2 }}>
                   <button
                     type="button"
                     style={{
@@ -557,7 +575,7 @@ const Events: React.FC = () => {
                       border: '1px solid rgba(255,255,255,0.2)',
                       color: 'rgba(255,255,255,0.75)',
                       borderRadius: 8,
-                      padding: '7px 0',
+                      padding: isMobile ? '6px 0' : '7px 0',
                       fontSize: 13,
                       cursor: 'pointer',
                       display: 'flex',
@@ -603,7 +621,7 @@ const Events: React.FC = () => {
                           ? '#f87171'
                           : '#111',
                       borderRadius: 8,
-                      padding: '7px 0',
+                      padding: isMobile ? '6px 0' : '7px 0',
                       fontSize: 13,
                       fontWeight: 600,
                       cursor: closed ? 'not-allowed' : 'pointer',
