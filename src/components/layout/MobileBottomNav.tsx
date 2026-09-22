@@ -48,6 +48,9 @@ const MobileBottomNav: React.FC = () => {
   // 普通会员：如果 AI识茄 功能被隐藏，则隐藏扫码按钮
   // 管理员/开发者：始终显示扫码按钮
   const showScannerButton = canAccessQR || aiCigarVisible
+  const scannerLabel = canAccessQR
+    ? t('navigation.scan', { defaultValue: 'Scan' })
+    : t('navigation.aiScanner', { defaultValue: 'AI Scan' })
 
   // 普通用户导航项
   const frontendNavItemsBase = [
@@ -178,41 +181,32 @@ const MobileBottomNav: React.FC = () => {
           alignItems: 'center',
           justifyContent: 'center',
           cursor: 'pointer',
-          padding: '5px 2px 4px',
+          padding: '4px 2px 3px',
           width: itemWidth,
           minWidth: 0,
-          height: '56px',
-          transition: 'color 0.2s ease, background-color 0.2s ease',
+          height: '64px',
+          transition: 'color 0.2s ease',
           position: 'relative',
-          borderRadius: '6px'
+          borderRadius: '8px'
         }}
         className={`mobile-nav-item${active ? ' mobile-nav-item-active' : ''}`}
       >
-        {active && (
-          <span
-            aria-hidden="true"
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: '50%',
-              width: '24px',
-              height: '2px',
-              transform: 'translateX(-50%)',
-              background: '#FFD700',
-              borderRadius: '0 0 2px 2px'
-            }}
-          />
-        )}
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          marginBottom: '2px',
-          position: 'relative'
+          marginBottom: '3px',
+          position: 'relative',
+          width: '58px',
+          height: '32px',
+          borderRadius: '18px',
+          background: active ? '#FFD65A' : 'transparent',
+          transition: 'background-color 0.2s ease, box-shadow 0.2s ease',
+          boxShadow: active ? '0 3px 10px rgba(255, 214, 90, 0.2)' : 'none'
         }}>
           <div style={{
-            fontSize: '21px',
-            color: active ? '#FFD700' : '#9ca3af',
+            fontSize: '20px',
+            color: active ? '#111111' : '#8f96a3',
             lineHeight: 1,
             transition: 'color 0.2s ease'
           }}>
@@ -225,8 +219,8 @@ const MobileBottomNav: React.FC = () => {
               color="#ffd700"
               style={{
                 position: 'absolute',
-                top: '-6px',
-                right: '-6px',
+                top: '-5px',
+                right: '1px',
                 zIndex: 1001,
                 fontSize: '10px'
               }}
@@ -235,8 +229,8 @@ const MobileBottomNav: React.FC = () => {
         </div>
 
         <div style={{
-          fontSize: '10px',
-          color: active ? '#FFD700' : '#9ca3af',
+          fontSize: '10.5px',
+          color: active ? '#FFD65A' : '#8f96a3',
           fontWeight: active ? 600 : 400,
           textAlign: 'center',
           lineHeight: 1.2,
@@ -258,20 +252,21 @@ const MobileBottomNav: React.FC = () => {
       aria-label="Bottom actions"
       style={{
         position: 'fixed',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        height: 'calc(62px + env(safe-area-inset-bottom, 0px))',
-        background: 'rgba(16, 16, 16, 0.96)',
-        borderTop: '1px solid rgba(255, 215, 0, 0.22)',
-        backdropFilter: 'blur(12px)',
-        WebkitBackdropFilter: 'blur(12px)',
-        padding: '0 max(8px, env(safe-area-inset-left, 0px)) calc(4px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-right, 0px))',
+        bottom: 'calc(8px + env(safe-area-inset-bottom, 0px))',
+        left: '8px',
+        right: '8px',
+        height: '72px',
+        background: 'rgba(20, 22, 27, 0.97)',
+        border: '1px solid rgba(255, 215, 0, 0.16)',
+        borderRadius: '28px',
+        backdropFilter: 'blur(16px)',
+        WebkitBackdropFilter: 'blur(16px)',
+        padding: '4px 8px',
         zIndex: 1000,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-around',
-        boxShadow: '0 -6px 20px rgba(0, 0, 0, 0.28)'
+        boxShadow: '0 8px 28px rgba(0, 0, 0, 0.48)'
       }}
       className="mobile-bottom-nav mobile-bottom-action-bar"
       data-nav-count={totalItemsCount}
@@ -281,50 +276,60 @@ const MobileBottomNav: React.FC = () => {
 
       {/* 中间的扫描按钮（仅在显示时渲染） */}
       {showScannerButton && (
-      <div
-        style={{
-          width: itemWidth,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          position: 'relative',
-          zIndex: 10,
-          height: '56px'
-        }}
-        className="mobile-nav-item"
-      >
         <button
           type="button"
           onClick={handleScanClick}
           aria-label={canAccessQR ? 'Open QR scanner' : 'Open AI cigar scanner'}
-          className="mobile-nav-scan-button"
+          className="mobile-nav-item mobile-nav-scan-button"
           style={{
-            position: 'relative',
-            top: '-7px',
-            width: '54px',
-            height: '54px',
-            borderRadius: '50%',
-            border: '3px solid #161616',
-            background: '#FFD65A',
+            width: itemWidth,
             display: 'flex',
+            flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(255, 215, 0, 0.24)',
-            transition: 'transform 0.2s ease, box-shadow 0.2s ease',
+            position: 'relative',
+            zIndex: 10,
+            height: '64px',
+            minWidth: 0,
+            padding: '4px 2px 3px',
             cursor: 'pointer',
-            padding: 0
+            borderRadius: '8px'
           }}
         >
-          <QrcodeOutlined
-              className="qr-icon-large"
+          <span
+            aria-hidden="true"
             style={{
-                fontSize: '30px',
-              color: '#111',
+              width: '58px',
+              height: '32px',
+              borderRadius: '18px',
+              background: '#FFD65A',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginBottom: '3px',
+              boxShadow: '0 3px 10px rgba(255, 214, 90, 0.2)'
             }}
-          />
+          >
+            <QrcodeOutlined
+              className="qr-icon-large"
+              style={{ fontSize: '23px', color: '#111' }}
+            />
+          </span>
+          <span
+            style={{
+              maxWidth: '100%',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+              color: '#FFD65A',
+              fontSize: '10.5px',
+              fontWeight: 600,
+              lineHeight: 1.2
+            }}
+          >
+            {scannerLabel}
+          </span>
         </button>
-      </div>
       )}
 
       {/* 右侧导航项 */}
