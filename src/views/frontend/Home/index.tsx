@@ -775,8 +775,8 @@ const Home: React.FC = () => {
       {/* 最新活动 列表（真实数据） - 仅在活动功能可见时显示 */}
       {eventsFeatureVisible && (
         <div style={{ marginBottom: 32 }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Title level={4} style={{ margin: '0 0 16px', color: '#f8f8f8' }}>{t('home.latestEvents')}</Title>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', minHeight: 32, marginBottom: 16 }}>
+            <Title level={4} style={{ margin: 0, color: '#f8f8f8', lineHeight: '32px' }}>{t('home.latestEvents')}</Title>
             <Button
               type="link"
               style={{
@@ -785,7 +785,9 @@ const Home: React.FC = () => {
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontWeight: 600,
-                paddingRight: 0
+                height: 32,
+                padding: 0,
+                lineHeight: '32px'
               }}
               onClick={() => navigate('/events')}
             >
