@@ -1,11 +1,12 @@
 // 活动页面
 import React, { useMemo, useState } from 'react'
-import { Typography, Button, Empty, Spin, App } from 'antd'
+import { Typography, Button, Drawer, Empty, Spin, App } from 'antd'
 import {
   CalendarOutlined,
   ClockCircleOutlined,
   EnvironmentOutlined,
   NotificationOutlined,
+  RightOutlined,
   UserOutlined,
 } from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
@@ -131,6 +132,7 @@ const Events: React.FC = () => {
     refreshAnnouncements()
   }
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
 
   const getDisplayStatus = (event: Event): 'upcoming' | 'ongoing' | 'completed' => {
     const now = new Date()
@@ -378,7 +380,7 @@ const Events: React.FC = () => {
                       letterSpacing: '0.04em',
                       backdropFilter: 'blur(4px)',
                     }}>
-                      {t(`announcements.${announcement.type}`)}
+                      {t('announcements.label')}
                     </span>
                   </div>
                 )}
@@ -388,18 +390,6 @@ const Events: React.FC = () => {
                   flexDirection: 'column',
                   gap: isMobile ? 7 : 9,
                 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
-                      <NotificationOutlined />
-                      {t('announcements.label')}
-                    </span>
-                    {!announcement.image && (
-                      <span style={{ padding: '3px 9px', borderRadius: 99, background: `${accentColor}22`, color: accentColor, fontSize: 11, fontWeight: 700 }}>
-                        {t(`announcements.${announcement.type}`)}
-                      </span>
-                    )}
-                  </div>
-
                   <h2 style={{
                     margin: 0,
                     fontSize: 17,
@@ -424,9 +414,31 @@ const Events: React.FC = () => {
                   }}>
                     {announcement.content}
                   </p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
-                    <CalendarOutlined style={{ fontSize: 12 }} />
-                    <span>{formatDisplayDate(item.date, i18n.language || 'zh-CN')}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                      <CalendarOutlined style={{ fontSize: 12 }} />
+                      {formatDisplayDate(item.date, i18n.language || 'zh-CN')}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedAnnouncement(announcement)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        color: '#FDE08D',
+                        padding: '4px 0 4px 8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {t('events.viewMore', 'View More')}
+                      <RightOutlined style={{ fontSize: 10 }} />
+                    </button>
                   </div>
                 </div>
               </article>
@@ -693,6 +705,79 @@ const Events: React.FC = () => {
           )
         })}
       </div>
+
+      <Drawer
+        placement="bottom"
+        open={Boolean(selectedAnnouncement)}
+        onClose={() => setSelectedAnnouncement(null)}
+        height={isMobile ? '78vh' : 560}
+        title={(
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#FDE08D' }}>
+            <NotificationOutlined />
+            {t('announcements.label')}
+          </span>
+        )}
+        styles={{
+          header: {
+            background: '#171612',
+            borderBottom: '1px solid rgba(244,175,37,0.25)',
+          },
+          body: {
+            padding: 0,
+            background: '#171612',
+          },
+          content: {
+            background: '#171612',
+            borderTop: '1px solid rgba(244,175,37,0.35)',
+            borderRadius: '12px 12px 0 0',
+          },
+        }}
+      >
+        {selectedAnnouncement && (
+          <article style={{ width: '100%', maxWidth: 720, margin: '0 auto', paddingBottom: 32 }}>
+            {selectedAnnouncement.image && (
+              <img
+                src={selectedAnnouncement.image}
+                alt={selectedAnnouncement.title}
+                style={{
+                  width: '100%',
+                  height: isMobile ? 190 : 260,
+                  objectFit: 'cover',
+                  display: 'block',
+                }}
+              />
+            )}
+            <div style={{ padding: isMobile ? '18px 16px' : '24px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                  {t(`announcements.${selectedAnnouncement.type}`)}
+                </span>
+                {selectedAnnouncement.pinned && (
+                  <span style={{ color: '#FDE08D', fontSize: 12 }}>{t('announcements.pinned')}</span>
+                )}
+              </div>
+              <h2 style={{ margin: 0, color: '#fff', fontSize: isMobile ? 22 : 26, lineHeight: 1.3 }}>
+                {selectedAnnouncement.title}
+              </h2>
+              <p style={{ margin: 0, color: 'rgba(255,255,255,0.78)', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                {selectedAnnouncement.content}
+              </p>
+              <div style={{ display: 'grid', gap: 8, paddingTop: 4, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <CalendarOutlined />
+                  {t('announcements.publishedAt')}: {formatDisplayDate(selectedAnnouncement.publishedAt, i18n.language || 'zh-CN')}
+                </span>
+                {selectedAnnouncement.expiresAt && (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <ClockCircleOutlined />
+                    {t('announcements.expiresAt')}: {formatDisplayDate(selectedAnnouncement.expiresAt, i18n.language || 'zh-CN')}
+                  </span>
+                )}
+              </div>
+            </div>
+          </article>
+        )}
+      </Drawer>
     </div>
   )
 }
