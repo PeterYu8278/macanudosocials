@@ -369,18 +369,16 @@ const Home: React.FC = () => {
 
             <div style={{ position: 'relative', zIndex: 1 }}>
               {/* 欢迎标题 - 独立一行 */}
-              <h1 style={{
+              <h1 className="home-welcome-title" style={{
                 color: '#f8f8f8',
                 background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
                 WebkitBackgroundClip: 'text',
                 WebkitTextFillColor: 'transparent',
                 backgroundClip: 'text',
                 fontWeight: 700,
-                fontSize: '24px',
                 textAlign: 'left',
                 margin: 0,
-                padding: 0,
-                lineHeight: 1.8
+                padding: 0
               }}>
                 {t('home.welcomeTitle')} {appConfig?.appName || 'Cigar Club'}
               </h1>

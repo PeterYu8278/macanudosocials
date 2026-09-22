@@ -690,6 +690,28 @@ a:hover {
   opacity: 0.55;
 }
 
+.home-welcome-title {
+  width: 100%;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 24px;
+  line-height: 1.3;
+  letter-spacing: 0;
+}
+
+@media (max-width: 480px) {
+  .home-welcome-title {
+    font-size: 20px;
+  }
+}
+
+@media (max-width: 380px) {
+  .home-welcome-title {
+    font-size: 18px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .mobile-nav-highlight-track > span {
     transition: none !important;
