@@ -1,7 +1,14 @@
 // 活动页面
 import React, { useMemo, useState } from 'react'
 import { Typography, Button, Empty, Spin, App } from 'antd'
-import { CalendarOutlined, TeamOutlined, RightOutlined, NotificationOutlined } from '@ant-design/icons'
+import {
+  CalendarOutlined,
+  ClockCircleOutlined,
+  EnvironmentOutlined,
+  RightOutlined,
+  NotificationOutlined,
+  UserOutlined,
+} from '@ant-design/icons'
 import { useNavigate } from 'react-router-dom'
 
 const { Text } = Typography
@@ -31,6 +38,16 @@ const formatDisplayDate = (value: unknown, language: string): string => {
   }
 
   return `${date.getDate()} ${date.toLocaleString('en-US', { month: 'short' })}, ${date.getFullYear()}`
+}
+
+const formatDisplayTime = (value: unknown, language: string): string => {
+  const date = toDateOrNull(value)
+  if (!date) return '-'
+
+  return date.toLocaleTimeString(language.startsWith('zh') ? 'zh-CN' : 'en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+  })
 }
 
 type FeedItem =
@@ -346,7 +363,18 @@ const Events: React.FC = () => {
           const closed = isRegistrationClosed(event)
           const displayStatus = getDisplayStatus(event)
 
-          const formattedDate = formatDisplayDate(item.date, i18n.language || 'zh-CN')
+          const language = i18n.language || 'zh-CN'
+          const startDate = toDateOrNull(event.schedule?.startDate)
+          const endDate = toDateOrNull(event.schedule?.endDate)
+          const formattedDateRange = `${formatDisplayDate(startDate, language)} - ${formatDisplayDate(endDate, language)}`
+          const formattedTimeRange = `${formatDisplayTime(startDate, language)} - ${formatDisplayTime(endDate, language)}`
+          const venue = event.location?.name || event.location?.address || '-'
+          const maxParticipants = event.participants?.maxParticipants || 0
+          const availablePax = maxParticipants > 0
+            ? Math.max(maxParticipants - registeredIds.length, 0)
+            : null
+          const visibleRegistrantIds = registeredIds.slice(0, 5)
+          const currentUserAvatar = user?.profile?.avatar || user?.photoURL
 
           const statusColors: Record<string, string> = {
             upcoming: '#3b82f6',
@@ -439,17 +467,82 @@ const Events: React.FC = () => {
                   {event.title}
                 </h2>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
-                  <CalendarOutlined style={{ fontSize: 12 }} />
-                  <span>{formattedDate}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.68)', fontSize: 13, minWidth: 0 }}>
+                  <EnvironmentOutlined style={{ fontSize: 13, flexShrink: 0 }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{venue}</span>
                 </div>
 
-                {registeredIds.length > 0 && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.5)', fontSize: 13 }}>
-                    <TeamOutlined style={{ fontSize: 12 }} />
-                    <span>{registeredIds.length} {t('events.registered')}</span>
-                  </div>
-                )}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
+                  <CalendarOutlined style={{ fontSize: 12, flexShrink: 0 }} />
+                  <span>{formattedDateRange}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7, color: 'rgba(255,255,255,0.6)', fontSize: 13 }}>
+                  <ClockCircleOutlined style={{ fontSize: 12, flexShrink: 0 }} />
+                  <span>{formattedTimeRange}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minHeight: 30 }}>
+                  <span style={{ color: '#FDE08D', fontSize: 13, fontWeight: 650, whiteSpace: 'nowrap' }}>
+                    {availablePax === null
+                      ? t('events.availablePaxUnlimited')
+                      : t('events.availablePax', { count: availablePax })}
+                  </span>
+
+                  {registeredIds.length > 0 && (
+                    <div
+                      aria-label={t('events.registrantCount', { count: registeredIds.length })}
+                      title={t('events.registrantCount', { count: registeredIds.length })}
+                      style={{ display: 'flex', alignItems: 'center', paddingLeft: 10 }}
+                    >
+                      {visibleRegistrantIds.map((participantId, index) => {
+                        const avatarUrl = participantId === user?.id ? currentUserAvatar : undefined
+
+                        return (
+                          <span
+                            key={participantId}
+                            style={{
+                              width: 30,
+                              height: 30,
+                              marginLeft: index === 0 ? 0 : -10,
+                              borderRadius: '50%',
+                              border: '2px solid #1a1a1a',
+                              background: avatarUrl ? `url("${avatarUrl}") center/cover` : '#4a4337',
+                              color: '#FDE08D',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              justifyContent: 'center',
+                              flexShrink: 0,
+                              position: 'relative',
+                              zIndex: visibleRegistrantIds.length - index,
+                            }}
+                          >
+                            {!avatarUrl && <UserOutlined style={{ fontSize: 14 }} />}
+                          </span>
+                        )
+                      })}
+                      {registeredIds.length > visibleRegistrantIds.length && (
+                        <span style={{
+                          width: 30,
+                          height: 30,
+                          marginLeft: -10,
+                          borderRadius: '50%',
+                          border: '2px solid #1a1a1a',
+                          background: '#C48D3A',
+                          color: '#111',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontSize: 10,
+                          fontWeight: 800,
+                          position: 'relative',
+                        }}>
+                          +{registeredIds.length - visibleRegistrantIds.length}
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
 
                 {/* Spacer */}
                 <div style={{ flex: 1 }} />
