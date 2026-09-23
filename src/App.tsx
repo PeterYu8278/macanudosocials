@@ -11,6 +11,7 @@ import { getAppConfig } from './services/firebase/appConfig'
 import { applyDynamicIcons } from './utils/dynamicManifest'
 import { saveAppConfigToIndexedDB } from './utils/indexedDB'
 import { PageLoading } from './components/common/LoadingSpinner'
+import OneSignalIntegration from './components/common/OneSignalIntegration'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -372,6 +373,7 @@ function App() {
   return (
     <Router>
       <AntApp>
+        <OneSignalIntegration />
         <AppContent />
       </AntApp>
     </Router>

@@ -160,6 +160,9 @@ export const unregisterServiceWorker = async (): Promise<void> => {
     try {
       const registrations = await navigator.serviceWorker.getRegistrations();
       for (const registration of registrations) {
+        if (new URL(registration.scope).pathname === '/push/onesignal/') {
+          continue;
+        }
         await registration.unregister();
       }
   } catch (error) {

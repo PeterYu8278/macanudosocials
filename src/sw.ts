@@ -1,3 +1,5 @@
+/// <reference lib="webworker" />
+
 /**
  * Service Worker
  * 拦截 manifest.json 请求并动态生成

@@ -3,7 +3,6 @@ import { create } from 'zustand'
 import { onAuthStateChange, getUserData, convertFirestoreTimestamps, findUserByEmail, createMissingUserDocument } from '../../services/firebase/auth'
 import type { User, UserRole, Permission } from '../../types'
 import { hasPermission } from '../../config/permissions'
-import { initializePushNotifications } from '../../services/firebase/messaging'
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 
@@ -255,12 +254,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
               isDeveloper: userData.role === 'developer'
             })
 
-            // 自动初始化推送通知（静默执行，不阻塞登录流程）
-            initializePushNotifications(userData).catch((error) => {
-              // 静默处理错误，不影响登录流程
-              console.warn('[Auth] Failed to initialize push notifications:', error)
-            })
-            
             // 策略3: 开始实时监听用户文档变化（自动更新用户状态和会员状态）
             // 仅在成功获取用户数据后启用监听
             if (firestoreUserId && userData) {
