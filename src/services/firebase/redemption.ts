@@ -250,6 +250,7 @@ export const createPendingRedemptionRecord = async (
       id: recordItemId,
       userId,
       userName: userData.displayName,
+      type: 'mystery_gift',
       cigarId: '',  // 待管理员选择
       cigarName: '待选择',  // 占位符
       quantity,
@@ -398,6 +399,7 @@ export const createRedemptionRecord = async (
       id: recordItemId,
       userId,
       userName: userData.displayName,
+      type: 'mystery_gift',
       cigarId,
       cigarName,
       quantity,
@@ -622,6 +624,83 @@ export const getRedemptionRecordsBySession = async (
     })
   } catch (error: any) {
     return [];
+  }
+};
+
+/**
+ * 获取全部兑换项，供管理员在驻店记录页集中管理。
+ * Firestore 文档按 visitSessionId 聚合，因此这里展开每个文档中的 redemptions 数组。
+ */
+export const getAllRedemptionRecords = async (storeId?: string): Promise<RedemptionRecord[]> => {
+  try {
+    const snapshot = await getDocs(collection(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS));
+    const usersSnapshot = await getDocs(collection(db, GLOBAL_COLLECTIONS.USERS));
+    const records: RedemptionRecord[] = [];
+    let allowedSessionIds: Set<string> | null = null;
+
+    if (storeId) {
+      const sessionsSnapshot = await getDocs(query(
+        collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+        where('storeId', '==', storeId),
+      ));
+      allowedSessionIds = new Set(sessionsSnapshot.docs.map((sessionDoc) => sessionDoc.id));
+    }
+
+    snapshot.docs.forEach((docSnap) => {
+      const data = docSnap.data() as RedemptionRecordDocument;
+      const visitSessionId = data.visitSessionId || docSnap.id;
+      if (allowedSessionIds && !allowedSessionIds.has(visitSessionId)) return;
+
+      (data.redemptions || []).forEach((item) => {
+        const toDate = (value: any): Date => (
+          value?.toDate?.() || (value instanceof Date ? value : new Date(value))
+        );
+
+        records.push({
+          ...item,
+          type: item.type || 'mystery_gift',
+          visitSessionId,
+          redeemedAt: toDate(item.redeemedAt),
+          createdAt: toDate(item.createdAt),
+          updatedAt: item.updatedAt ? toDate(item.updatedAt) : undefined,
+        });
+      });
+    });
+
+    // Referral milestone claims are stored on user documents for backwards
+    // compatibility. Expose them as typed records in this admin view.
+    usersSnapshot.docs.forEach((userDoc) => {
+      const userData = userDoc.data() as any;
+      if (storeId && userData.storeId !== storeId) return;
+
+      const redeemedAt = userData.updatedAt?.toDate?.()
+        || new Date(userData.updatedAt || Date.now());
+      const claimedMilestones = userData.referral?.redeemedMilestones || [];
+
+      claimedMilestones.forEach((target: number) => {
+        records.push({
+          id: `referral-reward-${userDoc.id}-${target}`,
+          userId: userDoc.id,
+          userName: userData.displayName,
+          type: 'referral_reward',
+          cigarId: 'referral_reward',
+          cigarName: `Referral reward (${target} referrals)`,
+          quantity: 1,
+          status: 'completed',
+          dayKey: redeemedAt.toISOString().slice(0, 10),
+          redemptionIndex: 0,
+          redeemedAt,
+          redeemedBy: userDoc.id,
+          createdAt: redeemedAt,
+          visitSessionId: `referral-reward-${userDoc.id}`,
+        });
+      });
+    });
+
+    return records.sort((a, b) => b.redeemedAt.getTime() - a.redeemedAt.getTime());
+  } catch (error) {
+    console.error('[getAllRedemptionRecords] Failed to load redemption records:', error);
+    throw error;
   }
 };
 

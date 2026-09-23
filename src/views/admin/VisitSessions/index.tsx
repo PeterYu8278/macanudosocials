@@ -1,5 +1,5 @@
 // 驻店记录管理页面
-import React, { useState, useMemo } from 'react';
+import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { Card, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs } from 'antd';
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, LoginOutlined, LogoutOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
@@ -14,11 +14,11 @@ import {
 // 不再使用服务端分页，改为加载所有数据并使用客户端分页
 import { getCigars } from '../../../services/firebase/firestore';
 import { getAllStores } from '../../../services/firebase/stores';
-import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession } from '../../../services/firebase/redemption';
+import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession, getAllRedemptionRecords } from '../../../services/firebase/redemption';
 import { useAuthStore } from '../../../store/modules/auth';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer';
-import type { VisitSession, Cigar } from '../../../types';
+import type { VisitSession, Cigar, RedemptionRecord } from '../../../types';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { QRScanner } from '../../../components/admin/QRScanner';
@@ -69,9 +69,119 @@ const VisitSessionsPage: React.FC = () => {
   );
   const [addingRedemption, setAddingRedemption] = useState(false);
   const [redemptionRecords, setRedemptionRecords] = useState<Map<string, any[]>>(new Map());
+  const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
+  const [redemptionRecordsLoading, setRedemptionRecordsLoading] = useState(false);
+  const [redemptionSearch, setRedemptionSearch] = useState('');
+  const [redemptionStatus, setRedemptionStatus] = useState<'all' | 'pending' | 'completed'>('all');
+  const [redemptionType, setRedemptionType] = useState<'all' | 'mystery_gift' | 'referral_reward'>('all');
   const [forceCheckoutForm] = Form.useForm();
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
+
+  const loadAllRedemptions = useCallback(async () => {
+    setRedemptionRecordsLoading(true);
+    try {
+      setAllRedemptionRecords(await getAllRedemptionRecords(isSuperAdmin ? undefined : user?.storeId));
+    } catch (error) {
+      console.error('[VisitSessions] Failed to load all redemption records:', error);
+      message.error(t('visitSessions.loadRedemptionRecordsFailed'));
+    } finally {
+      setRedemptionRecordsLoading(false);
+    }
+  }, [isSuperAdmin, message, t, user?.storeId]);
+
+  useEffect(() => {
+    loadAllRedemptions();
+  }, [loadAllRedemptions]);
+
+  const filteredAllRedemptions = useMemo(() => {
+    const keyword = redemptionSearch.trim().toLowerCase();
+    return allRedemptionRecords.filter((record) => {
+      const matchesStatus = redemptionStatus === 'all' || record.status === redemptionStatus;
+      const matchesType = redemptionType === 'all' || (record.type || 'mystery_gift') === redemptionType;
+      const matchesSearch = !keyword || [
+        record.userName || '',
+        record.userId,
+        record.cigarName,
+        record.visitSessionId,
+      ].some(value => value.toLowerCase().includes(keyword));
+      return matchesStatus && matchesType && matchesSearch;
+    });
+  }, [allRedemptionRecords, redemptionSearch, redemptionStatus, redemptionType]);
+
+  const redemptionColumns = useMemo(() => [
+    {
+      title: t('visitSessions.user'),
+      key: 'user',
+      render: (_: unknown, record: RedemptionRecord) => (
+        <div>
+          <div style={{ fontWeight: 600, color: '#fff' }}>{record.userName || '-'}</div>
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>
+            {record.userId.substring(0, 12)}...
+          </div>
+        </div>
+      )
+    },
+    {
+      title: t('visitSessions.redemptionTime'),
+      dataIndex: 'redeemedAt',
+      key: 'redeemedAt',
+      render: (value: Date) => dayjs(value).format('YYYY-MM-DD HH:mm')
+    },
+    {
+      title: t('visitSessions.cigarName'),
+      dataIndex: 'cigarName',
+      key: 'cigarName',
+      render: (value: string, record: RedemptionRecord) => record.status === 'pending'
+        ? <Tag color="orange">{t('visitSessions.statusToSelect')}</Tag>
+        : value || '-'
+    },
+    {
+      title: t('visitSessions.redemptionType'),
+      key: 'type',
+      render: (_: unknown, record: RedemptionRecord) => (
+        <Tag color={record.type === 'referral_reward' ? 'purple' : 'gold'}>
+          {record.type === 'referral_reward'
+            ? t('visitSessions.referralReward')
+            : t('visitSessions.mysteryGift')}
+        </Tag>
+      )
+    },
+    {
+      title: t('visitSessions.quantity'),
+      dataIndex: 'quantity',
+      key: 'quantity',
+      render: (value: number) => `${value} ${t('visitSessions.sticks')}`
+    },
+    {
+      title: t('visitSessions.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: (status: RedemptionRecord['status']) => (
+        <Tag color={status === 'completed' ? 'green' : 'orange'}>
+          {status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
+        </Tag>
+      )
+    },
+    {
+      title: t('visitSessions.actions'),
+      key: 'actions',
+      render: (_: unknown, record: RedemptionRecord) => record.status === 'pending' ? (
+        <Button
+          size="small"
+          icon={<EditOutlined />}
+          onClick={() => {
+            const session = sessions.find(item => item.id === record.visitSessionId);
+            if (session) openSessionDrawer(session);
+            openRedemptionDrawer(record);
+            form.setFieldsValue({ cigarId: record.cigarId || undefined, quantity: record.quantity || 1 });
+          }}
+        >
+          {t('common.edit')}
+        </Button>
+      ) : null
+    }
+  ], [form, openRedemptionDrawer, openSessionDrawer, sessions, t]);
 
   // 加载指定 session 的所有兑换记录（包括待处理和已完成）
   const loadRedemptionRecords = async (sessionId: string) => {
@@ -960,6 +1070,56 @@ const VisitSessionsPage: React.FC = () => {
               </div>
             )
           },
+          {
+            key: 'redemptions',
+            label: <span style={{ fontSize: 16, fontWeight: 700, paddingInline: 8 }}><GiftOutlined /> {t('visitSessions.mysteryGiftRedemptions')}</span>,
+            children: (
+              <Card>
+                <Space wrap style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+                  <Search
+                    allowClear
+                    placeholder={t('visitSessions.searchRedemptions')}
+                    onChange={(event) => setRedemptionSearch(event.target.value)}
+                    style={{ width: 360, maxWidth: '100%' }}
+                  />
+                  <Space>
+                    <Select
+                      value={redemptionStatus}
+                      onChange={setRedemptionStatus}
+                      style={{ width: 140 }}
+                      options={[
+                        { value: 'all', label: t('visitSessions.all') },
+                        { value: 'pending', label: t('visitSessions.statusToSelect') },
+                        { value: 'completed', label: t('visitSessions.completed') },
+                      ]}
+                    />
+                    <Select
+                      value={redemptionType}
+                      onChange={setRedemptionType}
+                      style={{ width: 160 }}
+                      options={[
+                        { value: 'all', label: t('visitSessions.allTypes') },
+                        { value: 'mystery_gift', label: t('visitSessions.mysteryGift') },
+                        { value: 'referral_reward', label: t('visitSessions.referralReward') },
+                      ]}
+                    />
+                    <Button icon={<ReloadOutlined />} loading={redemptionRecordsLoading} onClick={loadAllRedemptions}>
+                      {t('visitSessions.refresh')}
+                    </Button>
+                  </Space>
+                </Space>
+                <Table
+                  rowKey={(record) => record.id}
+                  loading={redemptionRecordsLoading}
+                  columns={redemptionColumns}
+                  dataSource={filteredAllRedemptions}
+                  scroll={{ x: 850 }}
+                  pagination={{ pageSize: 10, showSizeChanger: true }}
+                  locale={{ emptyText: t('visitSessions.noRedemptionRecords') }}
+                />
+              </Card>
+            )
+          },
           ...(roomBookingVisible ? [{
             key: 'bookings',
             label: <span style={{ fontSize: 16, fontWeight: 700, paddingInline: 8 }}>{t('roomManagement.viewBookingsTitle')}</span>,
@@ -1191,7 +1351,7 @@ const VisitSessionsPage: React.FC = () => {
           }
         }}
         onOk={async () => {
-          if (!selectedRedemptionRecord || !selectedSession || !user?.id) {
+          if (!selectedRedemptionRecord || !user?.id) {
             message.error(t('visitSessions.missingRequiredInfo'));
             return;
           }
@@ -1229,6 +1389,7 @@ const VisitSessionsPage: React.FC = () => {
             if (selectedSession) {
               await loadRedemptionRecords(selectedSession.id);
             }
+            await loadAllRedemptions();
             await refreshSessions();
           } catch (error: any) {
             console.error('更新兑换记录失败:', error);

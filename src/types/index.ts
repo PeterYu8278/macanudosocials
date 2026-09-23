@@ -804,6 +804,7 @@ export interface RedemptionRecordItem {
   id: string;                // 记录项的唯一ID（用于更新和删除）
   userId: string;
   userName?: string;
+  type?: 'mystery_gift' | 'referral_reward'; // 兑换来源类型
   cigarId: string;
   cigarName: string;
   quantity: number;
