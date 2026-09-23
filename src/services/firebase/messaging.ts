@@ -542,40 +542,12 @@ export const initializePushNotifications = async (user: User): Promise<boolean> 
       return false;
     }
     
-    // ✅ 优化：先检查 Firestore 中是否已存在当前设备的 token
-    const existingTokenData = await getExistingFCMToken(user.id);
-    
-    let token: string | null = null;
-    
-    if (existingTokenData) {
-      // 直接使用现有 token，只更新 lastUsed 时间
-      // 注意：不验证 token 是否仍然有效，因为验证本身可能会触发新 token 的生成
-      // 如果 token 真的失效了，Firebase 会在下次发送推送时返回错误，那时再重新获取
-      try {
-        const deviceId = getOrCreateDeviceId();
-        await setDoc(doc(db, 'users', user.id, 'fcmTokens', existingTokenData.docId), {
-          lastUsed: new Date(),
-          deviceId, // 确保设备 ID 存在（兼容旧数据）
-          deviceInfo: {
-            platform: navigator.platform,
-            userAgent: navigator.userAgent,
-            language: navigator.language
-          }
-        }, { merge: true });
-        return true; // 直接返回，不需要重新获取和保存
-      } catch (error) {
-        console.warn('[FCM] 更新现有 Token 的 lastUsed 时出错，将获取新 Token:', error);
-        // 如果更新失败，继续获取新 token
-      }
-    }
-    
-    // 如果没有现有 token 或现有 token 已失效，获取新 token
+    // Always ask Firebase for the current token. FCM tokens can rotate when
+    // the browser profile, permission, service worker, or app installation changes.
+    const token = await getFCMToken();
     if (!token) {
-      token = await getFCMToken();
-      if (!token) {
-        console.error('[FCM] ❌ 获取 FCM Token 失败');
-        return false;
-      }
+      console.error('[FCM] ❌ 获取 FCM Token 失败');
+      return false;
     }
 
     // 保存 Token 到 Firestore

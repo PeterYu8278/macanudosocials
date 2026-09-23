@@ -50,7 +50,7 @@ export const handler: Handler = async (event, context) => {
     const db = getFirestore();
     const messaging = getMessaging();
 
-    let tokens: string[] = [];
+    const tokenTargets: Array<{ token: string; ref: FirebaseFirestore.DocumentReference }> = [];
 
     // 如果指定了目标用户，获取这些用户的 Token
     if (targetUsers.length > 0) {
@@ -65,7 +65,7 @@ export const handler: Handler = async (event, context) => {
         tokensSnapshot.forEach((doc) => {
           const tokenData = doc.data();
           if (tokenData.token) {
-            tokens.push(tokenData.token);
+            tokenTargets.push({ token: tokenData.token, ref: doc.ref });
           }
         });
       }
@@ -85,7 +85,7 @@ export const handler: Handler = async (event, context) => {
         tokensSnapshot.forEach((doc) => {
           const tokenData = doc.data();
           if (tokenData.token) {
-            tokens.push(tokenData.token);
+            tokenTargets.push({ token: tokenData.token, ref: doc.ref });
           }
         });
       }
@@ -133,10 +133,11 @@ export const handler: Handler = async (event, context) => {
     }
 
     // 批量发送到 Token（每次最多 500 个）
-    if (tokens.length > 0) {
+    if (tokenTargets.length > 0) {
       const batchSize = 500;
-      for (let i = 0; i < tokens.length; i += batchSize) {
-        const batch = tokens.slice(i, i + batchSize);
+      for (let i = 0; i < tokenTargets.length; i += batchSize) {
+        const batchTargets = tokenTargets.slice(i, i + batchSize);
+        const batch = batchTargets.map((target) => target.token);
 
         const message = {
           notification: {
@@ -156,13 +157,27 @@ export const handler: Handler = async (event, context) => {
           results.total += batch.length;
           results.sent += response.successCount;
           results.failed += response.failureCount;
-          response.responses.forEach((sendResponse) => {
-            if (sendResponse.success || results.failureDetails.length >= 10) return;
-            results.failureDetails.push({
-              code: sendResponse.error?.code,
-              message: sendResponse.error?.message || 'Token delivery failed'
-            });
-          });
+          for (let responseIndex = 0; responseIndex < response.responses.length; responseIndex++) {
+            const sendResponse = response.responses[responseIndex];
+            if (sendResponse.success) continue;
+
+            const code = sendResponse.error?.code;
+            if (code === 'messaging/registration-token-not-registered'
+              || code === 'messaging/invalid-registration-token') {
+              await batchTargets[responseIndex].ref.update({
+                active: false,
+                lastError: code,
+                lastErrorAt: new Date()
+              });
+            }
+
+            if (results.failureDetails.length < 10) {
+              results.failureDetails.push({
+                code,
+                message: sendResponse.error?.message || 'Token delivery failed'
+              });
+            }
+          }
         } catch (error: any) {
           console.error('[send-notification] Failed to send batch:', error);
           results.total += batch.length;
