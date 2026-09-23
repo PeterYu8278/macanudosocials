@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { App as AntdApp } from 'antd'
 import OneSignal from 'react-onesignal'
 import { useAuthStore } from '../../store/modules/auth'
+import { normalizePhoneNumber } from '../../utils/phoneNormalization'
 
 const ONESIGNAL_APP_ID = 'af46548f-181c-40e3-8880-0aae079c20a3'
 const ONESIGNAL_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
@@ -131,23 +132,30 @@ const OneSignalIntegration = () => {
         }
 
         await OneSignal.login(user.id)
-        const phone = user.phone || user.profile?.phone
+        const email = user.email?.trim().toLowerCase()
+        const phone = normalizePhoneNumber(user.phone || user.profile?.phone || '')
         const deviceTags = getDeviceTags()
         OneSignal.User.setLanguage(getOneSignalLanguage(user.preferences?.locale))
+
+        if (email) {
+          OneSignal.User.addEmail(email)
+        }
+        if (phone) {
+          OneSignal.User.addSms(phone)
+        }
+
+        // The free plan allows six data tags per user. Email and phone belong to
+        // channel subscriptions, so keep the six tags focused on segmentation.
+        OneSignal.User.removeTags(['store_id', 'phone'])
         OneSignal.User.addTags({
           role: user.role,
-          name: user.displayName,
+          name: user.displayName || email?.split('@')[0] || user.id,
           device: deviceTags.device,
           ...(deviceTags.os ? { os: deviceTags.os } : {}),
           ...(deviceTags.browser ? { browser: deviceTags.browser } : {}),
-          ...(phone ? { phone } : {}),
-          ...(user.storeId ? { store_id: user.storeId } : {}),
           ...(user.memberId ? { member_id: user.memberId } : {}),
         })
 
-        if (!phone) {
-          OneSignal.User.removeTag('phone')
-        }
         if (!deviceTags.os) {
           OneSignal.User.removeTag('os')
         }
@@ -161,13 +169,13 @@ const OneSignalIntegration = () => {
   }, [
     loading,
     user?.displayName,
+    user?.email,
     user?.id,
     user?.memberId,
     user?.phone,
     user?.preferences?.locale,
     user?.profile?.phone,
     user?.role,
-    user?.storeId,
   ])
 
   return null

@@ -1,210 +1,194 @@
-// Netlify Function: 发送推送通知
-import { Handler } from '@netlify/functions';
-import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import type { Handler } from '@netlify/functions';
+import { cert, getApps, initializeApp } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
-import { getMessaging } from 'firebase-admin/messaging';
 
-// 初始化 Firebase Admin（如果尚未初始化）
-if (!getApps().length) {
-  try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(JSON.parse(serviceAccount))
-      });
-    } else {
-      console.error('[send-notification] FIREBASE_SERVICE_ACCOUNT not configured');
-    }
-  } catch (error) {
-    console.error('[send-notification] Failed to initialize Firebase Admin:', error);
+const headers = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
+const allowedRoles = new Set(['admin', 'superAdmin', 'developer']);
+
+const response = (statusCode: number, body: Record<string, unknown>) => ({
+  statusCode,
+  headers,
+  body: JSON.stringify(body),
+});
+
+const initializeAdmin = () => {
+  if (getApps().length) return;
+
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT is not configured');
+  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+};
+
+const verifyAdminCaller = async (authorization?: string) => {
+  const token = authorization?.startsWith('Bearer ')
+    ? authorization.slice('Bearer '.length)
+    : '';
+  if (!token) throw new Error('UNAUTHENTICATED');
+
+  initializeAdmin();
+  const decoded = await getAuth().verifyIdToken(token);
+  const db = getFirestore();
+  let userSnapshot = await db.collection('users').doc(decoded.uid).get();
+
+  if (!userSnapshot.exists && decoded.email) {
+    const matches = await db.collection('users')
+      .where('email', '==', decoded.email.toLowerCase())
+      .limit(1)
+      .get();
+    userSnapshot = matches.docs[0] || userSnapshot;
   }
-}
 
-export const handler: Handler = async (event, context) => {
-  // 只允许 POST 请求
-  if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
-  }
+  const role = (decoded.role as string | undefined) || userSnapshot.data()?.role;
+  if (!role || !allowedRoles.has(role)) throw new Error('FORBIDDEN');
+};
 
+const parseOneSignalResponse = (content: string) => {
+  if (!content.trim()) return {} as Record<string, unknown>;
   try {
-    const {
-      title,
-      body,
-      type = 'system',
-      targetUsers = [],
-      targetTopics = [],
-      data = {},
-      clickAction
-    } = JSON.parse(event.body || '{}');
-
-    if (!title || !body) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields: title, body' })
-      };
-    }
-
-    const db = getFirestore();
-    const messaging = getMessaging();
-
-    const tokenTargets: Array<{ token: string; ref: FirebaseFirestore.DocumentReference }> = [];
-
-    // 如果指定了目标用户，获取这些用户的 Token
-    if (targetUsers.length > 0) {
-      for (const userId of targetUsers) {
-        const tokensSnapshot = await db
-          .collection('users')
-          .doc(userId)
-          .collection('fcmTokens')
-          .where('active', '==', true)
-          .get();
-
-        tokensSnapshot.forEach((doc) => {
-          const tokenData = doc.data();
-          if (tokenData.token) {
-            tokenTargets.push({ token: tokenData.token, ref: doc.ref });
-          }
-        });
-      }
-    }
-
-    // 如果没有指定用户，发送到所有用户（或主题）
-    if (targetUsers.length === 0 && targetTopics.length === 0) {
-      // 获取所有活跃用户的 Token
-      const usersSnapshot = await db.collection('users').get();
-      
-      for (const userDoc of usersSnapshot.docs) {
-        const tokensSnapshot = await userDoc.ref
-          .collection('fcmTokens')
-          .where('active', '==', true)
-          .get();
-
-        tokensSnapshot.forEach((doc) => {
-          const tokenData = doc.data();
-          if (tokenData.token) {
-            tokenTargets.push({ token: tokenData.token, ref: doc.ref });
-          }
-        });
-      }
-    }
-
-    const results = {
-      total: 0,
-      sent: 0,
-      failed: 0,
-      failureDetails: [] as Array<{ code?: string; message: string }>
-    };
-
-    // 如果使用主题，发送主题消息
-    if (targetTopics.length > 0) {
-      for (const topic of targetTopics) {
-        try {
-          const message = {
-            notification: {
-              title,
-              body
-            },
-            data: {
-              ...data,
-              type,
-              clickAction: clickAction || '/'
-            },
-            topic
-          };
-
-          await messaging.send(message);
-          results.total++;
-          results.sent++;
-          } catch (error: any) {
-          console.error(`[send-notification] Failed to send to topic ${topic}:`, error);
-          results.total++;
-          results.failed++;
-          if (results.failureDetails.length < 10) {
-            results.failureDetails.push({
-              code: error?.code,
-              message: error?.message || 'Topic delivery failed'
-            });
-          }
-        }
-      }
-    }
-
-    // 批量发送到 Token（每次最多 500 个）
-    if (tokenTargets.length > 0) {
-      const batchSize = 500;
-      for (let i = 0; i < tokenTargets.length; i += batchSize) {
-        const batchTargets = tokenTargets.slice(i, i + batchSize);
-        const batch = batchTargets.map((target) => target.token);
-
-        const message = {
-          notification: {
-            title,
-            body
-          },
-          data: {
-            ...data,
-            type,
-            clickAction: clickAction || '/'
-          },
-          tokens: batch
-        };
-
-        try {
-          const response = await messaging.sendEachForMulticast(message);
-          results.total += batch.length;
-          results.sent += response.successCount;
-          results.failed += response.failureCount;
-          for (let responseIndex = 0; responseIndex < response.responses.length; responseIndex++) {
-            const sendResponse = response.responses[responseIndex];
-            if (sendResponse.success) continue;
-
-            const code = sendResponse.error?.code;
-            if (code === 'messaging/registration-token-not-registered'
-              || code === 'messaging/invalid-registration-token') {
-              await batchTargets[responseIndex].ref.update({
-                active: false,
-                lastError: code,
-                lastErrorAt: new Date()
-              });
-            }
-
-            if (results.failureDetails.length < 10) {
-              results.failureDetails.push({
-                code,
-                message: sendResponse.error?.message || 'Token delivery failed'
-              });
-            }
-          }
-        } catch (error: any) {
-          console.error('[send-notification] Failed to send batch:', error);
-          results.total += batch.length;
-          results.failed += batch.length;
-          if (results.failureDetails.length < 10) {
-            results.failureDetails.push({
-              code: error?.code,
-              message: error?.message || 'Batch delivery failed'
-            });
-          }
-        }
-      }
-    }
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({
-        success: results.sent > 0,
-        results
-      })
-    };
-  } catch (error: any) {
-    console.error('[send-notification] Error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message || 'Internal server error' })
-    };
+    return JSON.parse(content) as Record<string, unknown>;
+  } catch {
+    return { errors: [`OneSignal returned a non-JSON response: ${content.slice(0, 200)}`] };
   }
 };
 
+const errorMessage = (payload: Record<string, unknown>) => {
+  const errors = payload.errors;
+  if (Array.isArray(errors)) return errors.map(String).join('; ');
+  if (typeof errors === 'string') return errors;
+  if (errors && typeof errors === 'object') return JSON.stringify(errors);
+  return 'OneSignal rejected the notification';
+};
+
+const normalizeStringArray = (value: unknown) => Array.isArray(value)
+  ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
+  : [];
+
+export const handler: Handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return response(200, {});
+  if (event.httpMethod !== 'POST') {
+    return response(405, { success: false, error: 'Method not allowed' });
+  }
+
+  try {
+    await verifyAdminCaller(event.headers.authorization);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'UNAUTHENTICATED';
+    if (message === 'UNAUTHENTICATED') {
+      return response(401, { success: false, error: 'Authentication required' });
+    }
+    if (message === 'FORBIDDEN') {
+      return response(403, { success: false, error: 'Administrator permission required' });
+    }
+    console.error('[send-notification] Authentication failed:', error);
+    return response(401, { success: false, error: 'Authentication failed' });
+  }
+
+  try {
+    const request = JSON.parse(event.body || '{}') as Record<string, unknown>;
+    const title = typeof request.title === 'string' ? request.title.trim() : '';
+    const body = typeof request.body === 'string' ? request.body.trim() : '';
+    const type = typeof request.type === 'string' ? request.type : 'system';
+    const clickAction = typeof request.clickAction === 'string' ? request.clickAction : '/';
+    const targetUsers = normalizeStringArray(request.targetUsers);
+    const targetSegments = normalizeStringArray(request.targetSegments ?? request.targetTopics);
+    const customData = request.data && typeof request.data === 'object' && !Array.isArray(request.data)
+      ? request.data as Record<string, unknown>
+      : {};
+
+    if (!title || !body || title.length > 100 || body.length > 500) {
+      return response(400, {
+        success: false,
+        error: 'Title and message are required (maximum 100 and 500 characters)',
+      });
+    }
+    if (targetUsers.length > 0 && targetSegments.length > 0) {
+      return response(400, { success: false, error: 'Choose users or segments, not both' });
+    }
+
+    const appId = process.env.ONESIGNAL_APP_ID;
+    const apiKey = process.env.ONESIGNAL_REST_API_KEY;
+    if (!appId || !apiKey) {
+      return response(503, { success: false, error: 'OneSignal is not configured' });
+    }
+
+    const siteUrl = process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://macanudosocials.com';
+    let notificationUrl: string;
+    try {
+      notificationUrl = new URL(clickAction, siteUrl).toString();
+    } catch {
+      return response(400, { success: false, error: 'Invalid click path or URL' });
+    }
+
+    const oneSignalPayload: Record<string, unknown> = {
+      app_id: appId,
+      target_channel: 'push',
+      headings: { en: title },
+      contents: { en: body },
+      url: notificationUrl,
+      data: { ...customData, type, clickAction },
+    };
+
+    if (targetUsers.length > 0) {
+      oneSignalPayload.include_aliases = { external_id: targetUsers };
+    } else {
+      oneSignalPayload.included_segments = targetSegments.length > 0
+        ? targetSegments
+        : ['Subscribed Users'];
+    }
+
+    const oneSignalResponse = await fetch('https://api.onesignal.com/notifications', {
+      method: 'POST',
+      headers: {
+        Authorization: `Key ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(oneSignalPayload),
+    });
+    const responseBody = parseOneSignalResponse(await oneSignalResponse.text());
+
+    if (!oneSignalResponse.ok) {
+      console.error('[send-notification] OneSignal request failed:', responseBody);
+      return response(oneSignalResponse.status, {
+        success: false,
+        error: errorMessage(responseBody),
+        provider: 'onesignal',
+      });
+    }
+
+    const messageId = typeof responseBody.id === 'string' ? responseBody.id : '';
+    const recipients = typeof responseBody.recipients === 'number' ? responseBody.recipients : 0;
+    if (!messageId) {
+      return response(422, {
+        success: false,
+        error: 'No subscribed OneSignal recipients were found for this user',
+        provider: 'onesignal',
+        details: responseBody,
+      });
+    }
+
+    return response(200, {
+      success: true,
+      provider: 'onesignal',
+      messageId,
+      results: {
+        total: recipients,
+        sent: recipients,
+        failed: 0,
+        failureDetails: [],
+      },
+    });
+  } catch (error) {
+    console.error('[send-notification] Error:', error);
+    return response(500, {
+      success: false,
+      error: error instanceof Error ? error.message : 'Internal server error',
+    });
+  }
+};
