@@ -18,7 +18,8 @@ import {
   TrophyOutlined,
   ClockCircleOutlined,
   SettingOutlined,
-  FileTextOutlined
+  FileTextOutlined,
+  BellOutlined,
 } from '@ant-design/icons'
 import { useAuthStore } from '../../store/modules/auth'
 import { useTranslation } from 'react-i18next'
@@ -146,6 +147,11 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
       key: '/admin/visit-sessions',
       icon: <ClockCircleOutlined />,
       label: t('navigation.visitSessions'),
+    },
+    {
+      key: '/admin/notifications',
+      icon: <BellOutlined />,
+      label: t('navigation.notificationManagement', 'Notifications'),
     },
   ]
 
