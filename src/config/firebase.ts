@@ -1,6 +1,6 @@
 // Firebase配置文件
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { getStorage } from 'firebase/storage';
 
@@ -47,13 +47,12 @@ const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 
 // 初始化Firebase服务
 // try-catch 防止 Vite HMR 重复调用 initializeFirestore 报错
-// HMR 重新执行时 fallback 到已有 Firestore 实例（已带 persistentLocalCache）
+// 使用内存缓存，避免 IndexedDB 多标签协调触发 Firestore 内部状态错误。
+// HMR 重新执行时 fallback 到已经初始化的 Firestore 实例。
 export const db = (() => {
   try {
     return initializeFirestore(app, {
-      localCache: persistentLocalCache({
-        tabManager: persistentMultipleTabManager()
-      })
+      localCache: memoryLocalCache()
     });
   } catch {
     return getFirestore(app);

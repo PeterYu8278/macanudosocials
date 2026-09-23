@@ -33,6 +33,41 @@ const initializeOneSignal = (): Promise<void> => {
 const getOneSignalLanguage = (locale?: string): string =>
   locale?.toLowerCase().startsWith('zh') ? 'zh' : 'en'
 
+type DeviceType = 'mobile' | 'tablet' | 'desktop'
+type OperatingSystem = 'ios' | 'android' | 'windows' | 'macos' | 'linux'
+type Browser = 'safari' | 'chrome' | 'edge' | 'firefox'
+
+const getDeviceTags = (): {
+  device: DeviceType
+  os?: OperatingSystem
+  browser?: Browser
+} => {
+  const userAgent = navigator.userAgent.toLowerCase()
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1
+  const isTablet = isIPadOS || /ipad|tablet|kindle|silk|playbook/.test(userAgent) ||
+    (/android/.test(userAgent) && !/mobile/.test(userAgent))
+  const isMobile = !isTablet && /mobile|iphone|ipod|android/.test(userAgent)
+
+  let os: OperatingSystem | undefined
+  if (isIPadOS || /iphone|ipad|ipod/.test(userAgent)) os = 'ios'
+  else if (/android/.test(userAgent)) os = 'android'
+  else if (/windows/.test(userAgent)) os = 'windows'
+  else if (/macintosh|mac os x/.test(userAgent)) os = 'macos'
+  else if (/linux/.test(userAgent)) os = 'linux'
+
+  let browser: Browser | undefined
+  if (/edg\//.test(userAgent)) browser = 'edge'
+  else if (/firefox|fxios/.test(userAgent)) browser = 'firefox'
+  else if (/chrome|crios/.test(userAgent)) browser = 'chrome'
+  else if (/safari/.test(userAgent)) browser = 'safari'
+
+  return {
+    device: isTablet ? 'tablet' : isMobile ? 'mobile' : 'desktop',
+    os,
+    browser,
+  }
+}
+
 const OneSignalIntegration = () => {
   const { modal } = AntdApp.useApp()
   const { user, loading } = useAuthStore()
@@ -96,17 +131,44 @@ const OneSignalIntegration = () => {
         }
 
         await OneSignal.login(user.id)
+        const phone = user.phone || user.profile?.phone
+        const deviceTags = getDeviceTags()
         OneSignal.User.setLanguage(getOneSignalLanguage(user.preferences?.locale))
         OneSignal.User.addTags({
           role: user.role,
+          name: user.displayName,
+          device: deviceTags.device,
+          ...(deviceTags.os ? { os: deviceTags.os } : {}),
+          ...(deviceTags.browser ? { browser: deviceTags.browser } : {}),
+          ...(phone ? { phone } : {}),
           ...(user.storeId ? { store_id: user.storeId } : {}),
           ...(user.memberId ? { member_id: user.memberId } : {}),
         })
+
+        if (!phone) {
+          OneSignal.User.removeTag('phone')
+        }
+        if (!deviceTags.os) {
+          OneSignal.User.removeTag('os')
+        }
+        if (!deviceTags.browser) {
+          OneSignal.User.removeTag('browser')
+        }
       })
       .catch((error) => {
         console.error('[OneSignal] Failed to synchronize user identity:', error)
       })
-  }, [loading, user?.id, user?.memberId, user?.preferences?.locale, user?.role, user?.storeId])
+  }, [
+    loading,
+    user?.displayName,
+    user?.id,
+    user?.memberId,
+    user?.phone,
+    user?.preferences?.locale,
+    user?.profile?.phone,
+    user?.role,
+    user?.storeId,
+  ])
 
   return null
 }
