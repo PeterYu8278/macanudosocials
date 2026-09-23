@@ -385,8 +385,8 @@ const Landing: React.FC = () => {
         <div className="navbar-container" style={{ maxWidth: '1280px', margin: '0 auto', width: '100%', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => navigate('/')}>
             <span className="font-serif" style={{ fontSize: '20px', letterSpacing: '0.2em', textTransform: 'uppercase' }}>
-              <span style={{ color: 'var(--gold)' }}>Gentlemen</span>
-              <span style={{ color: '#E5E5E5' }}>Club</span>
+              <span style={{ color: 'var(--gold)' }}>Macanudo</span>
+              <span style={{ color: '#E5E5E5' }}>Socials</span>
             </span>
           </div>
 
@@ -827,7 +827,7 @@ const Landing: React.FC = () => {
           </Row>
           <div style={{ marginTop: '80px', paddingTop: '40px', borderTop: '1px solid #1A1A1A', textAlign: 'center' }}>
             <p style={{ color: '#52525B', fontSize: '12px' }}>
-              &copy; {new Date().getFullYear()} JCIGAR CLUB. ALL RIGHTS RESERVED. FOR ADULT ENTHUSIASTS ONLY.
+              &copy; {new Date().getFullYear()} MACANUDO SOCIALS. ALL RIGHTS RESERVED. FOR ADULT ENTHUSIASTS ONLY.
             </p>
           </div>
         </div>
@@ -851,7 +851,7 @@ const Landing: React.FC = () => {
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '60px' }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <span className="font-serif" style={{ fontSize: '24px', letterSpacing: '0.2em', textTransform: 'uppercase', color: '#E5E5E5' }}>
-              <span style={{ color: 'var(--gold)' }}>GENTLEMEN</span>CLUB
+              <span style={{ color: 'var(--gold)' }}>MACANUDO</span>SOCIALS
             </span>
             <span style={{ color: 'rgba(255,255,255,0.4)', fontSize: '10px', letterSpacing: '0.3em', marginTop: '4px' }}>#BEYONDBUSINESS</span>
           </div>
@@ -973,7 +973,7 @@ const Landing: React.FC = () => {
                 letterSpacing: '2px',
                 fontSize: '28px'
               }}>
-                {appConfig?.appName || 'Cigar Club'}
+                {appConfig?.appName || 'MS'}
               </Title>
               <Text style={{ color: '#c0c0c0', fontSize: '16px' }}>
                 {authMode === 'login'

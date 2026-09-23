@@ -44,7 +44,7 @@ export const sendEventReminderToUser = async (
 
     // 获取应用名称
     const appConfig = await getAppConfig();
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
 
     // 获取消息模板
     const template = await getMessageTemplate('event_reminder');
@@ -105,7 +105,7 @@ export const sendVipExpiryReminderToUser = async (
     }
 
     // 获取应用名称（appConfig 已在上面获取）
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
 
     // 获取消息模板
     const template = await getMessageTemplate('vip_expiry');
@@ -162,7 +162,7 @@ export const sendPasswordResetToUser = async (
     }
 
     // 获取应用名称
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
 
     // 获取消息模板
     const template = await getMessageTemplate('password_reset');

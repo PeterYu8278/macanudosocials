@@ -108,7 +108,7 @@ const fetchAppConfig = async (): Promise<AppConfig | null> => {
       const defaultConfig: AppConfig = {
         id: CONFIG_ID,
         logoUrl: 'https://res.cloudinary.com/dy2zb1n41/image/upload/jep-cigar/brands/JEP_Logo_White_1763310931359_s1pkcz8y617',
-        appName: 'Cigar Club',
+        appName: 'MS',
         hideFooter: true,
         colorTheme: DEFAULT_COLOR_THEME,
         auth: {
@@ -421,7 +421,7 @@ export const updateAppConfig = async (
       await setDoc(docRef, {
         id: CONFIG_ID,
         logoUrl: updates.logoUrl || 'https://res.cloudinary.com/dy2zb1n41/image/upload/jep-cigar/brands/JEP_Logo_White_1763310931359_s1pkcz8y617',
-        appName: updates.appName || 'Cigar Club',
+        appName: updates.appName || 'MS',
         hideFooter: updates.hideFooter ?? false,
         colorTheme: updates.colorTheme || DEFAULT_COLOR_THEME,
         ...updateData,
@@ -458,7 +458,7 @@ export const resetAppConfig = async (
   try {
     const defaultConfig: Partial<Pick<AppConfig, 'logoUrl' | 'appName' | 'hideFooter' | 'colorTheme'>> = {
       logoUrl: 'https://res.cloudinary.com/dy2zb1n41/image/upload/jep-cigar/brands/JEP_Logo_White_1763310931359_s1pkcz8y617',
-      appName: 'Cigar Club',
+      appName: 'MS',
       hideFooter: true,
       colorTheme: DEFAULT_COLOR_THEME,
     };

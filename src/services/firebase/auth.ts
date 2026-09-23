@@ -1082,7 +1082,7 @@ const resetPasswordByPhoneCore = async (phone: string): Promise<ResetPasswordByP
     }
 
     const appConfig = await getAppConfig();
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
     const displayName = (userData as any).displayName || '用户';
 
     const message = `[${appName}] 重置密码

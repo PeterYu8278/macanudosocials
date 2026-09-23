@@ -56,9 +56,9 @@ export const generateDynamicManifest = (appConfig: AppConfig | null): DynamicMan
   ]
 
   return {
-    name: `${appName} - Cigar World`,
-    short_name: appName,
-    description: 'Premium cigar club management platform',
+    name: appName,
+    short_name: 'MS',
+    description: 'Premium Macanudo Socials membership platform',
     start_url: '/',
     display: 'standalone',
     background_color: '#1A1A1A',

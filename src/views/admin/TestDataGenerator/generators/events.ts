@@ -8,7 +8,7 @@ const EVENT_TITLES = [
   'Premium Cigar Tasting', 'Cigar Appreciation Night', 'VIP Cigar Lounge',
   'Cigar Masterclass', 'Cuban Cigar Experience', 'Evening Cigar Social',
   'Cigar Pairing Event', 'Luxury Cigar Showcase', 'Cigar Connoisseur Gathering',
-  'Exclusive Cigar Event', 'Cigar Club Meeting', 'Premium Tobacco Tasting'
+  'Exclusive Cigar Event', 'MS Meeting', 'Premium Tobacco Tasting'
 ]
 
 const LOCATIONS = [

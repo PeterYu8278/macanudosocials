@@ -481,7 +481,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                     backgroundClip: 'text',
                     color: 'transparent',
                     backgroundImage: 'linear-gradient(to bottom, #F0E68C, #D4AF37)'
-                  }}>{appConfig?.appName || 'Cigar Club'}</div>
+                  }}>{appConfig?.appName || 'MS'}</div>
                   <div style={{
                     fontSize: 12,
                     fontWeight: 700,

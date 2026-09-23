@@ -511,7 +511,7 @@ const AdminReports: React.FC = () => {
       
       <div style={{ textAlign: 'center' }}>
         <Text style={{ color: 'rgba(255, 255, 255, 0.3)', fontSize: 12 }}>
-          © {dayjs().year()} {t('common.appName') || 'Cigar Club'}. {t('reports.footerSuffix')}
+          © {dayjs().year()} {t('common.appName') || 'MS'}. {t('reports.footerSuffix')}
         </Text>
       </div>
     </div>

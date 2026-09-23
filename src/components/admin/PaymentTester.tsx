@@ -35,7 +35,7 @@ const PaymentTester: React.FC<PaymentTesterProps> = ({ paymentConfig, isPlatform
   React.useEffect(() => {
     const loadAppName = async () => {
       const config = await getAppConfig();
-      setAppName(config?.appName || 'Cigar Club');
+      setAppName(config?.appName || 'MS');
     };
     loadAppName();
   }, []);

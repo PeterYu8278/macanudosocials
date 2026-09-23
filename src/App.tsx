@@ -167,7 +167,7 @@ const AppContent: React.FC = () => {
     const updateDocumentMeta = async () => {
       try {
         const config = await getAppConfig()
-        const appName = config?.appName || 'Cigar Club'
+        const appName = config?.appName || 'MS'
 
         // 存储 appConfig 到 IndexedDB（供 Service Worker 使用）
         if (config) {
@@ -179,7 +179,7 @@ const AppContent: React.FC = () => {
         }
 
         // Update document.title
-        document.title = `${appName} - Premium Cigar Club`
+        document.title = `${appName} - Premium Cigar Community`
 
         // 更新 meta 标签
         const updateMetaTag = (name: string, content: string, attribute: string = 'name') => {
@@ -193,7 +193,7 @@ const AppContent: React.FC = () => {
         }
 
         // Update description
-        updateMetaTag('description', `${appName} - Premium Cigar Club`)
+        updateMetaTag('description', `${appName} - Premium Cigar Community`)
 
         // Update author
         updateMetaTag('author', appName)
@@ -202,11 +202,11 @@ const AppContent: React.FC = () => {
         updateMetaTag('apple-mobile-web-app-title', appName)
 
         // Update Open Graph
-        updateMetaTag('og:title', `${appName} - Premium Cigar Club`, 'property')
+        updateMetaTag('og:title', `${appName} - Premium Cigar Community`, 'property')
         updateMetaTag('og:description', 'Premium membership platform for cigar lovers.', 'property')
 
         // Update Twitter Card
-        updateMetaTag('twitter:title', `${appName} - Premium Cigar Club`)
+        updateMetaTag('twitter:title', `${appName} - Premium Cigar Community`)
         updateMetaTag('twitter:description', 'Premium membership platform for cigar lovers.')
 
         // 应用动态图标更新（包括 manifest、favicon、apple-touch-icon）

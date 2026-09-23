@@ -166,7 +166,7 @@ export const sendEventReminder = async (
   if (!template) {
     // 获取应用名称
     const appConfig = await getAppConfig();
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
     
     // 解析日期和时间
     let dateStr = '';
@@ -223,7 +223,7 @@ export const sendVipExpiryReminder = async (
   if (!template) {
     // 获取应用名称
     const appConfig = await getAppConfig();
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
     
     const message = `[${appName}] VIP到期温馨提醒
 您好 ${userName}，您的VIP会员资格将于 ${expiryDate} 到期。
@@ -249,7 +249,7 @@ export const sendPasswordReset = async (
   if (!template) {
     // 获取应用名称
     const appConfig = await getAppConfig();
-    const appName = appConfig?.appName || 'Cigar Club';
+    const appName = appConfig?.appName || 'MS';
     
     // 判断是链接还是密码（链接通常包含 http 或 /reset-password）
     const isLink = resetLinkOrPassword.includes('http') || resetLinkOrPassword.includes('/reset-password');
@@ -344,4 +344,3 @@ export const renderMessageTemplate = (template: string, variables: Record<string
   });
   return message;
 };
-

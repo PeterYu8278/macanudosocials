@@ -71,8 +71,8 @@ export default defineConfig({
       },
       manifest: {
         name: 'Macanudo Socials',
-        short_name: 'Macanudo',
-        description: 'Premium cigar club management platform',
+        short_name: 'MS',
+        description: 'Premium Macanudo Socials membership platform',
         theme_color: '#D4AF37',
         background_color: '#1A1A1A',
         display: 'standalone',

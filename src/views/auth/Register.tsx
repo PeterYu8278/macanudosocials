@@ -199,10 +199,10 @@ const Register: React.FC = () => {
               fontWeight: 700,
               letterSpacing: '2px'
             }}>
-              {appConfig?.appName || 'Cigar Club'}
+              {appConfig?.appName || 'MS'}
             </Title>
             <Text style={{ color: '#c0c0c0', fontSize: '14px' }}>
-              {t('auth.createAccountSubtitle', { defaultValue: `创建您的账户，加入${appConfig?.appName || 'Cigar Club'}社区` })}
+              {t('auth.createAccountSubtitle', { defaultValue: `创建您的账户，加入${appConfig?.appName || 'MS'}社区` })}
             </Text>
           </div>
 

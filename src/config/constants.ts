@@ -5,9 +5,9 @@
 
 // 应用信息
 export const APP_INFO = {
-  NAME: 'Cigar Club',
+  NAME: 'MS',
   VERSION: '1.0.0',
-  DESCRIPTION: 'Premium Cigar Club Management Platform',
+  DESCRIPTION: 'Macanudo Socials Management Platform',
   AUTHOR: 'JEP Ventures',
   WEBSITE: 'https://cigarclub.com',
   SUPPORT_EMAIL: 'support@cigarclub.com'

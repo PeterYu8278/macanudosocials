@@ -170,7 +170,7 @@ const CompleteProfile: React.FC = () => {
 
       if (result.success) {
         // ✅ 如果是账户合并，显示特殊消息
-        const appName = appConfig?.appName || 'Cigar Club'
+        const appName = appConfig?.appName || 'MS'
         const successMessage = (result as any).mergedUserId
           ? t('auth.accountMergedSuccess')
           : t('auth.profileCompletedSuccess', { appName });
@@ -476,4 +476,3 @@ const CompleteProfile: React.FC = () => {
 }
 
 export default CompleteProfile
-

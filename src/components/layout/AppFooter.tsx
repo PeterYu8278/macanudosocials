@@ -62,7 +62,7 @@ const AppFooter: React.FC = () => {
               fontWeight: 700,
               letterSpacing: '2px'
             }}>
-              {appConfig?.appName || 'Cigar Club'}
+              {appConfig?.appName || 'MS'}
             </Text>
             <div style={{ marginTop: '8px' }}>
               <Text style={{ color: '#c0c0c0', fontSize: '14px' }}>

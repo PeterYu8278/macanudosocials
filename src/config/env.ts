@@ -100,9 +100,9 @@ const defaultConfig: AppConfig = {
   },
   
   app: {
-    name: 'Cigar Club',
+    name: 'MS',
     version: '1.0.0',
-    description: 'Premium Cigar Club Management Platform',
+    description: 'Macanudo Socials Management Platform',
     author: 'JEP Ventures'
   },
   

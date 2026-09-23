@@ -1941,7 +1941,7 @@
     "passwordUpdateFailed": "Password update failed",
     "phoneInvalidFormat": "Invalid phone number format",
     "updateFailed": "Update failed, please try again",
-    "shareText": "Join Cigar Club! Use my referral code: {{code}} and earn points on your first reload!",
+    "shareText": "Join MS! Use my referral code: {{code}} and earn points on your first reload!",
     "confirmPassword": "Confirm Password",
     "confirmPasswordPlaceholder": "Confirm new password",
     "viewAiHistory": "View AI Recognition History",
@@ -2185,7 +2185,7 @@
     "privacyPolicy": "Privacy Policy",
     "termsOfService": "Terms of Service",
     "contactUs": "Contact Us",
-    "copyright": "© 2024 Cigar Club Management Platform · Created with",
+    "copyright": "© 2024 MS · Created with",
     "byJepVentures": "by JEP Ventures",
     "private": "Private",
     "public": "Public"

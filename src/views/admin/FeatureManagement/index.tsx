@@ -1146,7 +1146,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               rules={[{ required: true, message: t('featureManagement.appNameRequired') }]}
             >
               <Input
-                placeholder="例如：Cigar Club"
+                placeholder="例如：MS"
                 style={{
                   background: 'rgba(255, 255, 255, 0.05)',
                   border: '1px solid rgba(255, 255, 255, 0.1)',
@@ -2073,7 +2073,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                 rules={[{ required: true, message: t('featureManagement.appNameRequired') }]}
               >
                 <Input
-                  placeholder="Cigar Club管理平台"
+                  placeholder="MS"
                   style={{
                     background: 'rgba(255, 255, 255, 0.05)',
                     border: '1px solid rgba(255, 255, 255, 0.1)',

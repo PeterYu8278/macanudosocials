@@ -380,7 +380,7 @@ const Home: React.FC = () => {
                 margin: 0,
                 padding: 0
               }}>
-                {t('home.welcomeTitle')} {appConfig?.appName || 'Cigar Club'}
+                {t('home.welcomeTitle')} {appConfig?.appName || 'MS'}
               </h1>
 
               {/* 副标题和 App Logo - 并排显示 */}
@@ -425,7 +425,7 @@ const Home: React.FC = () => {
                   ) : (
                     <img
                       src={appConfig?.logoUrl || '/icons/icon-96x96.svg'}
-                      alt={appConfig?.appName || 'Cigar Club'}
+                      alt={appConfig?.appName || 'MS'}
                       style={{
                         width: '84px',
                         height: '64px',

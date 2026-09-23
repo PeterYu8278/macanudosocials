@@ -1942,7 +1942,7 @@
     "passwordUpdateFailed": "密码更新失败",
     "phoneInvalidFormat": "手机号格式无效",
     "updateFailed": "更新失败，请重试",
-    "shareText": "加入 Cigar Club，使用我的引荐码：{{code}}，首次充值可获得积分奖励！",
+    "shareText": "加入 MS，使用我的引荐码：{{code}}，首次充值可获得积分奖励！",
     "currentPasswordHint": "更新邮箱或密码时需要",
     "confirmPassword": "确认密码",
     "confirmPasswordPlaceholder": "请再次输入新密码",
@@ -2185,7 +2185,7 @@
     "privacyPolicy": "隐私政策",
     "termsOfService": "服务条款",
     "contactUs": "联系我们",
-    "copyright": "© 2024 Cigar Club管理平台 · Created with",
+    "copyright": "© 2024 MS · Created with",
     "byJepVentures": "by JEP Ventures",
     "private": "私人",
     "public": "公开"
