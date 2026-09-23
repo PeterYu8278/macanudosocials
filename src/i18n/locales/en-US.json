@@ -945,7 +945,23 @@
     "bookEvent": "Book Event",
     "storeNavigation": "Store Navigation",
     "friendInvite": "Friend Invite",
-    "pointsExchange": "Points Exchange"
+    "pointsExchange": "Points Exchange",
+    "pushPrompt": {
+      "title": "Stay up to date",
+      "description": "Enable notifications on this device for event, points, and order updates.",
+      "deniedDescription": "Notifications are blocked in your browser. Review the instructions in Profile settings.",
+      "enable": "Enable",
+      "settings": "Settings"
+    },
+    "installPrompt": {
+      "title": "Install Macanudo Socials",
+      "description": "Add the app to your home screen for faster access and a full-screen experience.",
+      "install": "Install",
+      "installed": "Macanudo Socials installed",
+      "iosTitle": "Add to Home Screen",
+      "iosStep1": "Open the browser Share menu.",
+      "iosStep2": "Select Add to Home Screen, then confirm Add."
+    }
   },
   "redemptionMechanism": {
     "redeemMysteryGift": "Redeem Mystery Gift",
@@ -1872,6 +1888,20 @@
       "permissionRequiredHint": "Browser notification permission is required to receive push notifications",
       "permissionDeniedHint": "Notification permission has been denied. Please enable it manually in browser settings",
       "enabled": "Push notifications enabled",
+      "disabled": "Push notifications disabled on this device",
+      "disable": "Disable",
+      "disableFailed": "Failed to disable push notifications",
+      "currentDevice": "This device",
+      "status": {
+        "idle": "Checking",
+        "loading": "Checking",
+        "prompt": "Not enabled",
+        "subscribed": "Subscribed",
+        "unsubscribed": "Unsubscribed",
+        "denied": "Blocked",
+        "unsupported": "Not supported",
+        "error": "Unavailable"
+      },
       "tokenFailed": "Failed to get push token",
       "requestFailed": "Failed to request notification permission",
       "notificationTypes": "Notification Types",

@@ -8,6 +8,7 @@ export interface DynamicManifest {
   name: string
   short_name: string
   description: string
+  id: string
   start_url: string
   display: string
   background_color: string
@@ -16,6 +17,11 @@ export interface DynamicManifest {
   scope: string
   lang: string
   categories: string[]
+  related_applications: Array<{
+    platform: 'webapp'
+    url: string
+    id: string
+  }>
   icons: Array<{
     src: string
     sizes: string
@@ -59,6 +65,7 @@ export const generateDynamicManifest = (appConfig: AppConfig | null): DynamicMan
     name: appName,
     short_name: 'MS',
     description: 'Premium Macanudo Socials membership platform',
+    id: '/',
     start_url: '/',
     display: 'standalone',
     background_color: '#1A1A1A',
@@ -67,6 +74,11 @@ export const generateDynamicManifest = (appConfig: AppConfig | null): DynamicMan
     scope: '/',
     lang: 'zh-CN',
     categories: ['lifestyle', 'business', 'entertainment'],
+    related_applications: [{
+      platform: 'webapp',
+      url: '/manifest.json',
+      id: '/'
+    }],
     icons: defaultIcons
   }
 }

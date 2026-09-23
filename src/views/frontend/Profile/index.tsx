@@ -1,7 +1,7 @@
 // User Profile Page
 import React, { useState, useEffect } from 'react'
 import {
-  Button, Modal, Form, Input, message, Switch, Select, Space,
+  Button, Modal, Form, Input, message, Switch, Select, Space, Tag,
   Typography, Checkbox, Divider, TimePicker, Drawer, Tabs
 } from 'antd'
 import {
@@ -24,6 +24,12 @@ import { auth } from '../../../config/firebase'
 import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { getResponsiveModalConfig, getModalTheme } from '../../../config/modalTheme'
 import LanguageSelect from '../../../components/common/LanguageSelect'
+import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
+import {
+  disablePushSubscription,
+  requestPushSubscription,
+  syncPushSubscriptionToFirestore,
+} from '../../../services/oneSignal'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -31,14 +37,12 @@ const Profile: React.FC = () => {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      return Notification.permission
-    }
-    return 'default'
-  })
   const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState('basic')
+  const pushStatus = usePushNotificationStore((state) => state.status)
+  const pushBusy = usePushNotificationStore((state) => state.busy)
+  const setPushBusy = usePushNotificationStore((state) => state.setBusy)
+  const setPushSnapshot = usePushNotificationStore((state) => state.setSnapshot)
 
   // Reactive isMobile — fixed from exact-width bug
   const [isMobile, setIsMobile] = useState(() =>
@@ -53,12 +57,6 @@ const Profile: React.FC = () => {
 
   const theme = getModalTheme()
   const labelFlex = isMobile ? '40%' : '120px'
-
-  useEffect(() => {
-    if (typeof window !== 'undefined' && 'Notification' in window) {
-      setNotificationPermission(Notification.permission)
-    }
-  }, [])
 
   const buildFormValues = (userData: User) => {
     const pushPrefs = (userData as any)?.preferences?.pushNotifications || {}
@@ -200,6 +198,67 @@ const Profile: React.FC = () => {
       }
     } catch (error: any) {
       message.error(error.message || t('auth.logoutFailed', { defaultValue: '登出失败' }))
+    }
+  }
+
+  const updateNotificationPreference = async (enabled: boolean) => {
+    if (!user) return
+    const result = await updateDocument('users', user.id, {
+      'preferences.notifications': enabled,
+    } as any)
+    if (!result.success) throw new Error('Failed to update notification preference')
+
+    form.setFieldValue('notifications', enabled)
+    setUser({
+      ...user,
+      preferences: {
+        ...user.preferences,
+        notifications: enabled,
+      },
+    })
+  }
+
+  const handleEnablePush = async () => {
+    if (!user || pushBusy) return
+    setPushBusy(true)
+    try {
+      const snapshot = await requestPushSubscription()
+      setPushSnapshot(snapshot)
+      await syncPushSubscriptionToFirestore(user, snapshot)
+
+      if (snapshot.status === 'subscribed') {
+        await updateNotificationPreference(true)
+        message.success(t('profile.pushNotifications.enabled'))
+      } else if (snapshot.status === 'denied') {
+        message.warning(t('profile.pushNotifications.permissionDeniedHint'))
+      } else {
+        message.warning(t('profile.pushNotifications.requestFailed'))
+      }
+    } catch (error) {
+      console.error('[Profile] Failed to enable push notifications:', error)
+      message.error(t('profile.pushNotifications.requestFailed'))
+    } finally {
+      setPushBusy(false)
+    }
+  }
+
+  const handleDisablePush = async () => {
+    if (!user || pushBusy) return
+    setPushBusy(true)
+    try {
+      const snapshot = await disablePushSubscription()
+      setPushSnapshot(snapshot)
+      await updateNotificationPreference(false)
+      await syncPushSubscriptionToFirestore({
+        ...user,
+        preferences: { ...user.preferences, notifications: false },
+      }, snapshot)
+      message.success(t('profile.pushNotifications.disabled'))
+    } catch (error) {
+      console.error('[Profile] Failed to disable push notifications:', error)
+      message.error(t('profile.pushNotifications.disableFailed'))
+    } finally {
+      setPushBusy(false)
     }
   }
 
@@ -429,7 +488,46 @@ const Profile: React.FC = () => {
         </span>
       </div>
 
-      {notificationPermission !== 'granted' && (
+      <div style={{
+        padding: 12,
+        borderRadius: 8,
+        background: 'rgba(255,255,255,0.03)',
+        border: '1px solid rgba(255,255,255,0.1)',
+        marginBottom: 12,
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          marginBottom: pushStatus === 'denied' ? 8 : 0,
+        }}>
+          <Space size={8} wrap>
+            <Typography.Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12 }}>
+              {t('profile.pushNotifications.currentDevice')}
+            </Typography.Text>
+            <Tag color={pushStatus === 'subscribed' ? 'green' : pushStatus === 'denied' ? 'red' : 'gold'}>
+              {t(`profile.pushNotifications.status.${pushStatus}`)}
+            </Tag>
+          </Space>
+          {pushStatus === 'subscribed' ? (
+            <Button size="small" danger loading={pushBusy} onClick={handleDisablePush}>
+              {t('profile.pushNotifications.disable')}
+            </Button>
+          ) : !['unsupported', 'loading', 'idle', 'denied'].includes(pushStatus) ? (
+            <Button size="small" type="primary" loading={pushBusy} onClick={handleEnablePush}>
+              {t('profile.pushNotifications.enable')}
+            </Button>
+          ) : null}
+        </div>
+        {pushStatus === 'denied' && (
+          <Typography.Text style={{ color: 'rgba(255,255,255,0.68)', fontSize: 12 }}>
+            {t('profile.pushNotifications.permissionDeniedHint')}
+          </Typography.Text>
+        )}
+      </div>
+
+      {!['subscribed', 'denied', 'unsupported', 'loading', 'idle'].includes(pushStatus) && (
         <div style={{
           padding: 12, borderRadius: 8,
           background: 'rgba(244,175,37,0.1)',
@@ -437,9 +535,7 @@ const Profile: React.FC = () => {
           marginBottom: 12
         }}>
           <Typography.Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12 }}>
-            {notificationPermission === 'denied'
-              ? t('profile.pushNotifications.permissionDeniedHint')
-              : t('profile.pushNotifications.permissionRequiredHint')}
+            {t('profile.pushNotifications.permissionRequiredHint')}
           </Typography.Text>
         </div>
       )}
@@ -453,7 +549,7 @@ const Profile: React.FC = () => {
           shouldUpdate={(prev, cur) => prev.notifications !== cur.notifications}
         >
           {({ getFieldValue }) => {
-            const notificationsEnabled = getFieldValue('notifications') && notificationPermission === 'granted'
+            const notificationsEnabled = getFieldValue('notifications') && pushStatus === 'subscribed'
             return (
               <>
                 <div style={{
@@ -623,6 +719,7 @@ const Profile: React.FC = () => {
       {isMobile && (
         <Drawer
           open={editing}
+          zIndex={2000}
           placement="right"
           width="100%"
           closable={false}
@@ -707,6 +804,7 @@ const Profile: React.FC = () => {
         <Modal
           title={t('profile.editProfile')}
           open={editing}
+          zIndex={2000}
           onOk={handleSave}
           onCancel={() => setEditing(false)}
           confirmLoading={saving}

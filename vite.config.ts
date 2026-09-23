@@ -73,12 +73,20 @@ export default defineConfig({
         name: 'Macanudo Socials',
         short_name: 'MS',
         description: 'Premium Macanudo Socials membership platform',
+        id: '/',
         theme_color: '#D4AF37',
         background_color: '#1A1A1A',
         display: 'standalone',
         orientation: 'portrait-primary',
         scope: '/',
         start_url: '/',
+        related_applications: [
+          {
+            platform: 'webapp',
+            url: '/manifest.json',
+            id: '/'
+          }
+        ],
         icons: [
           {
             src: '/icons/app-logo-192.png',

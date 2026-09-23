@@ -76,6 +76,17 @@ export interface User {
     gender?: Gender;
     race?: Race;
   };
+  notificationSummary?: {
+    provider: 'onesignal';
+    hasActiveSubscription: boolean;
+    activeDeviceCount: number;
+    currentDeviceId?: string;
+    currentDeviceStatus?: 'idle' | 'loading' | 'prompt' | 'subscribed' | 'unsubscribed' | 'denied' | 'unsupported' | 'error';
+    currentSubscriptionId?: string | null;
+    permission?: NotificationPermission;
+    optedIn?: boolean;
+    lastSyncedAt?: Date;
+  };
   // 用户地址列表
   addresses?: Address[];
   // 用户偏好设置（根级别）

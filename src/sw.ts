@@ -203,6 +203,7 @@ function generateDynamicManifest(appConfig: any): any {
     name: appName,
     short_name: 'MS',
     description: 'Premium Macanudo Socials membership platform',
+    id: '/',
     start_url: '/',
     display: 'standalone',
     background_color: '#1A1A1A',
@@ -211,6 +212,11 @@ function generateDynamicManifest(appConfig: any): any {
     scope: '/',
     lang: 'zh-CN',
     categories: ['lifestyle', 'business', 'entertainment'],
+    related_applications: [{
+      platform: 'webapp',
+      url: '/manifest.json',
+      id: '/'
+    }],
     icons: defaultIcons
   }
 }

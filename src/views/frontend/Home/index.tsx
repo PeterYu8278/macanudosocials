@@ -1,12 +1,13 @@
 // 首页组件 - Cigar Club黑金主题
 import React, { useEffect, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
-import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, App } from 'antd'
+import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, App, Alert } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
   TeamOutlined,
   CrownOutlined,
+  DownloadOutlined,
   StarOutlined,
   TrophyOutlined
 } from '@ant-design/icons'
@@ -32,6 +33,9 @@ import type { AppConfig } from '../../../types'
 import { CigarRatingBadge } from '../../../components/common/CigarRatingBadge'
 import { RoomBookingSection } from '../../../components/home/RoomBookingSection'
 import { hasPermission } from '../../../config/permissions'
+import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
+import { requestPushSubscription, syncPushSubscriptionToFirestore } from '../../../services/oneSignal'
+import { usePWA } from '../../../utils/pwa'
 
 const usePrefersReducedMotion = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
@@ -58,8 +62,20 @@ const usePrefersReducedMotion = () => {
 const Home: React.FC = () => {
   const navigate = useNavigate()
   const { t } = useTranslation()
-  const { message } = App.useApp()
+  const { message, modal } = App.useApp()
   const { user, isAdmin } = useAuthStore()
+  const pushStatus = usePushNotificationStore((state) => state.status)
+  const pushBusy = usePushNotificationStore((state) => state.busy)
+  const setPushBusy = usePushNotificationStore((state) => state.setBusy)
+  const setPushSnapshot = usePushNotificationStore((state) => state.setSnapshot)
+  const {
+    isInstalled: isPWAInstalled,
+    isStandalone: isPWAStandalone,
+    canInstall: canInstallPWA,
+    isIOS,
+    isChecking: isCheckingPWA,
+    showInstallPrompt,
+  } = usePWA()
   const isMobile = typeof window !== 'undefined' && typeof window.matchMedia === 'function' ? window.matchMedia('(max-width: 991px)').matches : false
   const prefersReducedMotion = usePrefersReducedMotion()
   const [featuresReady, setFeaturesReady] = useState<boolean>(false)
@@ -97,6 +113,67 @@ const Home: React.FC = () => {
     reverseDirection: false
   }
   const carouselSpeed = prefersReducedMotion ? 300 : 8000
+
+  const showPushPrompt = Boolean(
+    user &&
+    user.preferences?.notifications !== false &&
+    ['prompt', 'unsubscribed', 'denied'].includes(pushStatus)
+  )
+
+  const showPWAInstallPrompt = !isCheckingPWA &&
+    !isPWAInstalled &&
+    !isPWAStandalone &&
+    (canInstallPWA || isIOS)
+
+  const handleInstallPWA = async () => {
+    if (canInstallPWA) {
+      const accepted = await showInstallPrompt()
+      if (accepted) message.success(t('home.installPrompt.installed'))
+      return
+    }
+
+    if (isIOS) {
+      modal.info({
+        title: t('home.installPrompt.iosTitle'),
+        content: (
+          <ol style={{ margin: '12px 0 0', paddingLeft: 20 }}>
+            <li style={{ marginBottom: 8 }}>{t('home.installPrompt.iosStep1')}</li>
+            <li>{t('home.installPrompt.iosStep2')}</li>
+          </ol>
+        ),
+        okText: t('common.ok'),
+        centered: true,
+      })
+    }
+  }
+
+  const handleEnablePush = async () => {
+    if (!user || pushBusy) return
+    if (pushStatus === 'denied') {
+      navigate('/profile')
+      return
+    }
+
+    setPushBusy(true)
+    try {
+      const snapshot = await requestPushSubscription()
+      setPushSnapshot(snapshot)
+      await syncPushSubscriptionToFirestore(user, snapshot)
+
+      if (snapshot.status === 'subscribed') {
+        message.success(t('profile.pushNotifications.enabled'))
+      } else if (snapshot.status === 'denied') {
+        message.warning(t('profile.pushNotifications.permissionDeniedHint'))
+      } else {
+        message.warning(t('profile.pushNotifications.requestFailed'))
+      }
+    } catch (error) {
+      console.error('[Home] Failed to enable push notifications:', error)
+      message.error(t('profile.pushNotifications.requestFailed'))
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   const renderSectionFeedback = (
     loading: boolean,
@@ -340,6 +417,52 @@ const Home: React.FC = () => {
           transform: scale(1.2);
         }
       `}</style>
+      {showPWAInstallPrompt && (
+        <Alert
+          type="info"
+          showIcon
+          icon={<DownloadOutlined />}
+          message={t('home.installPrompt.title')}
+          description={t('home.installPrompt.description')}
+          action={(
+            <Button size="small" type="primary" onClick={handleInstallPWA}>
+              {t('home.installPrompt.install')}
+            </Button>
+          )}
+          style={{
+            marginBottom: 16,
+            border: '1px solid rgba(244,175,37,0.55)',
+            background: 'rgba(36,31,20,0.96)',
+          }}
+        />
+      )}
+      {showPushPrompt && (
+        <Alert
+          type={pushStatus === 'denied' ? 'warning' : 'info'}
+          showIcon
+          message={t('home.pushPrompt.title')}
+          description={pushStatus === 'denied'
+            ? t('home.pushPrompt.deniedDescription')
+            : t('home.pushPrompt.description')}
+          action={(
+            <Button
+              size="small"
+              type="primary"
+              loading={pushBusy}
+              onClick={handleEnablePush}
+            >
+              {pushStatus === 'denied'
+                ? t('home.pushPrompt.settings')
+                : t('home.pushPrompt.enable')}
+            </Button>
+          )}
+          style={{
+            marginBottom: 16,
+            border: '1px solid rgba(244,175,37,0.55)',
+            background: 'rgba(36,31,20,0.96)',
+          }}
+        />
+      )}
       {/* 顶部标题栏 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       </div>

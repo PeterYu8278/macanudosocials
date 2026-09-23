@@ -14,6 +14,8 @@ export interface PWAInstallState {
   isInstalled: boolean;
   isStandalone: boolean;
   canInstall: boolean;
+  isIOS: boolean;
+  isChecking: boolean;
 }
 
 // Global variables for PWA state
@@ -22,7 +24,28 @@ let installState: PWAInstallState = {
   isInstallable: false,
   isInstalled: false,
   isStandalone: false,
-  canInstall: false
+  canInstall: false,
+  isIOS: false,
+  isChecking: true
+};
+
+type InstallStateListener = (state: PWAInstallState) => void;
+type NavigatorWithRelatedApps = Navigator & {
+  getInstalledRelatedApps?: () => Promise<Array<{ platform: string; id?: string; url?: string }>>;
+};
+
+const installStateListeners = new Set<InstallStateListener>();
+let installListenersInitialized = false;
+
+const isIOSBrowser = (): boolean => {
+  const isIOSUserAgent = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const isIPadOS = navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1;
+  return isIOSUserAgent || isIPadOS;
+};
+
+const updateInstallState = (updates: Partial<PWAInstallState>) => {
+  installState = { ...installState, ...updates };
+  installStateListeners.forEach(listener => listener({ ...installState }));
 };
 
 // Check if app is running in standalone mode
@@ -37,9 +60,73 @@ export const isInstalled = (): boolean => {
          window.matchMedia('(display-mode: minimal-ui)').matches;
 };
 
+const refreshInstallState = async (): Promise<void> => {
+  const standalone = isStandalone();
+  let relatedAppInstalled = false;
+  const relatedAppsNavigator = navigator as NavigatorWithRelatedApps;
+
+  if (!standalone && relatedAppsNavigator.getInstalledRelatedApps) {
+    try {
+      const relatedApps = await relatedAppsNavigator.getInstalledRelatedApps();
+      relatedAppInstalled = relatedApps.some(app => app.platform === 'webapp');
+    } catch {
+      relatedAppInstalled = false;
+    }
+  }
+
+  const installed = standalone || isInstalled() || relatedAppInstalled;
+  updateInstallState({
+    isStandalone: standalone,
+    isInstalled: installed,
+    isIOS: isIOSBrowser(),
+    isChecking: false,
+    canInstall: !installed && deferredPrompt !== null,
+    isInstallable: !installed && deferredPrompt !== null,
+  });
+};
+
+const initializeInstallDetection = () => {
+  if (installListenersInitialized) return;
+  installListenersInitialized = true;
+
+  window.addEventListener('beforeinstallprompt', (event) => {
+    if (isStandalone() || isInstalled()) return;
+
+    // A custom Home banner owns the prompt, so retain the event for its button.
+    event.preventDefault();
+    deferredPrompt = event as BeforeInstallPromptEvent;
+    updateInstallState({
+      isInstallable: true,
+      canInstall: true,
+      isInstalled: false,
+      isStandalone: false,
+      isIOS: isIOSBrowser(),
+      isChecking: false,
+    });
+  });
+
+  window.addEventListener('appinstalled', () => {
+    deferredPrompt = null;
+    updateInstallState({
+      isInstalled: true,
+      isStandalone: isStandalone(),
+      isInstallable: false,
+      canInstall: false,
+      isChecking: false,
+    });
+  });
+
+  window.matchMedia('(display-mode: standalone)').addEventListener('change', () => {
+    void refreshInstallState();
+  });
+};
+
 // Initialize PWA
 export const initializePWA = async (): Promise<void> => {
   try {
+    initializeInstallDetection();
+    await refreshInstallState();
+
     // Check if service worker is supported
     if ('serviceWorker' in navigator) {
       // Initialize Workbox
@@ -63,44 +150,9 @@ export const initializePWA = async (): Promise<void> => {
       });
     }
     
-    // Listen for beforeinstallprompt event
-    // 策略：只在确实需要自定义安装提示时才阻止默认提示
-    // 如果不需要自定义安装按钮，让浏览器显示默认提示，避免警告
-    window.addEventListener('beforeinstallprompt', (e) => {
-      // 检查应用是否已安装
-      const alreadyInstalled = isStandalone() || isInstalled();
-      
-      if (alreadyInstalled) {
-        // 应用已安装，不需要阻止默认提示
-        installState.isInstalled = true;
-        installState.canInstall = false;
-        return;
-      }
-      
-      // 应用未安装
-      // 策略：不阻止默认提示，让浏览器显示默认安装提示
-      // 同时保存事件，以便需要时可以手动触发
-      deferredPrompt = e as BeforeInstallPromptEvent;
-      installState.isInstallable = true;
-      installState.canInstall = true;
-      
-      // 不调用 preventDefault()，避免警告
-      // 如果需要自定义安装按钮，可以在 UI 中调用 showInstallPrompt()
-      // 但默认情况下让浏览器显示原生安装提示
-    });
-    
-    // Listen for appinstalled event
-    window.addEventListener('appinstalled', () => {
-      installState.isInstalled = true;
-      installState.canInstall = false;
-      deferredPrompt = null;
-    });
-    
-    // Update install state
-    installState.isInstalled = isInstalled();
-    installState.isStandalone = isStandalone();
   } catch (error) {
     // 静默处理错误
+    updateInstallState({ isChecking: false });
   }
 };
 
@@ -114,12 +166,18 @@ export const showInstallPrompt = async (): Promise<boolean> => {
     await deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
     if (outcome === 'accepted') {
-      installState.isInstalled = true;
-      installState.canInstall = false;
       deferredPrompt = null;
+      updateInstallState({
+        isInstalled: true,
+        isInstallable: false,
+        canInstall: false,
+        isChecking: false,
+      });
       return true;
     }
-    
+
+    deferredPrompt = null;
+    updateInstallState({ isInstallable: false, canInstall: false });
     return false;
   } catch (error) {
     return false;
@@ -191,17 +249,13 @@ export const usePWA = () => {
   const [installState, setInstallState] = useState(getInstallState());
   
   useEffect(() => {
-    const updateState = () => {
-      setInstallState(getInstallState());
-    };
-    
-    // Listen for state changes
-    window.addEventListener('beforeinstallprompt', updateState);
-    window.addEventListener('appinstalled', updateState);
-    
+    initializeInstallDetection();
+    const updateState: InstallStateListener = state => setInstallState(state);
+    installStateListeners.add(updateState);
+    void refreshInstallState();
+
     return () => {
-      window.removeEventListener('beforeinstallprompt', updateState);
-      window.removeEventListener('appinstalled', updateState);
+      installStateListeners.delete(updateState);
     };
   }, []);
   

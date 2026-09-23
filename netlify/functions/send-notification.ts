@@ -70,6 +70,14 @@ const normalizeStringArray = (value: unknown) => Array.isArray(value)
   ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
   : [];
 
+const notificationTypePreference = (type: string) => {
+  if (type === 'activity') return 'activity';
+  if (type === 'points') return 'points';
+  if (type === 'order') return 'order';
+  if (type === 'marketing') return 'marketing';
+  return null;
+};
+
 export const handler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return response(200, {});
   if (event.httpMethod !== 'POST') {
@@ -126,6 +134,33 @@ export const handler: Handler = async (event) => {
       return response(400, { success: false, error: 'Invalid click path or URL' });
     }
 
+    let eligibleTargetUsers = targetUsers;
+    if (targetUsers.length > 0) {
+      const db = getFirestore();
+      const preferenceKey = notificationTypePreference(type);
+      const userSnapshots = await Promise.all(
+        targetUsers.map((userId) => db.collection('users').doc(userId).get()),
+      );
+
+      eligibleTargetUsers = userSnapshots
+        .filter((snapshot) => {
+          if (!snapshot.exists) return false;
+          const preferences = snapshot.data()?.preferences;
+          if (preferences?.notifications === false) return false;
+          if (!preferenceKey) return true;
+          return preferences?.pushNotifications?.types?.[preferenceKey] !== false;
+        })
+        .map((snapshot) => snapshot.id);
+
+      if (eligibleTargetUsers.length === 0) {
+        return response(422, {
+          success: false,
+          error: 'The selected user has disabled this notification type',
+          provider: 'onesignal',
+        });
+      }
+    }
+
     const oneSignalPayload: Record<string, unknown> = {
       app_id: appId,
       target_channel: 'push',
@@ -135,8 +170,8 @@ export const handler: Handler = async (event) => {
       data: { ...customData, type, clickAction },
     };
 
-    if (targetUsers.length > 0) {
-      oneSignalPayload.include_aliases = { external_id: targetUsers };
+    if (eligibleTargetUsers.length > 0) {
+      oneSignalPayload.include_aliases = { external_id: eligibleTargetUsers };
     } else {
       oneSignalPayload.included_segments = targetSegments.length > 0
         ? targetSegments
