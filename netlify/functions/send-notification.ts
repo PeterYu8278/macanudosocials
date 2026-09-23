@@ -72,7 +72,7 @@ export const handler: Handler = async (event, context) => {
     }
 
     // 如果没有指定用户，发送到所有用户（或主题）
-    if (tokens.length === 0 && targetTopics.length === 0) {
+    if (targetUsers.length === 0 && targetTopics.length === 0) {
       // 获取所有活跃用户的 Token
       const usersSnapshot = await db.collection('users').get();
       
