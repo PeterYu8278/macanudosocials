@@ -55,7 +55,12 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+      includeAssets: [
+        'icons/app-logo-192.png',
+        'icons/app-logo-512.png',
+        'icons/app-logo-maskable-512.png',
+        'icons/apple-touch-icon-180.png',
+      ],
       selfDestroying: true, // 允许Service Worker自毁
       strategies: 'injectManifest', // 使用 injectManifest 策略以支持自定义 Service Worker
       srcDir: 'src',
@@ -65,8 +70,8 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 3000000, // 3MB
       },
       manifest: {
-        name: 'Cigar Club - Cigar World',
-        short_name: 'Cigar Club',
+        name: 'Macanudo Socials',
+        short_name: 'Macanudo',
         description: 'Premium cigar club management platform',
         theme_color: '#D4AF37',
         background_color: '#1A1A1A',
@@ -76,44 +81,22 @@ export default defineConfig({
         start_url: '/',
         icons: [
           {
-            src: '/icons/icon-72x72.svg',
-            sizes: '72x72',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-96x96.svg',
-            sizes: '96x96',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-128x128.svg',
-            sizes: '128x128',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-144x144.svg',
-            sizes: '144x144',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-152x152.svg',
-            sizes: '152x152',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-192x192.svg',
+            src: '/icons/app-logo-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml'
+            type: 'image/png',
+            purpose: 'any'
           },
           {
-            src: '/icons/icon-384x384.svg',
-            sizes: '384x384',
-            type: 'image/svg+xml'
-          },
-          {
-            src: '/icons/icon-512x512.svg',
+            src: '/icons/app-logo-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml'
+            type: 'image/png',
+            purpose: 'any'
+          },
+          {
+            src: '/icons/app-logo-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable'
           }
         ]
       },

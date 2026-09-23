@@ -30,81 +30,30 @@ export interface DynamicManifest {
  * @returns DynamicManifest 对象
  */
 export const generateDynamicManifest = (appConfig: AppConfig | null): DynamicManifest => {
-  const appName = appConfig?.appName || 'Cigar Club'
-  const logoUrl = appConfig?.logoUrl
+  const appName = appConfig?.appName || 'Macanudo Socials'
 
-  // 基础图标配置（使用默认图标）
-  const defaultIcons = [
+  // PWA install icons must have real, local dimensions so browsers can cache
+  // and validate them before the service worker or app config is available.
+  const defaultIcons: DynamicManifest['icons'] = [
     {
-      src: '/icons/icon-72x72.svg',
-      sizes: '72x72',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-96x96.svg',
-      sizes: '96x96',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-128x128.svg',
-      sizes: '128x128',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-144x144.svg',
-      sizes: '144x144',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-152x152.svg',
-      sizes: '152x152',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-192x192.svg',
+      src: '/icons/app-logo-192.png',
       sizes: '192x192',
-      type: 'image/svg+xml',
-      purpose: 'any maskable'
+      type: 'image/png',
+      purpose: 'any'
     },
     {
-      src: '/icons/icon-384x384.svg',
-      sizes: '384x384',
-      type: 'image/svg+xml'
-    },
-    {
-      src: '/icons/icon-512x512.svg',
+      src: '/icons/app-logo-512.png',
       sizes: '512x512',
-      type: 'image/svg+xml',
-      purpose: 'any maskable'
+      type: 'image/png',
+      purpose: 'any'
+    },
+    {
+      src: '/icons/app-logo-maskable-512.png',
+      sizes: '512x512',
+      type: 'image/png',
+      purpose: 'maskable'
     }
   ]
-
-  // 如果有自定义 logo，优先使用自定义 logo
-  const icons = logoUrl
-    ? (() => {
-        // 检测图标类型（根据 URL 扩展名）
-        const isSvg = logoUrl.toLowerCase().endsWith('.svg')
-        const iconType = isSvg ? 'image/svg+xml' : 'image/png'
-        
-        return [
-          // 使用自定义 logo 作为主要图标
-          {
-            src: logoUrl,
-            sizes: '192x192',
-            type: iconType,
-            purpose: 'any maskable'
-          },
-          {
-            src: logoUrl,
-            sizes: '512x512',
-            type: iconType,
-            purpose: 'any maskable'
-          },
-          // 保留其他尺寸的默认图标作为降级
-          ...defaultIcons.filter(icon => !['192x192', '512x512'].includes(icon.sizes))
-        ]
-      })()
-    : defaultIcons
 
   return {
     name: `${appName} - Cigar World`,
@@ -118,7 +67,7 @@ export const generateDynamicManifest = (appConfig: AppConfig | null): DynamicMan
     scope: '/',
     lang: 'zh-CN',
     categories: ['lifestyle', 'business', 'entertainment'],
-    icons
+    icons: defaultIcons
   }
 }
 
@@ -180,7 +129,7 @@ export const updateFavicon = (iconUrl: string): void => {
  * @param iconUrl 图标 URL
  */
 export const updateAppleTouchIcons = (iconUrl: string): void => {
-  const sizes = ['180x180', '152x152', '144x144', '120x120']
+  const sizes = ['180x180']
 
   sizes.forEach(size => {
     let appleIcon = document.querySelector(
@@ -209,11 +158,12 @@ export const applyDynamicIcons = (appConfig: AppConfig | null): (() => void) => 
   // 这里只更新 manifest link 为静态 URL
   updateManifestLink('/manifest.json')
 
-  // 如果有自定义 logo，更新图标
+  // The browser tab can follow the remote app logo, while installed icons use
+  // the square, locally generated brand assets declared in the manifest.
   if (appConfig?.logoUrl) {
     updateFavicon(appConfig.logoUrl)
-    updateAppleTouchIcons(appConfig.logoUrl)
   }
+  updateAppleTouchIcons('/icons/apple-touch-icon-180.png')
 
   // 返回空的清理函数（不再需要清理 blob URL）
   return () => {

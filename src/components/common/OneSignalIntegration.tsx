@@ -7,9 +7,13 @@ import { normalizePhoneNumber } from '../../utils/phoneNormalization'
 const ONESIGNAL_APP_ID = 'af46548f-181c-40e3-8880-0aae079c20a3'
 const ONESIGNAL_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
 const ONESIGNAL_WORKER_SCOPE = '/push/onesignal/'
+const ONESIGNAL_SITE_ORIGIN = 'https://macanudosocials.com'
 
 let initializationPromise: Promise<void> | null = null
 let verificationDialogShown = false
+
+const isOneSignalOrigin = () =>
+  typeof window !== 'undefined' && window.location.origin === ONESIGNAL_SITE_ORIGIN
 
 const initializeOneSignal = (): Promise<void> => {
   if (!initializationPromise) {
@@ -75,6 +79,8 @@ const OneSignalIntegration = () => {
   const registeredSubscriptionId = useRef<string | null>(null)
 
   useEffect(() => {
+    if (!isOneSignalOrigin()) return
+
     let active = true
     let observerAttached = false
 
@@ -122,7 +128,7 @@ const OneSignalIntegration = () => {
   }, [modal])
 
   useEffect(() => {
-    if (loading) return
+    if (loading || !isOneSignalOrigin()) return
 
     void initializeOneSignal()
       .then(async () => {
