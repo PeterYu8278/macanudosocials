@@ -13,6 +13,56 @@ declare const self: ServiceWorkerGlobalScope
 // 预缓存资源（由 Workbox 自动注入）
 precacheAndRoute(self.__WB_MANIFEST)
 
+// Handle FCM web push in the same worker that powers the PWA. A site can only
+// have one active worker for the root scope, so keeping this here avoids the
+// PWA worker shadowing firebase-messaging-sw.js in production.
+self.addEventListener('push', (event: PushEvent) => {
+  let payload: any = {}
+
+  try {
+    payload = event.data?.json() || {}
+  } catch {
+    payload = { data: { body: event.data?.text() || '' } }
+  }
+
+  const notification = payload.notification || {}
+  const data = payload.data || {}
+  const title = notification.title || data.title || 'Macanudo Socials'
+  const body = notification.body || data.body || ''
+  const clickAction = data.clickAction || '/'
+
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body,
+      icon: '/icons/icon-192x192.svg',
+      badge: '/icons/icon-96x96.svg',
+      tag: data.tag || 'macanudo-notification',
+      data: { ...data, clickAction },
+      requireInteraction: false,
+      silent: false,
+    }),
+  )
+})
+
+self.addEventListener('notificationclick', (event: NotificationEvent) => {
+  const clickAction = event.notification.data?.clickAction || '/'
+  event.notification.close()
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if (client.url.includes(self.location.origin) && 'focus' in client) {
+          client.focus()
+          client.postMessage({ type: 'NOTIFICATION_CLICK', action: clickAction })
+          return
+        }
+      }
+
+      return self.clients.openWindow(clickAction)
+    }),
+  )
+})
+
 // 拦截 manifest.json 请求
 registerRoute(
   ({ url }) => url.pathname === '/manifest.json',
