@@ -5,11 +5,14 @@ import {
   Button,
   Card,
   Col,
+  DatePicker,
   Empty,
   Form,
   Input,
   Modal,
   Row,
+  Segmented,
+  Select,
   Space,
   Statistic,
   Table,
@@ -23,13 +26,14 @@ import {
   SendOutlined,
   UserOutlined,
 } from '@ant-design/icons'
+import type { Dayjs } from 'dayjs'
 import { auth } from '../../../config/firebase'
-import { getAllUsers } from '../../../services/firebase/firestore'
-import type { User, UserRole } from '../../../types'
+import { getAllUsers, getUpcomingEvents } from '../../../services/firebase/firestore'
+import type { Event, User, UserRole } from '../../../types'
 
 const { Title, Text } = Typography
 
-type OneSignalUserRecord = {
+type NotificationUserRecord = {
   key: string
   userId: string
   displayName: string
@@ -41,24 +45,41 @@ type OneSignalUserRecord = {
 }
 
 type SendFormValues = {
+  provider: 'onesignal' | 'fcm'
+  messageType: 'custom' | 'event_reminder' | 'vip_expiry'
   title: string
   body: string
   clickAction?: string
+  eventId?: string
+  expiryDate?: Dayjs
 }
+
+const toDate = (value: unknown) => {
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    return (value as { toDate: () => Date }).toDate()
+  }
+  return new Date(value as string | number | Date)
+}
+
+const formatReminderDate = (value: Date) => new Intl.DateTimeFormat(undefined, {
+  dateStyle: 'medium',
+  timeStyle: 'short',
+}).format(value)
 
 const NotificationManagement: React.FC = () => {
   const { message } = App.useApp()
   const [form] = Form.useForm<SendFormValues>()
-  const [records, setRecords] = useState<OneSignalUserRecord[]>([])
+  const [records, setRecords] = useState<NotificationUserRecord[]>([])
+  const [events, setEvents] = useState<Event[]>([])
   const [loading, setLoading] = useState(false)
   const [search, setSearch] = useState('')
-  const [sendTarget, setSendTarget] = useState<OneSignalUserRecord | null>(null)
+  const [sendTarget, setSendTarget] = useState<NotificationUserRecord | null>(null)
   const [sending, setSending] = useState(false)
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
     try {
-      const users = await getAllUsers()
+      const [users, upcomingEvents] = await Promise.all([getAllUsers(), getUpcomingEvents()])
       setRecords(users.map((user: User) => ({
         key: user.id,
         userId: user.id,
@@ -69,6 +90,7 @@ const NotificationManagement: React.FC = () => {
         role: user.role,
         storeId: user.storeId || '-',
       })))
+      setEvents(upcomingEvents)
     } catch (error) {
       console.error('[NotificationManagement] Failed to load users:', error)
       message.error('Unable to load users')
@@ -95,12 +117,74 @@ const NotificationManagement: React.FC = () => {
     ].some((value) => value.toLowerCase().includes(keyword)))
   }, [records, search])
 
-  const openSendModal = (record: OneSignalUserRecord) => {
+  const openSendModal = (record: NotificationUserRecord) => {
     setSendTarget(record)
     form.resetFields()
     form.setFieldsValue({
+      provider: 'onesignal',
+      messageType: 'custom',
       title: 'Macanudo Socials notification test',
-      body: 'This is a targeted OneSignal test notification.',
+      body: 'This is a targeted push notification test.',
+      clickAction: '/profile',
+    })
+  }
+
+  const updateMessageType = (messageType: SendFormValues['messageType']) => {
+    if (!sendTarget) return
+
+    if (messageType === 'event_reminder') {
+      form.setFieldsValue({
+        messageType,
+        eventId: undefined,
+        expiryDate: undefined,
+        title: 'Event Reminder',
+        body: `Hi ${sendTarget.displayName}, this is a test event reminder from Macanudo Socials.`,
+        clickAction: '/events',
+      })
+      return
+    }
+
+    if (messageType === 'vip_expiry') {
+      form.setFieldsValue({
+        messageType,
+        eventId: undefined,
+        expiryDate: undefined,
+        title: 'VIP Expiry Reminder',
+        body: `Hi ${sendTarget.displayName}, this is a test VIP expiry reminder from Macanudo Socials.`,
+        clickAction: '/profile',
+      })
+      return
+    }
+
+    form.setFieldsValue({
+      messageType,
+      eventId: undefined,
+      expiryDate: undefined,
+      title: 'Macanudo Socials notification test',
+      body: 'This is a targeted push notification test.',
+      clickAction: '/profile',
+    })
+  }
+
+  const updateEventReminder = (eventId: string) => {
+    if (!sendTarget) return
+    const event = events.find((item) => item.id === eventId)
+    if (!event) return
+
+    const startsAt = toDate(event.schedule.startDate)
+    const location = event.location?.name || event.location?.address || 'Macanudo Socials'
+    form.setFieldsValue({
+      title: `Event Reminder: ${event.title}`,
+      body: `Hi ${sendTarget.displayName}, ${event.title} starts on ${formatReminderDate(startsAt)} at ${location}. We look forward to seeing you!`,
+      clickAction: '/events',
+    })
+  }
+
+  const updateVipExpiryReminder = (expiryDate: Dayjs | null) => {
+    if (!sendTarget || !expiryDate) return
+    form.setFieldsValue({
+      title: 'VIP Expiry Reminder',
+      body: `Hi ${sendTarget.displayName}, your VIP membership will expire on ${expiryDate.format('DD MMM YYYY')}. Please renew to continue enjoying member benefits.`,
       clickAction: '/profile',
     })
   }
@@ -119,11 +203,17 @@ const NotificationManagement: React.FC = () => {
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
+          provider: values.provider,
           title: values.title,
           body: values.body,
-          type: 'system',
+          type: values.messageType === 'custom' ? 'system' : values.messageType,
           targetUsers: [sendTarget.userId],
           clickAction: values.clickAction || '/profile',
+          data: {
+            ...(values.eventId ? { eventId: values.eventId } : {}),
+            ...(values.expiryDate ? { expiryDate: values.expiryDate.toISOString() } : {}),
+            test: true,
+          },
         }),
       })
       const responseText = await response.text()
@@ -142,15 +232,16 @@ const NotificationManagement: React.FC = () => {
         )
       }
       if (!response.ok || !result.success) {
-        throw new Error(result.error || result.message || 'OneSignal delivery request failed')
+        throw new Error(result.error || result.message || 'Push delivery request failed')
       }
 
       const recipients = result.results?.sent ?? 0
-      message.success(
-        recipients > 0
-          ? `OneSignal accepted the message for ${recipients} subscription${recipients === 1 ? '' : 's'}`
-          : `OneSignal accepted message ${result.messageId || ''}`.trim(),
-      )
+      const failures = result.results?.failed ?? 0
+      message.success(values.provider === 'fcm'
+        ? `FCM sent: ${recipients}, failed: ${failures}`
+        : recipients > 0
+          ? `OneSignal accepted ${recipients} subscription${recipients === 1 ? '' : 's'}; delivery is not yet confirmed`
+          : `OneSignal accepted message ${result.messageId || ''}`.trim())
       setSendTarget(null)
     } catch (error: any) {
       message.error(error?.message || 'Notification request failed')
@@ -163,7 +254,7 @@ const NotificationManagement: React.FC = () => {
     {
       title: 'User',
       key: 'user',
-      render: (_: unknown, record: OneSignalUserRecord) => (
+      render: (_: unknown, record: NotificationUserRecord) => (
         <Space>
           <UserOutlined style={{ color: '#F4AF25' }} />
           <div>
@@ -199,7 +290,7 @@ const NotificationManagement: React.FC = () => {
     {
       title: 'Action',
       key: 'action',
-      render: (_: unknown, record: OneSignalUserRecord) => (
+      render: (_: unknown, record: NotificationUserRecord) => (
         <Button type="primary" icon={<SendOutlined />} onClick={() => openSendModal(record)}>
           Test Send
         </Button>
@@ -213,20 +304,20 @@ const NotificationManagement: React.FC = () => {
         <BellOutlined style={{ color: '#F4AF25', fontSize: 24 }} />
         <Title level={2} style={{ color: '#FDE08D', margin: 0 }}>Notification Management</Title>
       </Space>
-      <Text type="secondary">Send targeted push notifications through OneSignal External IDs.</Text>
+      <Text type="secondary">Send targeted push notifications through FCM or OneSignal.</Text>
 
       <Alert
         type="info"
         showIcon
         style={{ margin: '16px 0' }}
-        message="OneSignal targeted delivery"
-        description="The selected user must have signed in after OneSignal initialized and allowed notifications on at least one device. Users without an active subscription will return a clear delivery error."
+        message="Targeted push delivery"
+        description="The selected user must allow notifications and have an active token for the selected provider. FCM uses stored device tokens; OneSignal uses the user's External ID subscriptions."
       />
 
       <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
         <Col xs={24} sm={8}><Card><Statistic title="Registered Users" value={records.length} prefix={<UserOutlined />} /></Card></Col>
         <Col xs={24} sm={8}><Card><Statistic title="Visible Users" value={filteredRecords.length} prefix={<BellOutlined />} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="Push Provider" value="OneSignal" prefix={<CloudServerOutlined />} /></Card></Col>
+        <Col xs={24} sm={8}><Card><Statistic title="Push Providers" value="FCM / OneSignal" prefix={<CloudServerOutlined />} /></Card></Col>
       </Row>
 
       <Card>
@@ -261,8 +352,69 @@ const NotificationManagement: React.FC = () => {
         destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={sendNotification}>
-          <Form.Item label="OneSignal External ID">
+          <Form.Item label="Target user ID">
             <Input value={sendTarget?.userId} disabled />
+          </Form.Item>
+          <Form.Item name="provider" label="Push provider" rules={[{ required: true }]}>
+            <Segmented
+              block
+              options={[
+                { value: 'onesignal', label: 'OneSignal' },
+                { value: 'fcm', label: 'FCM' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item
+            name="messageType"
+            label="Notification type"
+            rules={[{ required: true }]}
+          >
+            <Select
+              onChange={updateMessageType}
+              options={[
+                { value: 'custom', label: 'Custom test' },
+                { value: 'event_reminder', label: 'Event Reminder' },
+                { value: 'vip_expiry', label: 'VIP Expiry Reminder' },
+              ]}
+            />
+          </Form.Item>
+          <Form.Item noStyle shouldUpdate={(previous, current) => previous.messageType !== current.messageType}>
+            {({ getFieldValue }) => {
+              const messageType = getFieldValue('messageType') as SendFormValues['messageType']
+              if (messageType === 'event_reminder') {
+                return (
+                  <Form.Item
+                    name="eventId"
+                    label="Event"
+                    rules={[{ required: true, message: 'Select an event to test' }]}
+                  >
+                    <Select
+                      showSearch
+                      placeholder="Select an upcoming event"
+                      optionFilterProp="label"
+                      onChange={updateEventReminder}
+                      options={events.map((event) => ({
+                        value: event.id,
+                        label: `${event.title} - ${formatReminderDate(toDate(event.schedule.startDate))}`,
+                      }))}
+                      notFoundContent="No upcoming events found"
+                    />
+                  </Form.Item>
+                )
+              }
+              if (messageType === 'vip_expiry') {
+                return (
+                  <Form.Item
+                    name="expiryDate"
+                    label="VIP expiry date"
+                    rules={[{ required: true, message: 'Select an expiry date to test' }]}
+                  >
+                    <DatePicker style={{ width: '100%' }} onChange={updateVipExpiryReminder} />
+                  </Form.Item>
+                )
+              }
+              return null
+            }}
           </Form.Item>
           <Form.Item name="title" label="Title" rules={[{ required: true, max: 100 }]}>
             <Input />

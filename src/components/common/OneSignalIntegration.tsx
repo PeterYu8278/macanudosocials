@@ -33,6 +33,18 @@ const OneSignalIntegration = () => {
 
     let active = true
     let unsubscribe: (() => void) | undefined
+    let fcmSyncStarted = false
+
+    const syncFcmSubscription = async () => {
+      if (!user || fcmSyncStarted || Notification.permission !== 'granted') return
+      fcmSyncStarted = true
+      try {
+        const { initializePushNotifications } = await import('../../services/firebase/messaging')
+        await initializePushNotifications(user)
+      } catch (error) {
+        console.warn('[FCM] Failed to synchronize fallback subscription:', error)
+      }
+    }
 
     const publishSnapshot = async () => {
       if (!active) return
@@ -44,6 +56,7 @@ const OneSignalIntegration = () => {
         } catch (error) {
           console.error('[OneSignal] Failed to synchronize subscription status:', error)
         }
+        await syncFcmSubscription()
       }
     }
 

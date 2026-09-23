@@ -2,6 +2,7 @@ import type { Handler } from '@netlify/functions';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { getMessaging } from 'firebase-admin/messaging';
 
 const headers = {
   'Content-Type': 'application/json',
@@ -70,8 +71,15 @@ const normalizeStringArray = (value: unknown) => Array.isArray(value)
   ? value.filter((item): item is string => typeof item === 'string' && item.trim().length > 0)
   : [];
 
+const normalizeFcmData = (value: Record<string, unknown>) => Object.fromEntries(
+  Object.entries(value).map(([key, item]) => [
+    key,
+    typeof item === 'string' ? item : JSON.stringify(item),
+  ]),
+);
+
 const notificationTypePreference = (type: string) => {
-  if (type === 'activity') return 'activity';
+  if (type === 'activity' || type === 'event_reminder') return 'activity';
   if (type === 'points') return 'points';
   if (type === 'order') return 'order';
   if (type === 'marketing') return 'marketing';
@@ -102,6 +110,7 @@ export const handler: Handler = async (event) => {
     const request = JSON.parse(event.body || '{}') as Record<string, unknown>;
     const title = typeof request.title === 'string' ? request.title.trim() : '';
     const body = typeof request.body === 'string' ? request.body.trim() : '';
+    const provider = request.provider === 'fcm' ? 'fcm' : 'onesignal';
     const type = typeof request.type === 'string' ? request.type : 'system';
     const clickAction = typeof request.clickAction === 'string' ? request.clickAction : '/';
     const targetUsers = normalizeStringArray(request.targetUsers);
@@ -159,6 +168,119 @@ export const handler: Handler = async (event) => {
           provider: 'onesignal',
         });
       }
+    }
+
+    if (provider === 'fcm') {
+      const db = getFirestore();
+      const tokenTargets: Array<{
+        token: string;
+        ref: FirebaseFirestore.DocumentReference;
+      }> = [];
+
+      const appendUserTokens = async (userId: string) => {
+        const tokensSnapshot = await db.collection('users')
+          .doc(userId)
+          .collection('fcmTokens')
+          .where('active', '==', true)
+          .get();
+
+        tokensSnapshot.forEach((tokenDocument) => {
+          const token = tokenDocument.data().token;
+          if (typeof token === 'string' && token.trim()) {
+            tokenTargets.push({ token, ref: tokenDocument.ref });
+          }
+        });
+      };
+
+      if (eligibleTargetUsers.length > 0) {
+        await Promise.all(eligibleTargetUsers.map(appendUserTokens));
+      } else if (targetSegments.length === 0) {
+        const usersSnapshot = await db.collection('users').get();
+        await Promise.all(usersSnapshot.docs.map((userDocument) => appendUserTokens(userDocument.id)));
+      }
+
+      if (tokenTargets.length === 0 && targetSegments.length === 0) {
+        return response(422, {
+          success: false,
+          error: 'No active FCM tokens were found for the selected user',
+          provider: 'fcm',
+        });
+      }
+
+      const messaging = getMessaging();
+      const results = {
+        total: 0,
+        sent: 0,
+        failed: 0,
+        failureDetails: [] as Array<{ code?: string; message: string }>,
+      };
+      const fcmData = normalizeFcmData({ ...customData, type, clickAction });
+
+      for (const topic of targetSegments) {
+        try {
+          await messaging.send({
+            notification: { title, body },
+            data: fcmData,
+            topic,
+            webpush: { fcmOptions: { link: notificationUrl } },
+          });
+          results.total += 1;
+          results.sent += 1;
+        } catch (error) {
+          const sendError = error as { code?: string; message?: string };
+          results.total += 1;
+          results.failed += 1;
+          results.failureDetails.push({
+            code: sendError.code,
+            message: sendError.message || 'FCM topic delivery failed',
+          });
+        }
+      }
+
+      for (let offset = 0; offset < tokenTargets.length; offset += 500) {
+        const batchTargets = tokenTargets.slice(offset, offset + 500);
+        const batchResponse = await messaging.sendEachForMulticast({
+          notification: { title, body },
+          data: fcmData,
+          tokens: batchTargets.map((target) => target.token),
+          webpush: { fcmOptions: { link: notificationUrl } },
+        });
+
+        results.total += batchTargets.length;
+        results.sent += batchResponse.successCount;
+        results.failed += batchResponse.failureCount;
+
+        for (let index = 0; index < batchResponse.responses.length; index += 1) {
+          const sendResult = batchResponse.responses[index];
+          if (sendResult.success) continue;
+
+          const code = sendResult.error?.code;
+          if (
+            code === 'messaging/registration-token-not-registered'
+            || code === 'messaging/invalid-registration-token'
+          ) {
+            await batchTargets[index].ref.set({
+              active: false,
+              lastError: code,
+              lastErrorAt: new Date(),
+            }, { merge: true });
+          }
+
+          if (results.failureDetails.length < 10) {
+            results.failureDetails.push({
+              code,
+              message: sendResult.error?.message || 'FCM token delivery failed',
+            });
+          }
+        }
+      }
+
+      return response(results.sent > 0 ? 200 : 422, {
+        success: results.sent > 0,
+        provider: 'fcm',
+        error: results.sent > 0 ? undefined : 'FCM could not deliver to any active token',
+        results,
+      });
     }
 
     const oneSignalPayload: Record<string, unknown> = {

@@ -116,7 +116,7 @@ export interface PushNotificationRecord {
   id: string;
   title: string;
   body: string;
-  type: 'activity' | 'points' | 'order' | 'marketing' | 'system';
+  type: 'activity' | 'points' | 'order' | 'marketing' | 'system' | 'event_reminder' | 'vip_expiry';
   targetUsers?: string[];  // 目标用户ID列表（空表示全部用户）
   targetTopics?: string[]; // 目标主题列表
   data?: Record<string, string>; // 额外数据
