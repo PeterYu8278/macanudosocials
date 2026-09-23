@@ -94,6 +94,7 @@ const FeatureManagement: React.FC = () => {
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'whapi' | 'payment' | 'env'>('frontend');
   const [whapiForm] = Form.useForm();
+  const whapiEnabled = Form.useWatch('whapiEnabled', whapiForm) ?? false;
   const [paymentForm] = Form.useForm();
   const [envForm] = Form.useForm();
   const [localFeatures, setLocalFeatures] = useState<Record<string, boolean>>({});
@@ -989,6 +990,13 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
 
   return (
     <div style={{ paddingBottom: isMobile ? '100px' : '0' }}>
+      <style>{`
+        .whapi-gold-switch.ant-switch-checked,
+        .whapi-gold-switch.ant-switch-checked:hover:not(.ant-switch-disabled) {
+          background: linear-gradient(90deg, #FDE08D 0%, #C48D3A 100%) !important;
+          box-shadow: 0 0 0 1px rgba(244, 175, 37, 0.35);
+        }
+      `}</style>
       <Title level={2} style={{
         marginBottom: 8,
         background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
@@ -1034,6 +1042,29 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               color: '#A0A0A0',
             };
 
+            const label = tabKey === 'frontend'
+              ? t('featureManagement.frontendFeatures', { defaultValue: '前端功能' })
+              : tabKey === 'admin'
+                ? t('featureManagement.adminFeatures', { defaultValue: '管理后台功能' })
+                : tabKey === 'cigar-database'
+                  ? t('featureManagement.cigarDatabase', { defaultValue: '雪茄数据库' })
+                  : tabKey === 'tools'
+                    ? t('featureManagement.tools', { defaultValue: '工具' })
+                    : tabKey === 'app'
+                      ? t('featureManagement.appSettings', { defaultValue: '应用配置' })
+                      : tabKey === 'whapi'
+                        ? t('featureManagement.whapiSettings', { defaultValue: 'WhatsApp 管理' })
+                        : tabKey === 'payment'
+                          ? t('featureManagement.paymentSettings', { defaultValue: '支付网关' })
+                          : t('featureManagement.envSettings', { defaultValue: '环境配置' });
+            const words = label.trim().split(/\s+/);
+            const labelLines = words.length > 1
+              ? [
+                  words.slice(0, Math.ceil(words.length / 2)).join(' '),
+                  words.slice(Math.ceil(words.length / 2)).join(' ')
+                ]
+              : [label, '\u00A0'];
+
             return (
               <button
                 key={tabKey}
@@ -1043,21 +1074,8 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                 }}
                 onClick={() => setActiveTab(tabKey)}
               >
-                {tabKey === 'frontend'
-                  ? t('featureManagement.frontendFeatures', { defaultValue: '前端功能' })
-                  : tabKey === 'admin'
-                    ? t('featureManagement.adminFeatures', { defaultValue: '管理后台功能' })
-                    : tabKey === 'cigar-database'
-                      ? t('featureManagement.cigarDatabase', { defaultValue: '雪茄数据库' })
-                      : tabKey === 'tools'
-                        ? t('featureManagement.tools', { defaultValue: '工具' })
-                        : tabKey === 'app'
-                          ? t('featureManagement.appSettings', { defaultValue: '应用配置' })
-                          : tabKey === 'whapi'
-                            ? t('featureManagement.whapiSettings', { defaultValue: 'WhatsApp 管理' })
-                            : tabKey === 'payment'
-                              ? t('featureManagement.paymentSettings', { defaultValue: '支付网关' })
-                              : t('featureManagement.envSettings', { defaultValue: '环境配置' })}
+                <span style={{ display: 'block', lineHeight: 1.25 }}>{labelLines[0]}</span>
+                <span style={{ display: 'block', lineHeight: 1.25 }}>{labelLines[1]}</span>
               </button>
             );
           })}
@@ -1427,18 +1445,20 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                 }
               }}
             >
-              <Form.Item
-                name="whapiEnabled"
-                valuePropName="checked"
-              >
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.enableWhatsapp')}</span>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                <span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.enableWhatsapp')}</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ color: whapiEnabled ? '#f4cf72' : 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: 600 }}>
+                    {whapiEnabled ? t('featureManagement.enable') : t('featureManagement.disable')}
+                  </span>
+                  <Form.Item name="whapiEnabled" valuePropName="checked" noStyle>
                   <Switch
-                    checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
-                    unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
+                      className="whapi-gold-switch"
+                      aria-label={t('featureManagement.enableWhatsapp')}
                   />
+                  </Form.Item>
                 </div>
-              </Form.Item>
+              </div>
 
               <Form.Item
                 label={<span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.apiConfig')}</span>}
@@ -1514,6 +1534,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                     style={{ marginBottom: 0 }}
                   >
                     <Switch
+                      className="whapi-gold-switch"
                       checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
                       unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
                     />
@@ -1526,6 +1547,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                     style={{ marginBottom: 0 }}
                   >
                     <Switch
+                      className="whapi-gold-switch"
                       checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
                       unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
                     />
@@ -1538,6 +1560,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                     style={{ marginBottom: 0 }}
                   >
                     <Switch
+                      className="whapi-gold-switch"
                       checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
                       unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
                     />

@@ -15,7 +15,6 @@ import {
   MenuUnfoldOutlined,
   ShoppingCartOutlined,
   ShopOutlined,
-  FireOutlined,
   TrophyOutlined,
   ClockCircleOutlined,
   SettingOutlined,
@@ -266,21 +265,33 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: '16px',
+        padding: collapsed ? '10px 8px' : '10px 12px',
+        minHeight: 52,
         borderBottom: '1px solid #333333',
         position: 'relative'
       }}>
         {!collapsed && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <FireOutlined style={{ color: '#ffd700', fontSize: '18px' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
+            <img
+              src={appConfig?.logoUrl || '/icons/icon-96x96.svg'}
+              alt=""
+              aria-hidden="true"
+              style={{
+                width: 24,
+                height: 24,
+                objectFit: 'contain',
+                flexShrink: 0
+              }}
+            />
             <Text style={{
               fontWeight: 'bold',
               background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
-              fontSize: '16px',
-              letterSpacing: '1px'
+              fontSize: '14px',
+              letterSpacing: '0.5px',
+              whiteSpace: 'nowrap'
             }}>
               {appConfig?.appName || 'Cigar Club'}
             </Text>
@@ -309,8 +320,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
           font-weight: 800;
           font-size: 11px;
           letter-spacing: 2px;
-          padding-top: 16px;
-          padding-bottom: 8px;
+          padding: 9px 12px 4px !important;
           opacity: 0.8;
           text-transform: uppercase;
         }
@@ -319,7 +329,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         }
         .cigar-sidebar-menu .ant-menu-divider {
           border-color: rgba(255, 215, 0, 0.15) !important;
-          margin: 8px 16px !important;
+          margin: 4px 12px !important;
         }
         /* Hover and Active Styles */
         .cigar-sidebar-menu .ant-menu-item:hover,
@@ -346,6 +356,11 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         .cigar-sidebar-menu .ant-menu-item {
           color: rgba(255, 255, 255, 0.75);
           transition: all 0.3s ease;
+          height: 38px !important;
+          line-height: 38px !important;
+          margin-top: 2px !important;
+          margin-bottom: 2px !important;
+          padding-inline: 12px !important;
         }
         /* Layout flex and scroll management */
         .ant-layout-sider-children {
@@ -377,7 +392,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
           style={{
             borderRight: 0,
             background: 'transparent',
-            marginTop: '8px'
+            marginTop: '4px'
           }}
           className="cigar-sidebar-menu"
         />

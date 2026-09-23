@@ -2,7 +2,7 @@ import type { PointsRecord } from '../types'
 
 const VISIT_SUMMARY_DESCRIPTION = '驻店计时扣费（本次驻店汇总）'
 
-const isVisitDurationRecord = (record: PointsRecord): boolean => {
+export const isVisitDurationRecord = (record: PointsRecord): boolean => {
   if (record.source !== 'visit') return false
 
   return record.isVisitSessionSummary === true

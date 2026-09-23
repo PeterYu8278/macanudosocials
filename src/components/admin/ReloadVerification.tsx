@@ -68,13 +68,6 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       const filter = statusFilter === 'all' ? undefined : statusFilter;
       const allRecords = await getAllReloadRecords(filter);
       setRecords(allRecords);
-      if (allRecords.length === 0) {
-        if (statusFilter === 'pending') {
-          message.info(t('pointsConfig.reloadVerification.noPendingRecords'));
-        } else {
-          message.info(t('pointsConfig.reloadVerification.noRecords'));
-        }
-      }
     } catch (error: any) {
       console.error('[ReloadVerification] 加载充值记录失败:', error);
       message.error(t('pointsConfig.reloadVerification.loadFailed') + ': ' + (error.message || t('common.unknownError')));
@@ -908,4 +901,3 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
     </>
   );
 };
-

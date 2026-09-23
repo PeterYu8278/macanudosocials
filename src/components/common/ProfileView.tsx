@@ -26,6 +26,7 @@ import { MemberProfileCard } from './MemberProfileCard'
 import { isFeatureVisible } from '../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../store/modules/auth'
 import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/text-transform'
+import { isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
 
 interface ProfileViewProps {
   user?: User | null          // Direct user object
@@ -58,6 +59,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [userOrders, setUserOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [cigarRecordDrawerOpen, setCigarRecordDrawerOpen] = useState(false)
   const [referredUsers, setReferredUsers] = useState<User[]>([])
   const [loadingReferrals, setLoadingReferrals] = useState(false)
   const [pointsRecords, setPointsRecords] = useState<PointsRecord[]>([])
@@ -67,6 +70,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [loadingPointsRecordDetails, setLoadingPointsRecordDetails] = useState(false)
   const canViewDiscount = authUser?.role === 'developer' || authUser?.role === 'superAdmin'
   const [loadingPointsRecords, setLoadingPointsRecords] = useState(false)
+  const [pointsVisitSessions, setPointsVisitSessions] = useState<Record<string, VisitSession>>({})
   const [referralActivationMap, setReferralActivationMap] = useState<Record<string, Date | null>>({})
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
@@ -235,10 +239,35 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       try {
         const records = await getUserPointsRecords(user.id, 50)
         setPointsRecords(records)
+
+        const visitSessionIds = [...new Set(
+          records
+            .filter(record => isVisitDurationRecord(record) && record.relatedId)
+            .map(record => record.relatedId as string)
+        )]
+        const visitSessions = await Promise.all(
+          visitSessionIds.map(async sessionId => {
+            const data = await getDocument('visitSessions', sessionId) as any
+            if (!data) return null
+            const toDate = (value: any) => value?.toDate?.() || (value ? new Date(value) : undefined)
+            return {
+              id: sessionId,
+              ...data,
+              checkInAt: toDate(data.checkInAt),
+              checkOutAt: toDate(data.checkOutAt),
+              createdAt: toDate(data.createdAt),
+              updatedAt: toDate(data.updatedAt)
+            } as VisitSession
+          })
+        )
+        setPointsVisitSessions(Object.fromEntries(
+          visitSessions.filter((session): session is VisitSession => Boolean(session)).map(session => [session.id, session])
+        ))
       } catch (error) {
         console.error('[ProfileView] Failed to load points records:', error)
         message.error(t('pointsConfig.loadRecordsFailed'))
         setPointsRecords([])
+        setPointsVisitSessions({})
       } finally {
         setLoadingPointsRecords(false)
       }
@@ -326,6 +355,48 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
   }
 
+  const formatVisitPeriod = (session?: VisitSession): string | null => {
+    const checkIn = toDateValue(session?.checkInAt)
+    const checkOut = toDateValue(session?.checkOutAt)
+    if (!checkIn || !checkOut) return null
+
+    const sameDay = checkIn.toDateString() === checkOut.toDateString()
+    const locale = i18n.language === 'en-US' ? 'en-GB' : 'zh-CN'
+    const dateText = checkIn.toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+    const startTime = checkIn.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+    const endTime = checkOut.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
+    const endDate = sameDay
+      ? ''
+      : `${checkOut.toLocaleDateString(locale, { day: '2-digit', month: 'short' })} `
+    return `${dateText} ${startTime} - ${endDate}${endTime}`
+  }
+
+  const getPointsRecordDescription = (record: PointsRecord, session?: VisitSession): string => {
+    if (!isVisitDurationRecord(record)) return record.description
+    if (session?.durationHours != null) {
+      return t('profile.visitDurationFeeDetail', {
+        hours: session.durationHours,
+        points: record.amount
+      })
+    }
+    return t('profile.visitDurationFee')
+  }
+
+  const getOrderStatusConfig = (orderStatus: Order['status']) => {
+    const statusConfig: Record<string, { bg: string; border: string; color: string; label: string }> = {
+      completed: { bg: 'rgba(82,196,26,0.12)', border: 'rgba(82,196,26,0.45)', color: '#52c41a', label: t('ordersAdmin.status.completed') },
+      confirmed: { bg: 'rgba(82,196,26,0.12)', border: 'rgba(82,196,26,0.45)', color: '#52c41a', label: t('ordersAdmin.status.confirmed') || 'Confirmed' },
+      pending: { bg: 'rgba(244,175,37,0.12)', border: 'rgba(244,175,37,0.45)', color: '#F4AF25', label: t('ordersAdmin.status.pending') },
+      cancelled: { bg: 'rgba(255,77,79,0.12)', border: 'rgba(255,77,79,0.4)', color: '#ff4d4f', label: t('ordersAdmin.status.cancelled') },
+    }
+    return statusConfig[orderStatus] ?? {
+      bg: 'rgba(255,255,255,0.06)',
+      border: 'rgba(255,255,255,0.15)',
+      color: 'rgba(255,255,255,0.6)',
+      label: orderStatus
+    }
+  }
+
   const openPointsRecordDetails = async (record: PointsRecord) => {
     setSelectedPointsRecord(record)
     setSelectedVisitSession(null)
@@ -406,6 +477,69 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div style={{ color: '#FFFFFF' }}>
       <Drawer
+        title={t('profile.cigarRecordDetails')}
+        placement="bottom"
+        open={cigarRecordDrawerOpen}
+        onClose={() => setCigarRecordDrawerOpen(false)}
+        height={isMobile ? '56vh' : 420}
+        styles={{
+          content: { background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)' },
+          header: { borderBottom: '1px solid rgba(244,175,37,0.25)' },
+          body: { padding: isMobile ? 16 : 24 }
+        }}
+      >
+        {selectedOrder && (() => {
+          const status = getOrderStatusConfig(selectedOrder.status)
+          const orderNumber = selectedOrder.orderNo || selectedOrder.id
+          const totalQuantity = selectedOrder.items.reduce((sum, item) => sum + item.quantity, 0)
+          return (
+            <div style={{ maxWidth: 640, margin: '0 auto' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, marginBottom: 16 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ color: '#f4cf72', fontSize: 15, fontWeight: 800, overflowWrap: 'anywhere' }}>
+                    # {orderNumber.toUpperCase()}
+                  </div>
+                  <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4 }}>
+                    {formatDateTime(selectedOrder.createdAt)}
+                  </div>
+                </div>
+                <span style={{ padding: '3px 10px', borderRadius: 20, fontSize: 11, fontWeight: 700, background: status.bg, border: `1px solid ${status.border}`, color: status.color, whiteSpace: 'nowrap' }}>
+                  {status.label}
+                </span>
+              </div>
+
+              <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
+                {selectedOrder.items.map((item, index) => (
+                  <div key={`${item.cigarId}-${index}`} style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, alignItems: 'center', padding: '10px 12px', background: '#1d1a14' }}>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ color: 'rgba(255,255,255,0.88)', fontSize: 13, fontWeight: 650, overflowWrap: 'anywhere' }}>
+                        {item.name || item.cigarId}
+                      </div>
+                      <div style={{ color: 'rgba(255,255,255,0.4)', fontSize: 11, marginTop: 3 }}>
+                        RM {Number(item.price || 0).toFixed(2)} × {item.quantity}
+                      </div>
+                    </div>
+                    <div style={{ color: '#f4cf72', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                      RM {(Number(item.price || 0) * item.quantity).toFixed(2)}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, marginTop: 14, paddingTop: 12, borderTop: '1px solid rgba(244,175,37,0.18)' }}>
+                <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                  {totalQuantity} {t('ordersAdmin.totalQuantity')}
+                </span>
+                <span style={{ color: '#f4cf72', fontSize: 20, fontWeight: 800 }}>
+                  RM {Number(selectedOrder.total || 0).toFixed(2)}
+                </span>
+              </div>
+            </div>
+          )
+        })()}
+      </Drawer>
+
+      <Drawer
         title={t('profile.pointsRecords')}
         placement="bottom"
         open={pointsRecordDrawerOpen}
@@ -422,7 +556,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'flex-start', marginBottom: 18 }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ color: '#fff', fontSize: 16, fontWeight: 700, lineHeight: 1.4 }}>
-                  {selectedPointsRecord.description}
+                  {getPointsRecordDescription(selectedPointsRecord, pointsVisitSessions[selectedPointsRecord.relatedId || ''])}
                 </div>
                 <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 12, marginTop: 5 }}>
                   {formatDateTime(selectedPointsRecord.createdAt)}
@@ -748,18 +882,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       : new Date(order.createdAt)
 
                   const totalQuantity = order.items.reduce((sum, item) => sum + item.quantity, 0)
+                  const displayOrderNumber = order.orderNo || order.id
 
-                  const statusConfig: Record<string, { bg: string; border: string; color: string; label: string }> = {
-                    completed: { bg: 'rgba(82,196,26,0.12)', border: 'rgba(82,196,26,0.45)', color: '#52c41a', label: t('ordersAdmin.status.completed') },
-                    confirmed: { bg: 'rgba(82,196,26,0.12)', border: 'rgba(82,196,26,0.45)', color: '#52c41a', label: t('ordersAdmin.status.confirmed') || 'Confirmed' },
-                    pending: { bg: 'rgba(244,175,37,0.12)', border: 'rgba(244,175,37,0.45)', color: '#F4AF25', label: t('ordersAdmin.status.pending') },
-                    cancelled: { bg: 'rgba(255,77,79,0.12)', border: 'rgba(255,77,79,0.4)', color: '#ff4d4f', label: t('ordersAdmin.status.cancelled') },
-                  }
-                  const status = statusConfig[order.status] ?? { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.6)', label: order.status }
+                  const status = getOrderStatusConfig(order.status)
 
                   return (
                     <div
                       key={order.id}
+                      role="button"
+                      tabIndex={0}
+                      aria-label={`${t('profile.cigarRecordDetails')}: ${displayOrderNumber}`}
+                      onClick={() => {
+                        setSelectedOrder(order)
+                        setCigarRecordDrawerOpen(true)
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setSelectedOrder(order)
+                          setCigarRecordDrawerOpen(true)
+                        }
+                      }}
                       style={{
                         background: 'rgba(255,255,255,0.04)',
                         borderRadius: 12,
@@ -767,40 +910,34 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         borderLeft: '3px solid #C48D3A',
                         overflow: 'hidden',
                         display: 'flex',
-                        flexDirection: 'column'
+                        flexDirection: 'column',
+                        gap: 6,
+                        padding: isMobile ? '9px 12px' : '10px 14px',
+                        cursor: 'pointer'
                       }}
                     >
                       {/* Card header */}
                       <div style={{
-                        padding: isMobile ? '12px 14px 10px' : '14px 16px 10px',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'flex-start',
-                        borderBottom: '1px solid rgba(255,255,255,0.06)'
+                        alignItems: 'center',
+                        gap: 10
                       }}>
-                        <div>
-                          <div style={{
-                            fontSize: isMobile ? 13 : 14,
-                            fontWeight: 700,
-                            background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-                            WebkitBackgroundClip: 'text',
-                            WebkitTextFillColor: 'transparent',
-                            backgroundClip: 'text',
-                            letterSpacing: '0.5px'
-                          }}>
-                            # {order.id.slice(-6).toUpperCase()}
-                          </div>
-                          <div style={{
-                            fontSize: 11,
-                            color: 'rgba(255,255,255,0.4)',
-                            marginTop: 3,
-                            letterSpacing: '0.2px'
-                          }}>
-                            {formatDate(orderDate)}
-                          </div>
+                        <div style={{
+                          minWidth: 0,
+                          fontSize: isMobile ? 12 : 13,
+                          lineHeight: 1.3,
+                          fontWeight: 700,
+                          background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+                          WebkitBackgroundClip: 'text',
+                          WebkitTextFillColor: 'transparent',
+                          backgroundClip: 'text',
+                          overflowWrap: 'anywhere'
+                        }}>
+                          # {displayOrderNumber.toUpperCase()}
                         </div>
                         <div style={{
-                          padding: '3px 10px',
+                          padding: '2px 9px',
                           borderRadius: 20,
                           fontSize: 11,
                           fontWeight: 600,
@@ -816,7 +953,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </div>
 
                       {/* Items list */}
-                      <div style={{ padding: isMobile ? '8px 14px' : '8px 16px', flex: 1 }}>
+                      <div style={{ flex: 1 }}>
                         {order.items.map((item, index) => {
                           const displayName = item.cigarId.startsWith('FEE:')
                             ? t('eventsAdmin.eventFee')
@@ -827,7 +964,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                               display: 'flex',
                               justifyContent: 'space-between',
                               alignItems: 'center',
-                              padding: '7px 0',
+                              padding: '3px 0',
                               borderBottom: index < order.items.length - 1
                                 ? '1px solid rgba(255,255,255,0.05)'
                                 : 'none',
@@ -874,26 +1011,29 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                       {/* Footer */}
                       <div style={{
-                        padding: isMobile ? '10px 14px' : '10px 16px',
-                        borderTop: '1px solid rgba(255,255,255,0.06)',
-                        background: 'rgba(0,0,0,0.15)',
                         display: 'flex',
                         justifyContent: 'space-between',
-                        alignItems: 'center'
+                        alignItems: 'center',
+                        gap: 10
                       }}>
                         <div style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 5,
+                          gap: 10,
                           color: 'rgba(255,255,255,0.35)',
-                          fontSize: 11
+                          fontSize: 10,
+                          minWidth: 0
                         }}>
-                          <ShoppingOutlined style={{ fontSize: 11 }} />
-                          <span>{totalQuantity} {t('ordersAdmin.totalQuantity') || 'items'}</span>
+                          <span style={{ whiteSpace: 'nowrap' }}>{formatDate(orderDate)}</span>
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
+                            <ShoppingOutlined style={{ fontSize: 10 }} />
+                            {totalQuantity} {t('ordersAdmin.totalQuantity') || 'items'}
+                          </span>
                         </div>
                         <div style={{
-                          fontSize: isMobile ? 15 : 16,
+                          fontSize: isMobile ? 14 : 15,
                           fontWeight: 700,
+                          whiteSpace: 'nowrap',
                           background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
                           WebkitBackgroundClip: 'text',
                           WebkitTextFillColor: 'transparent',
@@ -940,12 +1080,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   const isEarn = record.type === 'earn'
                   const accentColor = isEarn ? '#52c41a' : '#ff4d4f'
                   const accentBg = isEarn ? 'rgba(82,196,26,0.06)' : 'rgba(255,77,79,0.06)'
+                  const visitSession = record.relatedId ? pointsVisitSessions[record.relatedId] : undefined
+                  const recordDescription = getPointsRecordDescription(record, visitSession)
+                  const visitPeriod = formatVisitPeriod(visitSession)
 
                   return (
                     <button
                       type="button"
                       key={record.id}
-                      aria-label={`${t('profile.pointsRecords')}: ${record.description}`}
+                      aria-label={`${t('profile.pointsRecords')}: ${recordDescription}`}
                       onClick={() => openPointsRecordDetails(record)}
                       style={{
                         width: '100%',
@@ -991,25 +1134,16 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           whiteSpace: 'nowrap',
                           marginBottom: 3
                         }}>
-                          {record.description}
+                          {recordDescription}
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <span style={{
                             fontSize: 11,
                             color: 'rgba(255,255,255,0.35)',
                           }}>
-                            {formatDate(recordDate)}
-                          </span>
-                          <span style={{ color: 'rgba(255,255,255,0.2)', fontSize: 10 }}>•</span>
-                          <span style={{
-                            fontSize: 11,
-                            padding: '1px 7px',
-                            borderRadius: 10,
-                            background: 'rgba(244,175,37,0.1)',
-                            border: '1px solid rgba(244,175,37,0.2)',
-                            color: 'rgba(244,175,37,0.8)',
-                          }}>
-                            {t(`pointsConfig.records.sources.${record.source}`) || record.source}
+                            {visitPeriod
+                              ? `${t('profile.stayTime')}: ${visitPeriod}`
+                              : formatDate(recordDate)}
                           </span>
                         </div>
                       </div>
@@ -1208,7 +1342,41 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 ].map((stat, i) => (
                   <React.Fragment key={i}>
                     {i > 0 && <div style={{ width: 1, background: 'rgba(244,175,37,0.15)', flexShrink: 0 }} />}
-                    <div style={{ flex: 1, textAlign: 'center', padding: '16px 8px' }}>
+                    <div style={{
+                      flex: 1,
+                      minWidth: 0,
+                      padding: isMobile ? '12px 14px' : '14px 16px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: 10
+                    }}>
+                      <div style={{
+                        fontSize: 11,
+                        color: 'rgba(255,255,255,0.45)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        minWidth: 0,
+                        maxWidth: isMobile ? 76 : 110,
+                        lineHeight: 1.25,
+                        textAlign: 'left'
+                      }}>
+                        <span style={{
+                          width: 28,
+                          height: 28,
+                          fontSize: 28,
+                          lineHeight: 1,
+                          color: 'rgba(244,175,37,0.6)',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexShrink: 0
+                        }}>
+                          {stat.icon}
+                        </span>
+                        <span>{stat.label}</span>
+                      </div>
                       <div style={{
                         fontSize: isMobile ? 22 : 26,
                         fontWeight: 800,
@@ -1217,20 +1385,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         WebkitTextFillColor: 'transparent',
                         backgroundClip: 'text',
                         lineHeight: 1,
-                        marginBottom: 6
+                        flexShrink: 0,
+                        textAlign: 'right'
                       }}>
                         {stat.value}
-                      </div>
-                      <div style={{
-                        fontSize: 11,
-                        color: 'rgba(255,255,255,0.45)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: 4
-                      }}>
-                        <span style={{ fontSize: 10, color: 'rgba(244,175,37,0.6)' }}>{stat.icon}</span>
-                        {stat.label}
                       </div>
                     </div>
                   </React.Fragment>
@@ -1278,106 +1436,101 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         borderRadius: 12,
                         border: '1px solid rgba(244,175,37,0.15)',
                         background: 'rgba(255,255,255,0.04)',
+                        padding: isMobile ? '11px 12px' : '13px 14px',
+                        display: 'grid',
+                        gridTemplateColumns: `${isMobile ? 44 : 48}px minmax(0, 1fr) auto`,
+                        alignItems: 'center',
+                        gap: isMobile ? 10 : 12,
                         overflow: 'hidden'
-                      }}>
-                        {/* Card header with avatar */}
+                        }}>
+                        {/* Avatar */}
                         <div style={{
-                          padding: isMobile ? '14px 14px 10px' : '16px 16px 12px',
+                          width: isMobile ? 44 : 48,
+                          height: isMobile ? 44 : 48,
+                          borderRadius: '50%',
+                          background: 'linear-gradient(135deg, rgba(253,224,141,0.15), rgba(196,141,58,0.08))',
+                          border: '2px solid rgba(244,175,37,0.35)',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 12,
-                          borderBottom: '1px solid rgba(255,255,255,0.06)'
+                          justifyContent: 'center',
+                          flexShrink: 0
                         }}>
-                          {/* Avatar */}
-                          <div style={{
-                            width: isMobile ? 44 : 48,
-                            height: isMobile ? 44 : 48,
-                            borderRadius: '50%',
-                            background: 'linear-gradient(135deg, rgba(253,224,141,0.15), rgba(196,141,58,0.08))',
-                            border: '2px solid rgba(244,175,37,0.35)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            flexShrink: 0
+                          <span style={{
+                            background: 'linear-gradient(135deg, #FDE08D, #C48D3A)',
+                            WebkitBackgroundClip: 'text',
+                            WebkitTextFillColor: 'transparent',
+                            backgroundClip: 'text',
+                            fontWeight: 800,
+                            fontSize: isMobile ? 18 : 20,
+                            lineHeight: 1
                           }}>
-                            <span style={{
-                              background: 'linear-gradient(135deg, #FDE08D, #C48D3A)',
-                              WebkitBackgroundClip: 'text',
-                              WebkitTextFillColor: 'transparent',
-                              backgroundClip: 'text',
-                              fontWeight: 800,
-                              fontSize: isMobile ? 18 : 20,
-                              lineHeight: 1
-                            }}>
-                              {initial}
-                            </span>
-                          </div>
-
-                          {/* Name + member number */}
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{
-                              fontSize: isMobile ? 14 : 15,
-                              fontWeight: 700,
-                              color: '#fff',
-                              textTransform: 'uppercase',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                              letterSpacing: '0.3px'
-                            }}>
-                              {referred.displayName || t('profile.unknownUser')}
-                            </div>
-                            {referred.memberId && (
-                              <div style={{
-                                display: 'flex', alignItems: 'center', gap: 4,
-                                fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2
-                              }}>
-                                <NumberOutlined style={{ fontSize: 10 }} />
-                                <span>{referred.memberId}</span>
-                              </div>
-                            )}
-                          </div>
+                            {initial}
+                          </span>
                         </div>
 
-                        {/* Info rows */}
-                        <div style={{ padding: isMobile ? '10px 14px' : '10px 16px', display: 'flex', flexDirection: 'column', gap: 6 }}>
-                          {/* Join date */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            <CalendarOutlined style={{ fontSize: 11, color: 'rgba(244,175,37,0.5)', flexShrink: 0 }} />
-                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
+                        {/* Name + member number */}
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{
+                            fontSize: isMobile ? 14 : 15,
+                            fontWeight: 700,
+                            color: '#fff',
+                            textTransform: 'uppercase',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            letterSpacing: '0.3px'
+                          }}>
+                            {referred.displayName || t('profile.unknownUser')}
+                          </div>
+                          {referred.memberId && (
+                            <div style={{
+                              display: 'flex', alignItems: 'center', gap: 4,
+                              fontSize: 11, color: 'rgba(255,255,255,0.35)', marginTop: 2
+                            }}>
+                              <NumberOutlined style={{ fontSize: 10 }} />
+                              <span>{referred.memberId}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Dates and membership */}
+                        <div style={{ minWidth: isMobile ? 148 : 164, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap' }}>
+                              <CalendarOutlined style={{ fontSize: 10, color: 'rgba(244,175,37,0.5)' }} />
                               {t('profile.joinDate')}
                             </span>
-                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)', marginLeft: 'auto' }}>
+                            <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.7)', whiteSpace: 'nowrap' }}>
                               {formatDate(joinDate)}
                             </span>
                           </div>
-
-                          {/* Membership activation */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <div style={{ display: 'grid', gridTemplateColumns: 'auto auto', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 10, color: 'rgba(255,255,255,0.4)', whiteSpace: 'nowrap' }}>
                             {isMembershipActivated
-                              ? <CheckCircleOutlined style={{ fontSize: 11, color: '#52c41a', flexShrink: 0 }} />
-                              : <ClockCircleOutlined style={{ fontSize: 11, color: 'rgba(255,255,255,0.25)', flexShrink: 0 }} />
+                                ? <CheckCircleOutlined style={{ fontSize: 10, color: '#52c41a' }} />
+                                : <ClockCircleOutlined style={{ fontSize: 10, color: 'rgba(255,255,255,0.25)' }} />
                             }
-                            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>
                               {t('profile.membership')}
                             </span>
                             {isMembershipActivated ? (
                               <span style={{
-                                fontSize: 12, marginLeft: 'auto',
-                                padding: '1px 8px', borderRadius: 10,
+                                fontSize: 10,
+                                padding: '1px 6px', borderRadius: 8,
                                 background: 'rgba(82,196,26,0.12)',
                                 border: '1px solid rgba(82,196,26,0.3)',
-                                color: '#52c41a'
+                                color: '#52c41a',
+                                whiteSpace: 'nowrap'
                               }}>
                                 {activatedAt ? formatDate(activatedAt) : t('profile.activatedMembership')}
                               </span>
                             ) : (
                               <span style={{
-                                fontSize: 11, marginLeft: 'auto',
-                                padding: '1px 8px', borderRadius: 10,
+                                fontSize: 10,
+                                padding: '1px 6px', borderRadius: 8,
                                 background: 'rgba(255,255,255,0.05)',
                                 border: '1px solid rgba(255,255,255,0.1)',
-                                color: 'rgba(255,255,255,0.3)'
+                                color: 'rgba(255,255,255,0.3)',
+                                whiteSpace: 'nowrap'
                               }}>
                                 {t('profile.notActivated')}
                               </span>

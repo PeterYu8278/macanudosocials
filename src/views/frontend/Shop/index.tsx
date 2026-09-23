@@ -24,7 +24,7 @@ const Shop: React.FC = () => {
   const { t } = useTranslation()
   const { message } = App.useApp()
   const navigate = useNavigate()
-  const { data: cigars = [], loading: cigarsLoading } = useFirestoreQuery(() => getCigars({ limit: 100 }))
+  const { data: cigars = [], loading: cigarsLoading, error: cigarsError } = useFirestoreQuery(() => getCigars({ limit: 100 }))
   const { data: brands = [], loading: brandsLoading } = useFirestoreQuery(() => getBrands({ limit: 200 }))
   const { data: allEvents = [] } = useFirestoreQuery(getUpcomingEvents)
   const [confirmRemove, setConfirmRemove] = useState<{
@@ -61,6 +61,15 @@ const Shop: React.FC = () => {
   const brandRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const brandNavRefs = useRef<Record<string, HTMLDivElement | null>>({})
   const sidebarRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (cigarsLoading || cigarsError) return
+
+    const availableCigarIds = new Set(cigars.map(cigar => cigar.id))
+    Object.keys(quantities).forEach(id => {
+      if (!availableCigarIds.has(id)) removeFromCart(id)
+    })
+  }, [cigars, cigarsError, cigarsLoading, quantities, removeFromCart])
 
   const formatAddress = (address: any): string => {
     if (!address) return ''
@@ -232,18 +241,15 @@ const Shop: React.FC = () => {
     })
   })() : filteredCigars
 
-  // 计算购物车总数量和总价
-  const cartItemCount = Object.values(quantities).reduce((sum, qty) => sum + qty, 0)
-  const cartTotal = Object.entries(quantities).reduce((sum, [id, qty]) => {
-    const cigar = cigars.find(c => c.id === id)
-    return sum + (cigar ? cigar.price * qty : 0)
-  }, 0)
-
   // 购物车商品列表
   const cartItems = Object.entries(quantities).map(([id, qty]) => {
     const cigar = cigars.find(c => c.id === id)
     return cigar ? { ...cigar, quantity: qty } : null
   }).filter(Boolean) as (Cigar & { quantity: number })[]
+
+  // 数量、总价和弹窗均以当前商品目录中真实存在的购物车项目为准。
+  const cartItemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0)
+  const cartTotal = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
 
   return (
     <div style={{
