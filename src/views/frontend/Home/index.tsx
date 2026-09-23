@@ -112,7 +112,7 @@ const Home: React.FC = () => {
           aria-live="polite"
           style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}
         >
-          <Spin tip={t('common.loading')} />
+          <Spin aria-label={t('common.loading')} />
         </div>
       )
     }
