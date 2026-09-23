@@ -153,7 +153,16 @@ const NotificationManagement: React.FC = () => {
         }),
       })
       const responseText = await response.text()
-      let result: { success?: boolean; results?: { sent?: number; failed?: number }; error?: string; message?: string } = {}
+      let result: {
+        success?: boolean
+        results?: {
+          sent?: number
+          failed?: number
+          failureDetails?: Array<{ code?: string; message?: string }>
+        }
+        error?: string
+        message?: string
+      } = {}
       try {
         result = responseText ? JSON.parse(responseText) : {}
       } catch {
@@ -162,9 +171,17 @@ const NotificationManagement: React.FC = () => {
         )
       }
       if (!response.ok || !result.success) {
-        throw new Error(result.error || result.message || 'Notification request failed')
+        const failure = result.results?.failureDetails?.[0]
+        const detail = failure ? ` (${failure.code || 'FCM'}: ${failure.message || 'delivery failed'})` : ''
+        throw new Error(result.error || result.message || `Notification delivery failed${detail}`)
       }
-      message.success(`Sent: ${result.results?.sent ?? 0}, failed: ${result.results?.failed ?? 0}`)
+      const sent = result.results?.sent ?? 0
+      const failed = result.results?.failed ?? 0
+      if (failed > 0) {
+        message.warning(`Sent: ${sent}, failed: ${failed}`)
+      } else {
+        message.success(`Sent: ${sent}, failed: ${failed}`)
+      }
       setSendTarget(null)
     } catch (error: any) {
       message.error(error?.message || 'Notification request failed')

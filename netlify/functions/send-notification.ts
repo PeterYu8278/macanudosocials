@@ -94,7 +94,8 @@ export const handler: Handler = async (event, context) => {
     const results = {
       total: 0,
       sent: 0,
-      failed: 0
+      failed: 0,
+      failureDetails: [] as Array<{ code?: string; message: string }>
     };
 
     // 如果使用主题，发送主题消息
@@ -117,10 +118,16 @@ export const handler: Handler = async (event, context) => {
           await messaging.send(message);
           results.total++;
           results.sent++;
-        } catch (error: any) {
+          } catch (error: any) {
           console.error(`[send-notification] Failed to send to topic ${topic}:`, error);
           results.total++;
           results.failed++;
+          if (results.failureDetails.length < 10) {
+            results.failureDetails.push({
+              code: error?.code,
+              message: error?.message || 'Topic delivery failed'
+            });
+          }
         }
       }
     }
@@ -149,10 +156,23 @@ export const handler: Handler = async (event, context) => {
           results.total += batch.length;
           results.sent += response.successCount;
           results.failed += response.failureCount;
+          response.responses.forEach((sendResponse) => {
+            if (sendResponse.success || results.failureDetails.length >= 10) return;
+            results.failureDetails.push({
+              code: sendResponse.error?.code,
+              message: sendResponse.error?.message || 'Token delivery failed'
+            });
+          });
         } catch (error: any) {
           console.error('[send-notification] Failed to send batch:', error);
           results.total += batch.length;
           results.failed += batch.length;
+          if (results.failureDetails.length < 10) {
+            results.failureDetails.push({
+              code: error?.code,
+              message: error?.message || 'Batch delivery failed'
+            });
+          }
         }
       }
     }
@@ -160,7 +180,7 @@ export const handler: Handler = async (event, context) => {
     return {
       statusCode: 200,
       body: JSON.stringify({
-        success: true,
+        success: results.sent > 0,
         results
       })
     };
