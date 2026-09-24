@@ -264,6 +264,7 @@ const NotificationManagement: React.FC = () => {
       let result: {
         success?: boolean
         messageId?: string
+        targetedSubscriptions?: number
         results?: { sent?: number; failed?: number }
         error?: string
         message?: string
@@ -283,9 +284,7 @@ const NotificationManagement: React.FC = () => {
       const failures = result.results?.failed ?? 0
       message.success(values.provider === 'fcm'
         ? `FCM sent: ${recipients}, failed: ${failures}`
-        : recipients > 0
-          ? `OneSignal accepted ${recipients} subscription${recipients === 1 ? '' : 's'}; delivery is not yet confirmed`
-          : `OneSignal accepted message ${result.messageId || ''}`.trim())
+        : `OneSignal accepted message ${result.messageId || ''} for ${result.targetedSubscriptions || recipients} subscription${(result.targetedSubscriptions || recipients) === 1 ? '' : 's'}; check Confirmed Delivery in OneSignal`)
       setSendTarget(null)
     } catch (error: any) {
       message.error(error?.message || 'Notification request failed')

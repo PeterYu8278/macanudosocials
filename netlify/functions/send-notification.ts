@@ -292,8 +292,43 @@ export const handler: Handler = async (event) => {
       data: { ...customData, type, clickAction },
     };
 
+    let targetedSubscriptionCount = 0;
     if (eligibleTargetUsers.length > 0) {
-      oneSignalPayload.include_aliases = { external_id: eligibleTargetUsers };
+      const db = getFirestore();
+      const subscriptionIds = new Set<string>();
+
+      await Promise.all(eligibleTargetUsers.map(async (userId) => {
+        const subscriptions = await db.collection('users')
+          .doc(userId)
+          .collection('notificationSubscriptions')
+          .get();
+
+        subscriptions.forEach((subscription) => {
+          const data = subscription.data();
+          const subscriptionId = data.subscriptionId;
+          if (
+            data.provider === 'onesignal'
+            && data.status === 'subscribed'
+            && data.optedIn === true
+            && typeof subscriptionId === 'string'
+            && subscriptionId.trim()
+          ) {
+            subscriptionIds.add(subscriptionId.trim());
+          }
+        });
+      }));
+
+      const activeSubscriptionIds = [...subscriptionIds];
+      targetedSubscriptionCount = activeSubscriptionIds.length;
+      if (targetedSubscriptionCount === 0) {
+        return response(422, {
+          success: false,
+          error: 'No active OneSignal subscriptions were found for the selected user',
+          provider: 'onesignal',
+        });
+      }
+
+      oneSignalPayload.include_subscription_ids = activeSubscriptionIds;
     } else {
       oneSignalPayload.included_segments = targetSegments.length > 0
         ? targetSegments
@@ -320,8 +355,9 @@ export const handler: Handler = async (event) => {
     }
 
     const messageId = typeof responseBody.id === 'string' ? responseBody.id : '';
-    const recipients = typeof responseBody.recipients === 'number' ? responseBody.recipients : 0;
-    if (!messageId) {
+    const hasRecipientCount = typeof responseBody.recipients === 'number';
+    const recipients = hasRecipientCount ? responseBody.recipients as number : targetedSubscriptionCount;
+    if (!messageId || (hasRecipientCount && recipients === 0)) {
       return response(422, {
         success: false,
         error: 'No subscribed OneSignal recipients were found for this user',
@@ -334,6 +370,7 @@ export const handler: Handler = async (event) => {
       success: true,
       provider: 'onesignal',
       messageId,
+      targetedSubscriptions: targetedSubscriptionCount,
       results: {
         total: recipients,
         sent: recipients,
