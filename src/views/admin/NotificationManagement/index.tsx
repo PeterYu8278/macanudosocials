@@ -37,6 +37,9 @@ type NotificationUserRecord = {
   displayName: string
   email: string
   subscriptionId: string
+  device: string
+  os: string
+  browser: string
   phone: string
   role: UserRole
   storeId: string
@@ -84,6 +87,9 @@ const NotificationManagement: React.FC = () => {
         displayName: user.displayName || 'Unnamed user',
         email: user.email || '-',
         subscriptionId: user.notificationSummary?.currentSubscriptionId || '-',
+        device: user.notificationSummary?.currentDeviceType || '-',
+        os: user.notificationSummary?.currentOs || '-',
+        browser: user.notificationSummary?.currentBrowser || '-',
         phone: user.phone || user.profile?.phone || '-',
         role: user.role,
         storeId: user.storeId || '-',
@@ -108,6 +114,9 @@ const NotificationManagement: React.FC = () => {
       record.displayName,
       record.email,
       record.subscriptionId,
+      record.device,
+      record.os,
+      record.browser,
       record.phone,
       record.role,
       record.storeId,
@@ -129,6 +138,39 @@ const NotificationManagement: React.FC = () => {
       body: 'This is a targeted push notification test.',
       clickAction: '/profile',
     })
+  }
+
+  const renderSubscription = (record: NotificationUserRecord) => {
+    const tags = [
+      { key: 'device', value: record.device },
+      { key: 'os', value: record.os },
+      { key: 'browser', value: record.browser },
+    ].filter((item) => item.value !== '-')
+
+    return (
+      <div className="notification-subscription-cell">
+        {tags.length > 0 && (
+          <div className="notification-device-tags">
+            {tags.map((item) => (
+              <Tag key={item.key} className={`notification-device-tag is-${item.key}`}>
+                {item.value}
+              </Tag>
+            ))}
+          </div>
+        )}
+        {record.subscriptionId === '-' ? (
+          <Text type="secondary">-</Text>
+        ) : (
+          <Text
+            code
+            copyable={{ text: record.subscriptionId }}
+            ellipsis={{ tooltip: record.subscriptionId }}
+          >
+            {record.subscriptionId}
+          </Text>
+        )}
+      </div>
+    )
   }
 
   const updateMessageType = (messageType: SendFormValues['messageType']) => {
@@ -267,21 +309,9 @@ const NotificationManagement: React.FC = () => {
       ),
     },
     {
-      title: 'Subscription ID',
-      dataIndex: 'subscriptionId',
+      title: 'Subscription',
       key: 'subscriptionId',
-      render: (subscriptionId: string) => subscriptionId === '-'
-        ? <Text type="secondary">-</Text>
-        : (
-          <Text
-            code
-            copyable={{ text: subscriptionId }}
-            ellipsis={{ tooltip: subscriptionId }}
-            style={{ maxWidth: 220 }}
-          >
-            {subscriptionId}
-          </Text>
-        ),
+      render: (_: unknown, record: NotificationUserRecord) => renderSubscription(record),
     },
     {
       title: 'Contact',
@@ -354,7 +384,7 @@ const NotificationManagement: React.FC = () => {
           <Space className="notification-toolbar">
           <Input.Search
             allowClear
-            placeholder="Search user, email, phone, Subscription ID, role, or store"
+            placeholder="Search user, subscription, device, OS, browser, role, or store"
             onChange={(event) => setSearch(event.target.value)}
           />
             <Button className="notification-refresh-button" icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>
@@ -400,17 +430,7 @@ const NotificationManagement: React.FC = () => {
                   <div><span>Store</span><strong>{record.storeId}</strong></div>
                   <div className="notification-subscription-row">
                     <span>Subscription</span>
-                    {record.subscriptionId === '-' ? (
-                      <strong>-</strong>
-                    ) : (
-                      <Text
-                        code
-                        copyable={{ text: record.subscriptionId }}
-                        ellipsis={{ tooltip: record.subscriptionId }}
-                      >
-                        {record.subscriptionId}
-                      </Text>
-                    )}
+                    {renderSubscription(record)}
                   </div>
                 </div>
 

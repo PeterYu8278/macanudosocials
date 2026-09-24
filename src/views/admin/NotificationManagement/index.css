@@ -149,6 +149,52 @@
   text-transform: capitalize;
 }
 
+.notification-subscription-cell {
+  display: flex;
+  min-width: 0;
+  max-width: 280px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 7px;
+}
+
+.notification-subscription-cell > .ant-typography {
+  display: block;
+  width: 100%;
+  max-width: 100%;
+}
+
+.notification-device-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.notification-device-tag {
+  margin-inline-end: 0;
+  border-radius: 4px;
+  line-height: 20px;
+  text-transform: capitalize;
+}
+
+.notification-device-tag.is-device {
+  border-color: rgba(244, 175, 37, 0.48);
+  color: #ebc66e;
+  background: rgba(244, 175, 37, 0.1);
+}
+
+.notification-device-tag.is-os {
+  border-color: rgba(64, 169, 255, 0.48);
+  color: #69b8f7;
+  background: rgba(64, 169, 255, 0.09);
+}
+
+.notification-device-tag.is-browser {
+  border-color: rgba(54, 207, 201, 0.46);
+  color: #58d5cf;
+  background: rgba(54, 207, 201, 0.09);
+}
+
 .notification-primary-button.ant-btn-primary {
   border-color: #d4a246;
   color: #17120a;
@@ -408,6 +454,10 @@
 
   .notification-subscription-row .ant-typography {
     display: block;
+    max-width: 100%;
+  }
+
+  .notification-subscription-row .notification-subscription-cell {
     max-width: 100%;
   }
 

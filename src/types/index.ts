@@ -83,6 +83,9 @@ export interface User {
     currentDeviceId?: string;
     currentDeviceStatus?: 'idle' | 'loading' | 'prompt' | 'subscribed' | 'unsubscribed' | 'denied' | 'unsupported' | 'error';
     currentSubscriptionId?: string | null;
+    currentDeviceType?: 'mobile' | 'tablet' | 'desktop';
+    currentOs?: 'ios' | 'android' | 'windows' | 'macos' | 'linux';
+    currentBrowser?: 'safari' | 'chrome' | 'edge' | 'firefox';
     permission?: NotificationPermission;
     optedIn?: boolean;
     lastSyncedAt?: Date;
