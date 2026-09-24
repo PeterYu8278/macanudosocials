@@ -3,18 +3,15 @@ import {
   Alert,
   App,
   Button,
-  Card,
-  Col,
   DatePicker,
   Empty,
   Form,
   Input,
+  List,
   Modal,
-  Row,
   Segmented,
   Select,
   Space,
-  Statistic,
   Table,
   Tag,
   Typography,
@@ -30,6 +27,7 @@ import type { Dayjs } from 'dayjs'
 import { auth } from '../../../config/firebase'
 import { getAllUsers, getUpcomingEvents } from '../../../services/firebase/firestore'
 import type { Event, User, UserRole } from '../../../types'
+import './index.css'
 
 const { Title, Text } = Typography
 
@@ -38,7 +36,7 @@ type NotificationUserRecord = {
   userId: string
   displayName: string
   email: string
-  memberId: string
+  subscriptionId: string
   phone: string
   role: UserRole
   storeId: string
@@ -85,7 +83,7 @@ const NotificationManagement: React.FC = () => {
         userId: user.id,
         displayName: user.displayName || 'Unnamed user',
         email: user.email || '-',
-        memberId: user.memberId || '-',
+        subscriptionId: user.notificationSummary?.currentSubscriptionId || '-',
         phone: user.phone || user.profile?.phone || '-',
         role: user.role,
         storeId: user.storeId || '-',
@@ -109,13 +107,17 @@ const NotificationManagement: React.FC = () => {
     return records.filter((record) => [
       record.displayName,
       record.email,
-      record.memberId,
+      record.subscriptionId,
       record.phone,
       record.role,
       record.storeId,
-      record.userId,
     ].some((value) => value.toLowerCase().includes(keyword)))
   }, [records, search])
+
+  const subscribedUserCount = useMemo(
+    () => records.filter((record) => record.subscriptionId !== '-').length,
+    [records],
+  )
 
   const openSendModal = (record: NotificationUserRecord) => {
     setSendTarget(record)
@@ -255,21 +257,31 @@ const NotificationManagement: React.FC = () => {
       title: 'User',
       key: 'user',
       render: (_: unknown, record: NotificationUserRecord) => (
-        <Space>
-          <UserOutlined style={{ color: '#F4AF25' }} />
+        <Space className="notification-user-cell">
+          <span className="notification-user-icon"><UserOutlined /></span>
           <div>
-            <Text strong style={{ color: '#FDE08D' }}>{record.displayName}</Text>
+            <Text strong className="notification-user-name">{record.displayName}</Text>
             <div><Text type="secondary">{record.email}</Text></div>
-            <Text type="secondary">{record.memberId}</Text>
           </div>
         </Space>
       ),
     },
     {
-      title: 'External ID',
-      dataIndex: 'userId',
-      key: 'userId',
-      render: (userId: string) => <Text code copyable={{ text: userId }}>{userId}</Text>,
+      title: 'Subscription ID',
+      dataIndex: 'subscriptionId',
+      key: 'subscriptionId',
+      render: (subscriptionId: string) => subscriptionId === '-'
+        ? <Text type="secondary">-</Text>
+        : (
+          <Text
+            code
+            copyable={{ text: subscriptionId }}
+            ellipsis={{ tooltip: subscriptionId }}
+            style={{ maxWidth: 220 }}
+          >
+            {subscriptionId}
+          </Text>
+        ),
     },
     {
       title: 'Contact',
@@ -280,7 +292,7 @@ const NotificationManagement: React.FC = () => {
       title: 'Role',
       dataIndex: 'role',
       key: 'role',
-      render: (role: UserRole) => <Tag color="gold">{role}</Tag>,
+      render: (role: UserRole) => <Tag className="notification-role-tag">{role}</Tag>,
     },
     {
       title: 'Store',
@@ -291,7 +303,7 @@ const NotificationManagement: React.FC = () => {
       title: 'Action',
       key: 'action',
       render: (_: unknown, record: NotificationUserRecord) => (
-        <Button type="primary" icon={<SendOutlined />} onClick={() => openSendModal(record)}>
+        <Button className="notification-primary-button" type="primary" icon={<SendOutlined />} onClick={() => openSendModal(record)}>
           Test Send
         </Button>
       ),
@@ -299,50 +311,129 @@ const NotificationManagement: React.FC = () => {
   ]
 
   return (
-    <div style={{ padding: 16, maxWidth: 1500, margin: '0 auto' }}>
-      <Space align="center" style={{ marginBottom: 8 }}>
-        <BellOutlined style={{ color: '#F4AF25', fontSize: 24 }} />
-        <Title level={2} style={{ color: '#FDE08D', margin: 0 }}>Notification Management</Title>
-      </Space>
-      <Text type="secondary">Send targeted push notifications through FCM or OneSignal.</Text>
+    <div className="notification-management-page">
+      <header className="notification-page-header">
+        <div className="notification-title-group">
+          <span className="notification-title-icon"><BellOutlined /></span>
+          <div>
+            <Title level={2}>Notification Management</Title>
+            <Text type="secondary">Send targeted push notifications through FCM or OneSignal.</Text>
+          </div>
+        </div>
+      </header>
 
       <Alert
+        className="notification-delivery-alert"
         type="info"
         showIcon
-        style={{ margin: '16px 0' }}
         message="Targeted push delivery"
-        description="The selected user must allow notifications and have an active token for the selected provider. FCM uses stored device tokens; OneSignal uses the user's External ID subscriptions."
+        description="The selected user must allow notifications and have an active subscription for the selected provider."
       />
 
-      <Row gutter={[12, 12]} style={{ marginBottom: 16 }}>
-        <Col xs={24} sm={8}><Card><Statistic title="Registered Users" value={records.length} prefix={<UserOutlined />} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="Visible Users" value={filteredRecords.length} prefix={<BellOutlined />} /></Card></Col>
-        <Col xs={24} sm={8}><Card><Statistic title="Push Providers" value="FCM / OneSignal" prefix={<CloudServerOutlined />} /></Card></Col>
-      </Row>
+      <section className="notification-status-strip" aria-label="Notification overview">
+        <div className="notification-status-item">
+          <UserOutlined />
+          <div><strong>{records.length}</strong><span>Registered users</span></div>
+        </div>
+        <div className="notification-status-item">
+          <BellOutlined />
+          <div><strong>{subscribedUserCount}</strong><span>OneSignal ready</span></div>
+        </div>
+        <div className="notification-status-item">
+          <CloudServerOutlined />
+          <div><strong>2</strong><span>Push providers</span></div>
+        </div>
+      </section>
 
-      <Card>
-        <Space wrap style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+      <section className="notification-directory">
+        <div className="notification-directory-header">
+          <div>
+            <Title level={4}>Recipients</Title>
+            <Text type="secondary">{filteredRecords.length} users shown</Text>
+          </div>
+          <Space className="notification-toolbar">
           <Input.Search
             allowClear
-            placeholder="Search user, email, member ID, phone, or External ID"
+            placeholder="Search user, email, phone, Subscription ID, role, or store"
             onChange={(event) => setSearch(event.target.value)}
-            style={{ width: 420, maxWidth: '100%' }}
           />
-          <Button icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>Refresh</Button>
-        </Space>
-        <Table
-          rowKey="key"
+            <Button className="notification-refresh-button" icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>
+              <span>Refresh</span>
+            </Button>
+          </Space>
+        </div>
+
+        <div className="notification-desktop-table">
+          <Table
+            rowKey="key"
+            loading={loading}
+            columns={columns}
+            dataSource={filteredRecords}
+            locale={{ emptyText: <Empty description="No registered users found" /> }}
+            scroll={{ x: 900 }}
+            pagination={{ pageSize: 10, showSizeChanger: true }}
+          />
+        </div>
+
+        <List<NotificationUserRecord>
+          className="notification-mobile-list"
           loading={loading}
-          columns={columns}
           dataSource={filteredRecords}
           locale={{ emptyText: <Empty description="No registered users found" /> }}
-          scroll={{ x: 1050 }}
-          pagination={{ pageSize: 10, showSizeChanger: true }}
+          pagination={{ pageSize: 10, size: 'small', showSizeChanger: false }}
+          renderItem={(record) => (
+            <List.Item>
+              <article className="notification-mobile-user">
+                <div className="notification-mobile-user-header">
+                  <div className="notification-mobile-identity">
+                    <span className="notification-user-icon"><UserOutlined /></span>
+                    <div>
+                      <strong>{record.displayName}</strong>
+                      <span>{record.email}</span>
+                    </div>
+                  </div>
+                  <Tag className="notification-role-tag">{record.role}</Tag>
+                </div>
+
+                <div className="notification-mobile-meta">
+                  <div><span>Phone</span><strong>{record.phone}</strong></div>
+                  <div><span>Store</span><strong>{record.storeId}</strong></div>
+                  <div className="notification-subscription-row">
+                    <span>Subscription</span>
+                    {record.subscriptionId === '-' ? (
+                      <strong>-</strong>
+                    ) : (
+                      <Text
+                        code
+                        copyable={{ text: record.subscriptionId }}
+                        ellipsis={{ tooltip: record.subscriptionId }}
+                      >
+                        {record.subscriptionId}
+                      </Text>
+                    )}
+                  </div>
+                </div>
+
+                <Button
+                  className="notification-primary-button"
+                  type="primary"
+                  icon={<SendOutlined />}
+                  block
+                  onClick={() => openSendModal(record)}
+                >
+                  Test Send
+                </Button>
+              </article>
+            </List.Item>
+          )}
         />
-      </Card>
+      </section>
 
       <Modal
         open={!!sendTarget}
+        width={560}
+        centered
+        wrapClassName="notification-send-modal"
         title={sendTarget ? `Send to ${sendTarget.displayName}` : 'Send notification'}
         okText="Send Notification"
         okButtonProps={{ icon: <SendOutlined />, loading: sending }}
@@ -352,9 +443,16 @@ const NotificationManagement: React.FC = () => {
         destroyOnHidden
       >
         <Form form={form} layout="vertical" onFinish={sendNotification}>
-          <Form.Item label="Target user ID">
-            <Input value={sendTarget?.userId} disabled />
-          </Form.Item>
+          {sendTarget && (
+            <div className="notification-modal-target">
+              <span className="notification-user-icon"><UserOutlined /></span>
+              <div>
+                <strong>{sendTarget.displayName}</strong>
+                <span>{sendTarget.email}</span>
+              </div>
+              <Tag className="notification-role-tag">{sendTarget.role}</Tag>
+            </div>
+          )}
           <Form.Item name="provider" label="Push provider" rules={[{ required: true }]}>
             <Segmented
               block
