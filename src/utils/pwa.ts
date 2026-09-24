@@ -130,7 +130,9 @@ export const initializePWA = async (): Promise<void> => {
     // Check if service worker is supported
     if ('serviceWorker' in navigator) {
       // Initialize Workbox
-      const wb = new Workbox('/sw.js');
+      // The versioned URL bypasses the previously deployed self-destroying
+      // worker, which may still be held in a long-lived mobile browser cache.
+      const wb = new Workbox('/sw.js?push-worker=2');
       
       // Register service worker
       await wb.register();

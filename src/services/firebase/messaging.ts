@@ -7,6 +7,7 @@ import type { User } from '../../types';
 
 // VAPID 公钥（从环境变量读取）
 const VAPID_KEY = import.meta.env.VITE_FCM_VAPID_KEY;
+const PUSH_WORKER_URL = '/sw.js?push-worker=2';
 
 let messagingInstance: Messaging | null = null;
 
@@ -109,19 +110,14 @@ const registerFirebaseMessagingSW = async (): Promise<ServiceWorkerRegistration 
   }
 
   try {
-    // 检查是否已有 Service Worker 注册
+    // FCM shares the root PWA worker because that worker owns the app scope and
+    // contains the background push handler. Always wait until it is active.
     const existingRegistration = await navigator.serviceWorker.getRegistration('/');
-    if (existingRegistration) {
-      return existingRegistration;
-    }
-
-    // 尝试注册 Firebase Messaging Service Worker
-    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js', {
-      scope: '/'
+    const registration = existingRegistration || await navigator.serviceWorker.register(PUSH_WORKER_URL, {
+      scope: '/',
     });
-    
-    // 等待 Service Worker 激活
-    if (registration.installing) {
+
+    if (!registration.active && registration.installing) {
       await new Promise<void>((resolve) => {
         const installing = registration.installing;
         if (!installing) {
@@ -141,7 +137,7 @@ const registerFirebaseMessagingSW = async (): Promise<ServiceWorkerRegistration 
           resolve();
         }
       });
-    } else if (registration.waiting) {
+    } else if (!registration.active && registration.waiting) {
       await new Promise<void>((resolve) => {
         const waiting = registration.waiting;
         if (!waiting) {
@@ -161,10 +157,12 @@ const registerFirebaseMessagingSW = async (): Promise<ServiceWorkerRegistration 
           resolve();
         }
       });
-    } else if (registration.active) {
-      // Service Worker 已经激活
     }
-    
+
+    if (!registration.active) {
+      await navigator.serviceWorker.ready;
+    }
+
     return registration;
   } catch (error: any) {
     console.error('[FCM] Failed to register Firebase Messaging Service Worker:', error);
@@ -604,18 +602,53 @@ export const initializePushNotifications = async (user: User): Promise<boolean> 
 /**
  * 监听前台推送消息（应用打开时）
  */
-export const onForegroundMessage = (callback: (payload: any) => void): (() => void) | null => {
-  let unsubscribe: (() => void) | null = null;
+export const onForegroundMessage = (callback: (payload: any) => void): (() => void) => {
+  let disposed = false;
+  let unsubscribe: (() => void) | undefined;
 
-  getMessagingInstance().then((messaging) => {
-    if (!messaging) return;
+  void getMessagingInstance().then((messaging) => {
+    if (!messaging || disposed) return;
 
     unsubscribe = onMessage(messaging, (payload) => {
       callback(payload);
     });
   });
 
-  return unsubscribe || null;
+  return () => {
+    disposed = true;
+    unsubscribe?.();
+  };
+};
+
+/**
+ * Foreground FCM messages are delivered to the page instead of being displayed
+ * by the browser. Route them through the active PWA worker so mobile users see
+ * the same system notification while the app is open.
+ */
+export const displayForegroundNotification = async (payload: any): Promise<void> => {
+  if (!('serviceWorker' in navigator) || Notification.permission !== 'granted') return;
+
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  if (!registration) {
+    console.warn('[FCM] No active root service worker for foreground notification');
+    return;
+  }
+
+  const notification = payload?.notification || {};
+  const data = payload?.data || {};
+  await registration.showNotification(
+    notification.title || data.title || 'Macanudo Socials',
+    {
+      body: notification.body || data.body || '',
+      icon: '/icons/app-logo-192.png',
+      badge: '/icons/app-logo-192.png',
+      tag: data.tag || `macanudo-${payload?.messageId || Date.now()}`,
+      data: {
+        ...data,
+        clickAction: data.clickAction || '/profile',
+      },
+    },
+  );
 };
 
 /**

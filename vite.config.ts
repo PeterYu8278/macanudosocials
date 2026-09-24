@@ -54,14 +54,15 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // Registration is handled in src/utils/pwa.ts so worker upgrades and
+      // recovery from previously cached workers have one owner.
+      injectRegister: null,
       includeAssets: [
         'icons/app-logo-192.png',
         'icons/app-logo-512.png',
         'icons/app-logo-maskable-512.png',
         'icons/apple-touch-icon-180.png',
       ],
-      selfDestroying: true, // 允许Service Worker自毁
       strategies: 'injectManifest', // 使用 injectManifest 策略以支持自定义 Service Worker
       srcDir: 'src',
       filename: 'sw.ts',

@@ -33,15 +33,32 @@ const OneSignalIntegration = () => {
 
     let active = true
     let unsubscribe: (() => void) | undefined
+    let unsubscribeFcm: (() => void) | undefined
     let fcmSyncStarted = false
 
     const syncFcmSubscription = async () => {
       if (!user || fcmSyncStarted || Notification.permission !== 'granted') return
       fcmSyncStarted = true
       try {
-        const { initializePushNotifications } = await import('../../services/firebase/messaging')
-        await initializePushNotifications(user)
+        const {
+          displayForegroundNotification,
+          initializePushNotifications,
+          onForegroundMessage,
+        } = await import('../../services/firebase/messaging')
+        const initialized = await initializePushNotifications(user)
+        if (!initialized) {
+          fcmSyncStarted = false
+          return
+        }
+        if (initialized && active && !unsubscribeFcm) {
+          unsubscribeFcm = onForegroundMessage((payload) => {
+            void displayForegroundNotification(payload).catch((error) => {
+              console.warn('[FCM] Failed to display foreground notification:', error)
+            })
+          })
+        }
       } catch (error) {
+        fcmSyncStarted = false
         console.warn('[FCM] Failed to synchronize fallback subscription:', error)
       }
     }
@@ -125,6 +142,7 @@ const OneSignalIntegration = () => {
     return () => {
       active = false
       unsubscribe?.()
+      unsubscribeFcm?.()
     }
   }, [
     loading,
