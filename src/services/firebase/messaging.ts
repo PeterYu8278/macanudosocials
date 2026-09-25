@@ -641,7 +641,7 @@ export const displayForegroundNotification = async (payload: any): Promise<void>
     {
       body: notification.body || data.body || '',
       icon: '/icons/app-logo-192.png',
-      badge: '/icons/app-logo-192.png',
+      badge: '/icons/notification-badge-96.png',
       tag: data.tag || `macanudo-${payload?.messageId || Date.now()}`,
       data: {
         ...data,

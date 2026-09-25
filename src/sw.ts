@@ -37,7 +37,7 @@ self.addEventListener('push', (event: PushEvent) => {
     self.registration.showNotification(title, {
       body,
       icon: '/icons/app-logo-192.png',
-      badge: '/icons/app-logo-192.png',
+      badge: '/icons/notification-badge-96.png',
       tag: data.tag || 'macanudo-notification',
       data: { ...data, clickAction },
       requireInteraction: false,

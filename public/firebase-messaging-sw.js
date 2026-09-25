@@ -29,7 +29,7 @@ messaging.onBackgroundMessage((payload) => {
   const notificationOptions = {
     body: payload.notification?.body || '',
     icon: '/icons/app-logo-192.png',
-    badge: '/icons/app-logo-192.png',
+    badge: '/icons/notification-badge-96.png',
     tag: payload.data?.tag || 'default',
     data: payload.data || {},
     requireInteraction: false,

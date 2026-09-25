@@ -101,8 +101,8 @@ export const handler: Handler = async (event, context) => {
           link: '/'
         },
         notification: {
-          icon: '/icons/icon-192x192.svg',
-          badge: '/icons/icon-96x96.svg',
+          icon: '/icons/app-logo-192.png',
+          badge: '/icons/notification-badge-96.png',
           requireInteraction: false,
           silent: false
         }

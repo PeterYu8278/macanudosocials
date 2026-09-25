@@ -142,6 +142,8 @@ export const handler: Handler = async (event) => {
     } catch {
       return response(400, { success: false, error: 'Invalid click path or URL' });
     }
+    const notificationIconUrl = new URL('/icons/app-logo-192.png', siteUrl).toString();
+    const notificationBadgeUrl = new URL('/icons/notification-badge-96.png', siteUrl).toString();
 
     let eligibleTargetUsers = targetUsers;
     if (targetUsers.length > 0) {
@@ -222,7 +224,10 @@ export const handler: Handler = async (event) => {
             notification: { title, body },
             data: fcmData,
             topic,
-            webpush: { fcmOptions: { link: notificationUrl } },
+            webpush: {
+              fcmOptions: { link: notificationUrl },
+              notification: { icon: notificationIconUrl, badge: notificationBadgeUrl },
+            },
           });
           results.total += 1;
           results.sent += 1;
@@ -243,7 +248,10 @@ export const handler: Handler = async (event) => {
           notification: { title, body },
           data: fcmData,
           tokens: batchTargets.map((target) => target.token),
-          webpush: { fcmOptions: { link: notificationUrl } },
+          webpush: {
+            fcmOptions: { link: notificationUrl },
+            notification: { icon: notificationIconUrl, badge: notificationBadgeUrl },
+          },
         });
 
         results.total += batchTargets.length;
@@ -289,6 +297,8 @@ export const handler: Handler = async (event) => {
       headings: { en: title },
       contents: { en: body },
       url: notificationUrl,
+      chrome_web_icon: notificationIconUrl,
+      chrome_web_badge: notificationBadgeUrl,
       data: { ...customData, type, clickAction },
     };
 
