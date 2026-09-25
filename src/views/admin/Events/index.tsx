@@ -22,6 +22,7 @@ import { useAuthStore } from '../../../store/modules/auth'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { calculateEventFeeStats } from '../../../utils/eventFeeStats'
+import { notifyEventPublished } from '../../../services/eventNotifications'
 
 const { Option } = Select
 
@@ -258,6 +259,14 @@ const AdminEvents: React.FC = () => {
           
           const res = await createDocument<Event>(COLLECTIONS.EVENTS, newEventData as any)
           if (res.success) {
+            if (newEventData.status === 'published' && res.id) {
+              try {
+                await notifyEventPublished(res.id)
+              } catch (notificationError) {
+                console.error('[AdminEvents] Publication notification failed:', notificationError)
+                message.warning('Event published, but the notification could not be sent')
+              }
+            }
             message.success(t('common.created'))
             refreshEvents()
             const newEvent = await getEventById(res.id!)
@@ -395,6 +404,14 @@ const AdminEvents: React.FC = () => {
       
       const res = await updateDocument(COLLECTIONS.EVENTS, viewing.id, updateData)
       if (res.success) {
+        if (fieldName === 'status' && editForm.status === 'published') {
+          try {
+            await notifyEventPublished(viewing.id)
+          } catch (notificationError) {
+            console.error('[AdminEvents] Publication notification failed:', notificationError)
+            message.warning('Event published, but the notification could not be sent')
+          }
+        }
         message.success(t('common.saved'))
         refreshEvents()
         const updatedEvent = await getEventById(viewing.id)
