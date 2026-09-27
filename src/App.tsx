@@ -12,6 +12,7 @@ import { applyDynamicIcons } from './utils/dynamicManifest'
 import { saveAppConfigToIndexedDB } from './utils/indexedDB'
 import { PageLoading } from './components/common/LoadingSpinner'
 import OneSignalIntegration from './components/common/OneSignalIntegration'
+import NotificationOpenTracker from './components/common/NotificationOpenTracker'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -46,7 +47,6 @@ const SubscriptionSettings = lazy(() => import('./views/admin/SubscriptionSettin
 const StoreManagement = lazy(() => import('./views/admin/StoreManagement'))
 const SystemConfig = lazy(() => import('./views/admin/SystemConfig'))
 const AdminReports = lazy(() => import('./views/admin/Reports'))
-const NotificationManagement = lazy(() => import('./views/admin/NotificationManagement'))
 
 // --- 认证页面 (Lazy Loaded) ---
 const Register = lazy(() => import('./views/auth/Register'))
@@ -341,7 +341,7 @@ const AppContent: React.FC = () => {
                   <Route path="/admin/visit-sessions" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><VisitSessionsPage /></ProtectedRoute>} />
                   <Route path="/admin/stores" element={<ProtectedRoute roles={['superAdmin', 'developer']}><StoreManagement /></ProtectedRoute>} />
                   <Route path="/admin/system-config" element={<ProtectedRoute roles={['superAdmin', 'developer']}><SystemConfig /></ProtectedRoute>} />
-                  <Route path="/admin/notifications" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><NotificationManagement /></ProtectedRoute>} />
+                  <Route path="/admin/notifications" element={<ProtectedRoute roles={['developer']}><Navigate to="/developer/feature-management?tab=notifications" replace /></ProtectedRoute>} />
                   <Route path="/developer/orphaned-users" element={<ProtectedRoute roles={['developer']}><OrphanedUserCleanup /></ProtectedRoute>} />
                   <Route path="/developer/performance" element={<ProtectedRoute roles={['developer']}><PerformanceMonitor /></ProtectedRoute>} />
                   <Route path="/developer/feature-management" element={<ProtectedRoute roles={['developer']}><FeatureManagement /></ProtectedRoute>} />
@@ -374,6 +374,7 @@ function App() {
     <Router>
       <AntApp>
         <OneSignalIntegration />
+        <NotificationOpenTracker />
         <AppContent />
       </AntApp>
     </Router>

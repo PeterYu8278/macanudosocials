@@ -2,6 +2,11 @@ import { schedule } from '@netlify/functions';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import {
+  completeNotificationDelivery,
+  createNotificationDelivery,
+  updateDeliveryRecipient,
+} from './_shared/notificationHistory';
 
 const TIME_ZONE = 'Asia/Singapore';
 const SITE_URL = process.env.URL || 'https://macanudosocials.com';
@@ -107,17 +112,25 @@ const sendPush = async (
   const db = getAdminDb();
   const fcmTargets: Array<{ token: string; ref: FirebaseFirestore.DocumentReference }> = [];
   const oneSignalSubscriptionIds = new Set<string>();
+  const targetedUserIds = new Set<string>();
+  const recipientIdentifiers = new Map<string, { deviceIds: string[]; subscriptionIds: string[] }>();
 
   await Promise.all(users.map(async (user) => {
     const fcmSnapshot = await db.collection('users').doc(user.id)
       .collection('fcmTokens').where('active', '==', true).get();
+    const identifiers = { deviceIds: [] as string[], subscriptionIds: [] as string[] };
 
     fcmSnapshot.forEach((tokenDocument) => {
       const token = tokenDocument.data().token;
       if (typeof token === 'string' && token.trim()) {
         fcmTargets.push({ token: token.trim(), ref: tokenDocument.ref });
+        targetedUserIds.add(user.id);
+        identifiers.deviceIds.push(token.trim());
       }
     });
+    if (identifiers.deviceIds.length) {
+      recipientIdentifiers.set(user.id, identifiers);
+    }
 
     // Prefer FCM for a user to avoid duplicate notifications on the same device.
     if (!fcmSnapshot.empty) return;
@@ -133,12 +146,36 @@ const sendPush = async (
         && typeof subscriptionData.subscriptionId === 'string'
       ) {
         oneSignalSubscriptionIds.add(subscriptionData.subscriptionId.trim());
+        targetedUserIds.add(user.id);
+        identifiers.subscriptionIds.push(subscriptionData.subscriptionId.trim());
       }
     });
+    if (identifiers.deviceIds.length || identifiers.subscriptionIds.length) {
+      recipientIdentifiers.set(user.id, identifiers);
+    }
   }));
 
   const result: PushResult = { fcmSent: 0, fcmFailed: 0, oneSignalAccepted: 0 };
-  const notificationUrl = new URL(clickAction, SITE_URL).toString();
+  const delivery = await createNotificationDelivery(db, {
+    title,
+    body,
+    type,
+    source: type === 'event_reminder' ? 'scheduled_event_reminder' : 'scheduled_vip_expiry',
+    provider: fcmTargets.length > 0 && oneSignalSubscriptionIds.size > 0 ? 'mixed'
+      : fcmTargets.length > 0 ? 'fcm' : 'onesignal',
+    clickAction,
+    relatedId: data.eventId || data.membershipFeeRecordId,
+    recipients: users.filter((user) => targetedUserIds.has(user.id)).map((user) => ({
+      userId: user.id,
+      displayName: user.data.displayName || user.data.name || user.data.email || user.id,
+      email: user.data.email,
+      memberId: user.data.memberId,
+      deviceIds: recipientIdentifiers.get(user.id)?.deviceIds,
+      subscriptionIds: recipientIdentifiers.get(user.id)?.subscriptionIds,
+    })),
+  });
+  const trackedClickAction = `${clickAction}${clickAction.includes('?') ? '&' : '?'}notificationDelivery=${delivery.id}`;
+  const notificationUrl = new URL(trackedClickAction, SITE_URL).toString();
   const icon = new URL('/icons/app-logo-192.png', SITE_URL).toString();
   const badge = new URL('/icons/notification-badge-96.png', SITE_URL).toString();
 
@@ -146,7 +183,7 @@ const sendPush = async (
     const batchTargets = fcmTargets.slice(offset, offset + 500);
     const response = await getMessaging().sendEachForMulticast({
       notification: { title, body },
-      data: { ...data, type, clickAction },
+      data: { ...data, type, clickAction: trackedClickAction },
       tokens: batchTargets.map((target) => target.token),
       webpush: {
         fcmOptions: { link: notificationUrl },
@@ -186,7 +223,7 @@ const sendPush = async (
           url: notificationUrl,
           chrome_web_icon: icon,
           chrome_web_badge: badge,
-          data: { ...data, type, clickAction },
+          data: { ...data, type, clickAction: trackedClickAction },
         }),
       });
       const responseText = await response.text();
@@ -194,6 +231,20 @@ const sendPush = async (
       result.oneSignalAccepted = oneSignalSubscriptionIds.size;
     }
   }
+
+  await Promise.all(users.filter((user) => targetedUserIds.has(user.id)).map((user) => updateDeliveryRecipient(
+    delivery.ref,
+    user.id,
+    {
+      sent: result.fcmSent > 0 || result.oneSignalAccepted > 0,
+      failed: result.fcmSent === 0 && result.oneSignalAccepted === 0,
+      status: result.fcmSent > 0 || result.oneSignalAccepted > 0 ? 'sent' : 'failed',
+    },
+  )));
+  await completeNotificationDelivery(delivery.ref, {
+    sent: result.fcmSent + result.oneSignalAccepted,
+    failed: result.fcmFailed,
+  });
 
   return result;
 };

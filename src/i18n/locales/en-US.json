@@ -359,6 +359,7 @@
     "appSettings": "App Settings",
     "whapiSettings": "WhatsApp Management",
     "paymentSettings": "Payment Gateway",
+    "notificationsSettings": "Notifications",
     "envSettings": "Env Settings",
     "billplzConfig": "Billplz Configuration (Client)",
     "billplzConfigPlatform": "Billplz Configuration (Platform)",

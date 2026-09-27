@@ -359,6 +359,7 @@
     "appSettings": "应用配置",
     "whapiSettings": "WhatsApp 管理",
     "paymentSettings": "支付网关",
+    "notificationsSettings": "通知管理",
     "envSettings": "环境配置",
     "billplzConfig": "Billplz 配置 (Client)",
     "billplzConfigPlatform": "Billplz 配置 (Platform)",

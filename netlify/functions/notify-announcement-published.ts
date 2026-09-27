@@ -10,9 +10,8 @@ import {
   updateDeliveryRecipient,
 } from './_shared/notificationHistory';
 
-const TIME_ZONE = 'Asia/Singapore';
 const SITE_URL = process.env.URL || process.env.DEPLOY_PRIME_URL || 'https://macanudosocials.com';
-const ALLOWED_ROLES = new Set(['admin', 'superAdmin', 'developer']);
+const ALLOWED_ROLES = new Set(['admin', 'storeAdmin', 'superAdmin', 'developer']);
 const INVALID_FCM_CODES = new Set([
   'messaging/registration-token-not-registered',
   'messaging/invalid-registration-token',
@@ -67,19 +66,11 @@ const asDate = (value: unknown) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-const formatEventDate = (date: Date) => new Intl.DateTimeFormat('en-MY', {
-  timeZone: TIME_ZONE,
-  weekday: 'short',
-  day: 'numeric',
-  month: 'short',
-  year: 'numeric',
-  hour: 'numeric',
-  minute: '2-digit',
-}).format(date);
-
-const claimDispatch = async (eventId: string) => {
+const claimDispatch = async (announcementId: string) => {
   const db = getFirestore();
-  const ref = db.collection('scheduledNotificationDispatches').doc(`event-published-${eventId}`);
+  const ref = db.collection('scheduledNotificationDispatches')
+    .doc(`announcement-published-${announcementId}`);
+
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
     const data = snapshot.data();
@@ -91,8 +82,8 @@ const claimDispatch = async (eventId: string) => {
     }
 
     transaction.set(ref, {
-      type: 'event_published',
-      eventId,
+      type: 'announcement_published',
+      announcementId,
       status: 'processing',
       attempts: Number(data?.attempts || 0) + 1,
       createdAt: data?.createdAt || FieldValue.serverTimestamp(),
@@ -118,20 +109,24 @@ export const handler: Handler = async (event) => {
 
   let dispatchRef: FirebaseFirestore.DocumentReference | null = null;
   try {
-    const request = JSON.parse(event.body || '{}') as { eventId?: unknown };
-    const eventId = typeof request.eventId === 'string' ? request.eventId.trim() : '';
-    if (!eventId) return reply(400, { success: false, error: 'eventId is required' });
+    const request = JSON.parse(event.body || '{}') as { announcementId?: unknown };
+    const announcementId = typeof request.announcementId === 'string'
+      ? request.announcementId.trim()
+      : '';
+    if (!announcementId) return reply(400, { success: false, error: 'announcementId is required' });
 
     const db = getFirestore();
-    const eventSnapshot = await db.collection('events').doc(eventId).get();
-    if (!eventSnapshot.exists) return reply(404, { success: false, error: 'Event not found' });
-
-    const eventData = eventSnapshot.data()!;
-    if (eventData.status !== 'published') {
-      return reply(409, { success: false, error: 'Only published events can trigger this notification' });
+    const announcementSnapshot = await db.collection('announcements').doc(announcementId).get();
+    if (!announcementSnapshot.exists) {
+      return reply(404, { success: false, error: 'Announcement not found' });
     }
 
-    const dispatch = await claimDispatch(eventId);
+    const announcement = announcementSnapshot.data()!;
+    if (announcement.status !== 'published') {
+      return reply(409, { success: false, error: 'Only published announcements can trigger notifications' });
+    }
+
+    const dispatch = await claimDispatch(announcementId);
     dispatchRef = dispatch.ref;
     if (!dispatch.claimed) {
       return reply(200, { success: true, alreadySent: dispatch.alreadySent });
@@ -157,6 +152,7 @@ export const handler: Handler = async (event) => {
         }
       });
 
+      // Prefer FCM when the user has an active FCM token to avoid duplicates.
       if (!tokens.empty) return;
       const subscriptions = await user.ref.collection('notificationSubscriptions').get();
       subscriptions.forEach((subscription) => {
@@ -174,20 +170,20 @@ export const handler: Handler = async (event) => {
       });
     }));
 
-    const title = `New Event: ${String(eventData.title || 'Cigar Gathering')}`;
-    const startDate = asDate(eventData.schedule?.startDate);
-    const dateText = startDate ? formatEventDate(startDate) : 'soon';
-    const location = eventData.location?.name || eventData.location?.address || 'Macanudo Socials';
-    const body = `${eventData.title || 'Cigar Gathering'} is open for registration on ${dateText} at ${location}. Limited seats - register now!`;
+    const announcementTitle = String(announcement.title || 'New Announcement').trim();
+    const announcementContent = String(announcement.content || 'A new announcement is available.')
+      .trim()
+      .slice(0, 500);
+    const title = `New Announcement: ${announcementTitle}`.slice(0, 100);
     const clickAction = '/events';
     const deliveryRef = await createNotificationDelivery(db, {
       title,
-      body,
-      type: 'event_reminder',
-      source: 'event_published',
+      body: announcementContent,
+      type: 'announcement',
+      source: 'announcement_published',
       provider: 'mixed',
       clickAction,
-      relatedId: eventId,
+      relatedId: announcementId,
       recipients: users.filter((user) => targetedUserIds.has(user.id)).map((user) => ({
         userId: user.id,
         displayName: user.data().displayName,
@@ -203,8 +199,8 @@ export const handler: Handler = async (event) => {
     for (let offset = 0; offset < fcmTargets.length; offset += 500) {
       const batchTargets = fcmTargets.slice(offset, offset + 500);
       const sendResult = await getMessaging().sendEachForMulticast({
-        notification: { title, body },
-        data: { type: 'event_reminder', eventId, clickAction: trackedAction, deliveryId: deliveryRef.id },
+        notification: { title, body: announcementContent },
+        data: { type: 'announcement', announcementId, clickAction: trackedAction, deliveryId: deliveryRef.id },
         tokens: batchTargets.map((target) => target.token),
         webpush: {
           fcmOptions: { link: notificationUrl },
@@ -239,11 +235,11 @@ export const handler: Handler = async (event) => {
           target_channel: 'push',
           include_subscription_ids: [...oneSignalIds],
           headings: { en: title },
-          contents: { en: body },
+          contents: { en: announcementContent },
           url: notificationUrl,
           chrome_web_icon: icon,
           chrome_web_badge: badge,
-          data: { type: 'event_reminder', eventId, clickAction: trackedAction, deliveryId: deliveryRef.id },
+          data: { type: 'announcement', announcementId, clickAction: trackedAction, deliveryId: deliveryRef.id },
         }),
       });
       const responseText = await oneSignalResponse.text();
@@ -271,10 +267,10 @@ export const handler: Handler = async (event) => {
         updatedAt: FieldValue.serverTimestamp(),
       }, { merge: true });
     }
-    console.error('[notify-event-published]', error);
+    console.error('[notify-announcement-published]', error);
     return reply(500, {
       success: false,
-      error: error instanceof Error ? error.message : 'Failed to send publication notification',
+      error: error instanceof Error ? error.message : 'Failed to send announcement notification',
     });
   }
 };

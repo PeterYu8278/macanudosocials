@@ -5,11 +5,28 @@
   color: #f8f8f8;
 }
 
+.notification-management-page.is-embedded {
+  width: 100%;
+  padding: 0;
+}
+
 .notification-page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   margin-bottom: 16px;
+}
+
+.notification-view-tabs {
+  margin-bottom: 16px;
+}
+
+.notification-view-tabs .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.notification-view-tabs .ant-tabs-tab {
+  padding: 10px 14px;
 }
 
 .notification-title-group,
@@ -230,6 +247,52 @@
   display: none;
 }
 
+.notification-history-content {
+  display: flex;
+  max-width: 320px;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.notification-history-table .ant-table {
+  background: transparent;
+}
+
+.notification-history-mobile {
+  display: none;
+}
+
+.notification-history-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.notification-history-counts span {
+  display: flex;
+  flex-direction: column;
+  padding: 9px;
+  border: 1px solid #3c382f;
+  border-radius: 6px;
+  color: #99958d;
+  background: #211f1b;
+  font-size: 11px;
+}
+
+.notification-history-counts b {
+  color: #fde08d;
+  font-size: 18px;
+}
+
+.notification-history-counts.is-detail {
+  margin: 16px 0;
+}
+
+.notification-delivery-detail > .ant-typography {
+  display: block;
+  line-height: 1.6;
+}
+
 .notification-modal-target {
   gap: 10px;
   margin-bottom: 18px;
@@ -256,6 +319,10 @@
 @media (max-width: 767px) {
   .notification-management-page {
     padding: 12px 12px 92px;
+  }
+
+  .notification-management-page.is-embedded {
+    padding: 0 0 20px;
   }
 
   .notification-title-group {
@@ -363,6 +430,59 @@
 
   .notification-mobile-list {
     display: block;
+  }
+
+  .notification-history-table {
+    display: none;
+  }
+
+  .notification-history-mobile {
+    display: block;
+    padding-top: 10px;
+  }
+
+  .notification-history-mobile .ant-list-item {
+    display: block;
+    padding: 0 0 10px;
+    border: 0;
+  }
+
+  .notification-history-card {
+    padding: 14px;
+    border: 1px solid #3c382f;
+    border-radius: 8px;
+    background: linear-gradient(145deg, #24211c 0%, #191816 100%);
+  }
+
+  .notification-history-card-header {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+  }
+
+  .notification-history-card-header > div {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+  }
+
+  .notification-history-card-header strong {
+    color: #f5e5b6;
+  }
+
+  .notification-history-card-header span,
+  .notification-history-card p {
+    color: #99958d;
+    font-size: 12px;
+  }
+
+  .notification-history-card p {
+    margin: 12px 0;
+    line-height: 1.5;
+  }
+
+  .notification-history-counts {
+    margin-bottom: 12px;
   }
 
   .notification-mobile-list .ant-list-item {

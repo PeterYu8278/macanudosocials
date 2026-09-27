@@ -515,6 +515,17 @@ service cloud.firestore {
       allow create, update, delete: if isAnyAdmin();
     }
 
+    // Notification delivery history is written only by trusted server functions.
+    match /notificationDeliveries/{deliveryId} {
+      allow read: if isAdmin();
+      allow write: if false;
+
+      match /recipients/{recipientId} {
+        allow read: if isAdmin();
+        allow write: if false;
+      }
+    }
+
     // ================================
     // AI Cigar Recognition Database
     // ================================

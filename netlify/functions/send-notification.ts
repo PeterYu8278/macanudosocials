@@ -3,6 +3,12 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
+import {
+  completeNotificationDelivery,
+  createNotificationDelivery,
+  trackedClickAction,
+  updateDeliveryRecipient,
+} from './_shared/notificationHistory';
 
 const headers = {
   'Content-Type': 'application/json',
@@ -177,6 +183,8 @@ export const handler: Handler = async (event) => {
       const tokenTargets: Array<{
         token: string;
         ref: FirebaseFirestore.DocumentReference;
+        userId: string;
+        deviceId?: string;
       }> = [];
 
       const appendUserTokens = async (userId: string) => {
@@ -189,7 +197,12 @@ export const handler: Handler = async (event) => {
         tokensSnapshot.forEach((tokenDocument) => {
           const token = tokenDocument.data().token;
           if (typeof token === 'string' && token.trim()) {
-            tokenTargets.push({ token, ref: tokenDocument.ref });
+            tokenTargets.push({
+              token,
+              ref: tokenDocument.ref,
+              userId,
+              deviceId: tokenDocument.data().deviceId,
+            });
           }
         });
       };
@@ -209,6 +222,28 @@ export const handler: Handler = async (event) => {
         });
       }
 
+      const targetUserSnapshots = await Promise.all(
+        eligibleTargetUsers.map((userId) => db.collection('users').doc(userId).get()),
+      );
+      const deliveryRef = await createNotificationDelivery(db, {
+        title,
+        body,
+        type,
+        source: customData.test === true ? 'manual_test' : 'manual',
+        provider: 'fcm',
+        clickAction,
+        createdBy: (await getAuth().verifyIdToken(event.headers.authorization!.slice(7))).uid,
+        recipients: targetUserSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => ({
+          userId: snapshot.id,
+          displayName: snapshot.data()?.displayName,
+          email: snapshot.data()?.email,
+          deviceIds: tokenTargets.filter((target) => target.userId === snapshot.id)
+            .map((target) => target.deviceId).filter((value): value is string => Boolean(value)),
+        })),
+      });
+      const trackedAction = trackedClickAction(clickAction, deliveryRef.id);
+      notificationUrl = new URL(trackedAction, siteUrl).toString();
+
       const messaging = getMessaging();
       const results = {
         total: 0,
@@ -216,7 +251,12 @@ export const handler: Handler = async (event) => {
         failed: 0,
         failureDetails: [] as Array<{ code?: string; message: string }>,
       };
-      const fcmData = normalizeFcmData({ ...customData, type, clickAction });
+      const fcmData = normalizeFcmData({
+        ...customData,
+        type,
+        clickAction: trackedAction,
+        deliveryId: deliveryRef.id,
+      });
 
       for (const topic of targetSegments) {
         try {
@@ -283,9 +323,20 @@ export const handler: Handler = async (event) => {
         }
       }
 
+      // Firebase's aggregate result is authoritative; targeted sends currently contain one user.
+      for (const userId of eligibleTargetUsers) {
+        await updateDeliveryRecipient(deliveryRef, userId, {
+          status: results.sent > 0 ? 'sent' : 'failed',
+          sent: results.sent,
+          failed: results.failed,
+        });
+      }
+      await completeNotificationDelivery(deliveryRef, results);
+
       return response(results.sent > 0 ? 200 : 422, {
         success: results.sent > 0,
         provider: 'fcm',
+        deliveryId: deliveryRef.id,
         error: results.sent > 0 ? undefined : 'FCM could not deliver to any active token',
         results,
       });
@@ -303,6 +354,7 @@ export const handler: Handler = async (event) => {
     };
 
     let targetedSubscriptionCount = 0;
+    const subscriptionIdsByUser = new Map<string, string[]>();
     if (eligibleTargetUsers.length > 0) {
       const db = getFirestore();
       const subscriptionIds = new Set<string>();
@@ -324,6 +376,9 @@ export const handler: Handler = async (event) => {
             && subscriptionId.trim()
           ) {
             subscriptionIds.add(subscriptionId.trim());
+            const current = subscriptionIdsByUser.get(userId) || [];
+            current.push(subscriptionId.trim());
+            subscriptionIdsByUser.set(userId, current);
           }
         });
       }));
@@ -345,6 +400,34 @@ export const handler: Handler = async (event) => {
         : ['Subscribed Users'];
     }
 
+    const db = getFirestore();
+    const targetUserSnapshots = await Promise.all(
+      eligibleTargetUsers.map((userId) => db.collection('users').doc(userId).get()),
+    );
+    const deliveryRef = await createNotificationDelivery(db, {
+      title,
+      body,
+      type,
+      source: customData.test === true ? 'manual_test' : 'manual',
+      provider: 'onesignal',
+      clickAction,
+      createdBy: (await getAuth().verifyIdToken(event.headers.authorization!.slice(7))).uid,
+      recipients: targetUserSnapshots.filter((snapshot) => snapshot.exists).map((snapshot) => ({
+        userId: snapshot.id,
+        displayName: snapshot.data()?.displayName,
+        email: snapshot.data()?.email,
+        subscriptionIds: subscriptionIdsByUser.get(snapshot.id) || [],
+      })),
+    });
+    const trackedAction = trackedClickAction(clickAction, deliveryRef.id);
+    oneSignalPayload.url = new URL(trackedAction, siteUrl).toString();
+    oneSignalPayload.data = {
+      ...customData,
+      type,
+      clickAction: trackedAction,
+      deliveryId: deliveryRef.id,
+    };
+
     const oneSignalResponse = await fetch('https://api.onesignal.com/notifications', {
       method: 'POST',
       headers: {
@@ -357,6 +440,7 @@ export const handler: Handler = async (event) => {
 
     if (!oneSignalResponse.ok) {
       console.error('[send-notification] OneSignal request failed:', responseBody);
+      await completeNotificationDelivery(deliveryRef, { sent: 0, failed: targetedSubscriptionCount });
       return response(oneSignalResponse.status, {
         success: false,
         error: errorMessage(responseBody),
@@ -368,6 +452,7 @@ export const handler: Handler = async (event) => {
     const hasRecipientCount = typeof responseBody.recipients === 'number';
     const recipients = hasRecipientCount ? responseBody.recipients as number : targetedSubscriptionCount;
     if (!messageId || (hasRecipientCount && recipients === 0)) {
+      await completeNotificationDelivery(deliveryRef, { sent: 0, failed: targetedSubscriptionCount });
       return response(422, {
         success: false,
         error: 'No subscribed OneSignal recipients were found for this user',
@@ -376,10 +461,25 @@ export const handler: Handler = async (event) => {
       });
     }
 
+
+    for (const userId of eligibleTargetUsers) {
+      await updateDeliveryRecipient(deliveryRef, userId, {
+        status: 'accepted',
+        sent: subscriptionIdsByUser.get(userId)?.length || 0,
+        failed: 0,
+      });
+    }
+    await completeNotificationDelivery(
+      deliveryRef,
+      { sent: recipients, failed: 0 },
+      { providerMessageId: messageId },
+    );
+
     return response(200, {
       success: true,
       provider: 'onesignal',
       messageId,
+      deliveryId: deliveryRef.id,
       targetedSubscriptions: targetedSubscriptionCount,
       results: {
         total: recipients,

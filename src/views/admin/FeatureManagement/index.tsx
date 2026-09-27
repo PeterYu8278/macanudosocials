@@ -19,9 +19,30 @@ import MockAppInterface from '../../../components/admin/MockAppInterface';
 import WhapiMessageTester from '../../../components/admin/WhapiMessageTester';
 import PaymentTester from '../../../components/admin/PaymentTester';
 import CigarDatabase from '../CigarDatabase';
+import NotificationManagement from '../NotificationManagement';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
+
+type FeatureManagementTab = 'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'whapi' | 'payment' | 'notifications' | 'env';
+
+const FEATURE_MANAGEMENT_TABS: FeatureManagementTab[] = [
+  'frontend',
+  'admin',
+  'cigar-database',
+  'tools',
+  'app',
+  'whapi',
+  'payment',
+  'notifications',
+  'env',
+];
+
+const getInitialTab = (): FeatureManagementTab => {
+  if (typeof window === 'undefined') return 'frontend';
+  const requestedTab = new URLSearchParams(window.location.search).get('tab') as FeatureManagementTab | null;
+  return requestedTab && FEATURE_MANAGEMENT_TABS.includes(requestedTab) ? requestedTab : 'frontend';
+};
 
 // Firestore 索引预览数据
 const FIRESTORE_INDEXES_PREVIEW = [
@@ -92,7 +113,7 @@ const FeatureManagement: React.FC = () => {
   const { data: rawAppConfig, refresh: refreshAppConfig } = useFirestoreDoc(getAppConfig);
   const [saving, setSaving] = useState(false);
   const [searchText, setSearchText] = useState('');
-  const [activeTab, setActiveTab] = useState<'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'whapi' | 'payment' | 'env'>('frontend');
+  const [activeTab, setActiveTab] = useState<FeatureManagementTab>(getInitialTab);
   const [whapiForm] = Form.useForm();
   const whapiEnabled = Form.useWatch('whapiEnabled', whapiForm) ?? false;
   const [paymentForm] = Form.useForm();
@@ -1018,7 +1039,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
           borderBottom: '1px solid rgba(244,175,37,0.2)',
           marginBottom: 16
         }}>
-          {(['frontend', 'admin', 'cigar-database', 'tools', 'app', 'whapi', 'payment', 'env'] as const).map((tabKey) => {
+          {FEATURE_MANAGEMENT_TABS.map((tabKey) => {
             const isActive = activeTab === tabKey;
             const baseStyle: React.CSSProperties = {
               flex: 1,
@@ -1054,9 +1075,11 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                       ? t('featureManagement.appSettings', { defaultValue: '应用配置' })
                       : tabKey === 'whapi'
                         ? t('featureManagement.whapiSettings', { defaultValue: 'WhatsApp 管理' })
-                        : tabKey === 'payment'
-                          ? t('featureManagement.paymentSettings', { defaultValue: '支付网关' })
-                          : t('featureManagement.envSettings', { defaultValue: '环境配置' });
+                       : tabKey === 'payment'
+                           ? t('featureManagement.paymentSettings', { defaultValue: '支付网关' })
+                           : tabKey === 'notifications'
+                             ? t('featureManagement.notificationsSettings', { defaultValue: '通知管理' })
+                             : t('featureManagement.envSettings', { defaultValue: '环境配置' });
             const words = label.trim().split(/\s+/);
             const labelLines = words.length > 1
               ? [
@@ -1072,7 +1095,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                   ...baseStyle,
                   ...(isActive ? activeStyle : inactiveStyle),
                 }}
-                onClick={() => setActiveTab(tabKey)}
+                onClick={() => {
+                  setActiveTab(tabKey);
+                  const url = new URL(window.location.href);
+                  url.searchParams.set('tab', tabKey);
+                  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+                }}
               >
                 <span style={{ display: 'block', lineHeight: 1.25 }}>{labelLines[0]}</span>
                 <span style={{ display: 'block', lineHeight: 1.25 }}>{labelLines[1]}</span>
@@ -1083,7 +1111,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       </div>
 
       {/* 搜索和批量操作（仅功能标签页显示） */}
-      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'payment' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
+      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'payment' && activeTab !== 'notifications' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
         <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
           <Search
             placeholder={t('featureManagement.searchPlaceholder', { defaultValue: '搜索功能...' })}
@@ -2628,7 +2656,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
         <CigarDatabase />
       ) : null}
 
-      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
+      {/* 通知管理标签页 */}
+      {activeTab === 'notifications' ? (
+        <NotificationManagement embedded />
+      ) : null}
+
+      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'payment' && activeTab !== 'notifications' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
         <>
           <Card style={{
             background: 'rgba(255, 255, 255, 0.05)',

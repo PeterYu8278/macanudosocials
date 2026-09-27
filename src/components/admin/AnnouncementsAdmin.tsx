@@ -22,6 +22,7 @@ import {
   updateAnnouncement,
   deleteAnnouncement,
 } from '../../services/firebase/announcements'
+import { notifyAnnouncementPublished } from '../../services/announcementNotifications'
 import { useAuthStore } from '../../store/modules/auth'
 import ImageUpload from '../common/ImageUpload'
 
@@ -117,10 +118,24 @@ const AnnouncementsAdmin: React.FC<AnnouncementsAdminProps> = ({ isMobile = fals
         publishedAt: values.publishedAt?.toDate() ?? null,
         expiresAt: values.expiresAt?.toDate() ?? null,
       }
+      let publishedAnnouncementId: string | null = null
       if (editing) {
         await updateAnnouncement(editing.id, payload)
+        if (editing.status !== 'published' && payload.status === 'published') {
+          publishedAnnouncementId = editing.id
+        }
       } else {
-        await createAnnouncement({ ...payload, createdBy: user?.id ?? 'unknown' })
+        const announcementId = await createAnnouncement({ ...payload, createdBy: user?.id ?? 'unknown' })
+        if (payload.status === 'published') publishedAnnouncementId = announcementId
+      }
+
+      if (publishedAnnouncementId) {
+        try {
+          await notifyAnnouncementPublished(publishedAnnouncementId)
+        } catch (notificationError) {
+          console.error('[AnnouncementsAdmin] Publication notification failed:', notificationError)
+          message.warning('Announcement published, but the notification could not be sent')
+        }
       }
       message.success(t('common.saved'))
       setModalOpen(false)

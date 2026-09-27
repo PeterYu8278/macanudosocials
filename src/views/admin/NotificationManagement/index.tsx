@@ -14,11 +14,14 @@ import {
   Space,
   Table,
   Tag,
+  Tabs,
   Typography,
 } from 'antd'
 import {
   BellOutlined,
   CloudServerOutlined,
+  EyeOutlined,
+  HistoryOutlined,
   ReloadOutlined,
   SendOutlined,
   UserOutlined,
@@ -26,6 +29,12 @@ import {
 import type { Dayjs } from 'dayjs'
 import { auth } from '../../../config/firebase'
 import { getAllUsers, getUpcomingEvents } from '../../../services/firebase/firestore'
+import {
+  getNotificationDeliveries,
+  getNotificationRecipients,
+  type NotificationDeliveryRecord,
+  type NotificationRecipientRecord,
+} from '../../../services/firebase/notificationHistory'
 import type { Event, User, UserRole } from '../../../types'
 import './index.css'
 
@@ -67,7 +76,11 @@ const formatReminderDate = (value: Date) => new Intl.DateTimeFormat(undefined, {
   timeStyle: 'short',
 }).format(value)
 
-const NotificationManagement: React.FC = () => {
+interface NotificationManagementProps {
+  embedded?: boolean
+}
+
+const NotificationManagement: React.FC<NotificationManagementProps> = ({ embedded = false }) => {
   const { message } = App.useApp()
   const [form] = Form.useForm<SendFormValues>()
   const [records, setRecords] = useState<NotificationUserRecord[]>([])
@@ -76,6 +89,37 @@ const NotificationManagement: React.FC = () => {
   const [search, setSearch] = useState('')
   const [sendTarget, setSendTarget] = useState<NotificationUserRecord | null>(null)
   const [sending, setSending] = useState(false)
+  const [activeView, setActiveView] = useState('recipients')
+  const [history, setHistory] = useState<NotificationDeliveryRecord[]>([])
+  const [historyLoading, setHistoryLoading] = useState(false)
+  const [selectedDelivery, setSelectedDelivery] = useState<NotificationDeliveryRecord | null>(null)
+  const [deliveryRecipients, setDeliveryRecipients] = useState<NotificationRecipientRecord[]>([])
+  const [recipientsLoading, setRecipientsLoading] = useState(false)
+
+  const loadHistory = useCallback(async () => {
+    setHistoryLoading(true)
+    try {
+      setHistory(await getNotificationDeliveries())
+    } catch (error) {
+      console.error('[NotificationManagement] Failed to load notification history:', error)
+      message.error('Unable to load notification history')
+    } finally {
+      setHistoryLoading(false)
+    }
+  }, [message])
+
+  const openDelivery = async (delivery: NotificationDeliveryRecord) => {
+    setSelectedDelivery(delivery)
+    setRecipientsLoading(true)
+    try {
+      setDeliveryRecipients(await getNotificationRecipients(delivery.id))
+    } catch (error) {
+      console.error('[NotificationManagement] Failed to load delivery recipients:', error)
+      message.error('Unable to load delivery recipients')
+    } finally {
+      setRecipientsLoading(false)
+    }
+  }
 
   const loadUsers = useCallback(async () => {
     setLoading(true)
@@ -106,6 +150,10 @@ const NotificationManagement: React.FC = () => {
   useEffect(() => {
     loadUsers()
   }, [loadUsers])
+
+  useEffect(() => {
+    if (activeView === 'history') void loadHistory()
+  }, [activeView, loadHistory])
 
   const filteredRecords = useMemo(() => {
     const keyword = search.trim().toLowerCase()
@@ -339,17 +387,71 @@ const NotificationManagement: React.FC = () => {
     },
   ]
 
-  return (
-    <div className="notification-management-page">
-      <header className="notification-page-header">
-        <div className="notification-title-group">
-          <span className="notification-title-icon"><BellOutlined /></span>
-          <div>
-            <Title level={2}>Notification Management</Title>
-            <Text type="secondary">Send targeted push notifications through FCM or OneSignal.</Text>
-          </div>
+  const historyColumns = [
+    {
+      title: 'Notification',
+      key: 'notification',
+      render: (_: unknown, record: NotificationDeliveryRecord) => (
+        <div className="notification-history-content">
+          <Text strong>{record.title}</Text>
+          <Text type="secondary" ellipsis={{ tooltip: record.body }}>{record.body}</Text>
         </div>
-      </header>
+      ),
+    },
+    { title: 'Source', dataIndex: 'source', key: 'source', render: (value: string) => <Tag>{value.replaceAll('_', ' ')}</Tag> },
+    { title: 'Provider', dataIndex: 'provider', key: 'provider', render: (value: string) => <Tag className="notification-role-tag">{value}</Tag> },
+    {
+      title: 'Results',
+      key: 'results',
+      render: (_: unknown, record: NotificationDeliveryRecord) => (
+        <Space size={10} wrap>
+          <span>Targeted {record.counts.targeted}</span>
+          <span>Sent {record.counts.sent}</span>
+          <span>Failed {record.counts.failed}</span>
+          <span>Opened {record.counts.opened}</span>
+        </Space>
+      ),
+    },
+    {
+      title: 'Sent at',
+      key: 'createdAt',
+      render: (_: unknown, record: NotificationDeliveryRecord) => record.createdAt?.toLocaleString() || '-',
+    },
+    {
+      title: 'Action',
+      key: 'action',
+      render: (_: unknown, record: NotificationDeliveryRecord) => (
+        <Button icon={<EyeOutlined />} onClick={() => void openDelivery(record)}>View</Button>
+      ),
+    },
+  ]
+
+  return (
+    <div className={`notification-management-page${embedded ? ' is-embedded' : ''}`}>
+      {!embedded && (
+        <header className="notification-page-header">
+          <div className="notification-title-group">
+            <span className="notification-title-icon"><BellOutlined /></span>
+            <div>
+              <Title level={2}>Notification Management</Title>
+              <Text type="secondary">Send targeted push notifications through FCM or OneSignal.</Text>
+            </div>
+          </div>
+        </header>
+      )}
+
+      <Tabs
+        className="notification-view-tabs"
+        activeKey={activeView}
+        onChange={setActiveView}
+        items={[
+          { key: 'recipients', label: <span><UserOutlined /> Recipients</span> },
+          { key: 'history', label: <span><HistoryOutlined /> History</span> },
+        ]}
+      />
+
+      {activeView === 'recipients' ? (
+        <>
 
       <Alert
         className="notification-delivery-alert"
@@ -543,6 +645,99 @@ const NotificationManagement: React.FC = () => {
             <Input placeholder="/profile" />
           </Form.Item>
         </Form>
+      </Modal>
+        </>
+      ) : (
+        <section className="notification-directory notification-history-directory">
+          <div className="notification-directory-header">
+            <div>
+              <Title level={4}>Notification History</Title>
+              <Text type="secondary">Content, delivery results, recipients, and notification opens</Text>
+            </div>
+            <Button className="notification-refresh-button" icon={<ReloadOutlined />} loading={historyLoading} onClick={loadHistory}>
+              <span>Refresh</span>
+            </Button>
+          </div>
+          <div className="notification-history-table">
+            <Table
+              rowKey="id"
+              loading={historyLoading}
+              columns={historyColumns}
+              dataSource={history}
+              locale={{ emptyText: <Empty description="No notification history yet" /> }}
+              scroll={{ x: 1050 }}
+              pagination={{ pageSize: 10, showSizeChanger: true }}
+            />
+          </div>
+          <List<NotificationDeliveryRecord>
+            className="notification-history-mobile"
+            loading={historyLoading}
+            dataSource={history}
+            locale={{ emptyText: <Empty description="No notification history yet" /> }}
+            pagination={{ pageSize: 10, size: 'small', showSizeChanger: false }}
+            renderItem={(record) => (
+              <List.Item>
+                <article className="notification-history-card">
+                  <div className="notification-history-card-header">
+                    <div>
+                      <strong>{record.title}</strong>
+                      <span>{record.createdAt?.toLocaleString() || '-'}</span>
+                    </div>
+                    <Tag className="notification-role-tag">{record.provider}</Tag>
+                  </div>
+                  <p>{record.body}</p>
+                  <div className="notification-history-counts">
+                    <span><b>{record.counts.targeted}</b> Targeted</span>
+                    <span><b>{record.counts.sent}</b> Sent</span>
+                    <span><b>{record.counts.failed}</b> Failed</span>
+                    <span><b>{record.counts.opened}</b> Opened</span>
+                  </div>
+                  <Button block icon={<EyeOutlined />} onClick={() => void openDelivery(record)}>View recipients</Button>
+                </article>
+              </List.Item>
+            )}
+          />
+        </section>
+      )}
+
+      <Modal
+        open={!!selectedDelivery}
+        width={760}
+        centered
+        footer={null}
+        destroyOnHidden
+        title={selectedDelivery?.title || 'Delivery details'}
+        onCancel={() => {
+          setSelectedDelivery(null)
+          setDeliveryRecipients([])
+        }}
+      >
+        {selectedDelivery && (
+          <div className="notification-delivery-detail">
+            <Text type="secondary">{selectedDelivery.body}</Text>
+            <div className="notification-history-counts is-detail">
+              <span><b>{selectedDelivery.counts.targeted}</b> Targeted</span>
+              <span><b>{selectedDelivery.counts.sent}</b> Sent</span>
+              <span><b>{selectedDelivery.counts.failed}</b> Failed</span>
+              <span><b>{selectedDelivery.counts.opened}</b> Opened</span>
+            </div>
+            <Table
+              rowKey="id"
+              size="small"
+              loading={recipientsLoading}
+              dataSource={deliveryRecipients}
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              scroll={{ x: 620 }}
+              columns={[
+                { title: 'Recipient', key: 'recipient', render: (_: unknown, item: NotificationRecipientRecord) => <div><Text strong>{item.displayName}</Text><div><Text type="secondary">{item.email}</Text></div></div> },
+                { title: 'Status', dataIndex: 'status', key: 'status', render: (value: string) => <Tag color={value === 'opened' ? 'green' : value === 'failed' ? 'red' : 'gold'}>{value}</Tag> },
+                { title: 'Sent', dataIndex: 'sent', key: 'sent' },
+                { title: 'Failed', dataIndex: 'failed', key: 'failed' },
+                { title: 'Opened at', key: 'openedAt', render: (_: unknown, item: NotificationRecipientRecord) => item.openedAt?.toLocaleString() || '-' },
+              ]}
+            />
+          </div>
+        )}
       </Modal>
     </div>
   )
