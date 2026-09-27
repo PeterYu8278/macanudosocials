@@ -344,6 +344,46 @@ const AdminEvents: React.FC = () => {
       let updateData: any = {}
       
       switch (fieldName) {
+        case '__SAVE_ALL__': {
+          if (editForm.title !== undefined) updateData.title = editForm.title
+          if (editForm.description !== undefined) updateData.description = editForm.description
+          if (editForm.image !== undefined) updateData.image = editForm.image
+          if (editForm.status !== undefined) updateData.status = editForm.status
+          if (editForm.isPrivate !== undefined) updateData.isPrivate = editForm.isPrivate
+
+          if (editForm.startDate !== undefined || editForm.endDate !== undefined) {
+            const currentSchedule = (viewing as any).schedule || {}
+            const nextStartDate = editForm.startDate !== undefined
+              ? toDateOrNull(editForm.startDate)
+              : currentSchedule.startDate
+            const nextEndDate = editForm.endDate !== undefined
+              ? toDateOrNull(editForm.endDate)
+              : currentSchedule.endDate
+            updateData.schedule = {
+              ...currentSchedule,
+              startDate: nextStartDate,
+              endDate: nextEndDate,
+              registrationDeadline: nextEndDate,
+            }
+          }
+
+          if (editForm.locationName !== undefined) {
+            updateData.location = {
+              ...((viewing as any).location || {}),
+              name: editForm.locationName,
+            }
+          }
+
+          if (editForm.fee !== undefined || editForm.maxParticipants !== undefined) {
+            const currentParticipants = (viewing as any).participants || {}
+            updateData.participants = {
+              ...currentParticipants,
+              ...(editForm.fee !== undefined ? { fee: Number(editForm.fee) } : {}),
+              ...(editForm.maxParticipants !== undefined ? { maxParticipants: editForm.maxParticipants } : {}),
+            }
+          }
+          break
+        }
         case 'title':
           updateData.title = editForm.title
           break
@@ -404,7 +444,9 @@ const AdminEvents: React.FC = () => {
       
       const res = await updateDocument(COLLECTIONS.EVENTS, viewing.id, updateData)
       if (res.success) {
-        if (fieldName === 'status' && editForm.status === 'published') {
+        if ((fieldName === 'status' || fieldName === '__SAVE_ALL__')
+          && editForm.status === 'published'
+          && viewing.status !== 'published') {
           try {
             await notifyEventPublished(viewing.id)
           } catch (notificationError) {

@@ -643,24 +643,11 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
                   await onSaveField('__CREATE_ALL__')
                   onToggleEdit()
                 } else {
-                  // 编辑模式：保存所有更改的字段
-                try {
-                  // 保存所有字段
-                  const fieldsToSave = ['title', 'description', 'status', 'isPrivate', 'locationName', 'fee', 'maxParticipants', 'image']
-                  for (const field of fieldsToSave) {
-                    if (editForm[field] !== undefined) {
-                      await onSaveField(field)
-                    }
-                  }
-                  // 保存日期字段（startDate 会同时保存 endDate）
-                  if (editForm.startDate !== undefined) {
-                    await onSaveField('startDate')
-                  } else if (editForm.endDate !== undefined) {
-                    await onSaveField('endDate')
-                  }
-                  // 退出编辑模式
-                  onToggleEdit()
-                } catch (error) {
+                  // 编辑模式：一次性保存所有更改，避免每个字段各写一条审计日志
+                  try {
+                    await onSaveField('__SAVE_ALL__')
+                    onToggleEdit()
+                  } catch (error) {
                     console.error('🟠 EDIT MODE error:', error)
                   }
                 }
