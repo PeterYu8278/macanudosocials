@@ -277,7 +277,7 @@ const AdminUsers: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       render: (_: any, record: any) => {
-        const status = statusMap[record.id] || record.status || 'active'
+        const status = statusMap[record.id] || record.status || 'inactive'
         return (
           <Space>
             <Tag color={getStatusColor(status)}>
@@ -402,7 +402,7 @@ const AdminUsers: React.FC = () => {
         (u.memberId || '').toLowerCase().includes(kw)
 
       // 状态筛选（客户端，因为statusMap是动态的）
-      const status = statusMap[u.id] || (u as any).status || 'active'
+      const status = statusMap[u.id] || (u as any).status || 'inactive'
       const passStatus = !statusFilter || status === statusFilter
 
       // role筛选（客户端）
@@ -484,7 +484,7 @@ const AdminUsers: React.FC = () => {
       flexDirection: 'column',
       overflow: isMobile ? 'hidden' : 'visible',
       paddingRight: isMobile && activeTab === 'list' ? '32px' : '0',
-      paddingBottom: isMobile ? '112px' : '0'
+      paddingBottom: isMobile ? '46px' : '0'
     }}>
       {/* 标签页 */}
       <div>
@@ -913,7 +913,7 @@ const AdminUsers: React.FC = () => {
                         <div key={group.key} id={`group-${group.key}`} style={{ marginBottom: 12 }}>
                           <div style={{ color: '#f4af25', fontWeight: 600, marginBottom: 8 }}>{group.key}</div>
                           {group.items.map((u) => {
-                            const status = statusMap[u.id] || (u as any).status || 'active'
+                            const status = statusMap[u.id] || (u as any).status || 'inactive'
                             const role = u.role || 'member'
                             return (
                               <div key={u.id} style={{ borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', padding: 12, marginBottom: 8, backdropFilter: 'blur(6px)' }}>

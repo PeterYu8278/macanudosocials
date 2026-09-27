@@ -43,6 +43,8 @@ export interface User {
     lastCheckInAt?: Date;      // 最后一次check-in时间
     currentVisitSessionId?: string; // 当前进行中的visit session ID
     nextFirstVisitWaiverExpiresAt?: Date; // 续费后首次驻店免扣费到期时间
+    activeFrom?: Date;              // Annual Pass 生效时间
+    activeUntil?: Date;             // Annual Pass 到期时间
   };
   
   // AI 功能使用统计

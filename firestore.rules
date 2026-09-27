@@ -72,19 +72,6 @@ service cloud.firestore {
       return isSignedIn() && getUserData().status == 'active';
     }
 
-    // Annual Pass is represented by users/{uid}.status. Activation upgrades
-    // guest to member while every other role remains unchanged.
-    function isSelfAnnualPassActivation(userId) {
-      return isOwner(userId)
-             && resource.data.status == 'inactive'
-             && request.resource.data.status == 'active'
-             && ((resource.data.role == 'guest' && request.resource.data.role == 'member')
-                 || (resource.data.role != 'guest' && request.resource.data.role == resource.data.role))
-             && request.resource.data.membership.points < resource.data.membership.points
-             && request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['membership', 'role', 'status', 'updatedAt']);
-    }
-
     function isActiveReferredUser(referrerId, referredUserId) {
       return isSignedIn()
              && get(/databases/$(database)/documents/users/$(referredUserId)).data.status == 'active'
@@ -122,13 +109,19 @@ service cloud.firestore {
                   || (isSignedIn()
                       && resource.data.referral.referredByUserId == request.auth.uid);
 
-      // 创建：仅在注册时允许（特殊情况）
-      allow create: if isSignedIn() && request.auth.uid == userId;
+      // 注册只能建立最低权限、零积分、未激活的本人账户。
+      allow create: if isSignedIn()
+                    && request.auth.uid == userId
+                    && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.role == 'guest'
+                    && request.resource.data.status == 'inactive'
+                    && request.resource.data.membership.points == 0;
 
-      // 更新：用户可以更新自己的数据，管理员可以更新所有
+      // 用户可维护个人资料和消费积分，但不能提升角色、激活账户或自行增加积分。
       allow update: if (isOwner(userId) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status']))
-                    || isSelfAnnualPassActivation(userId)
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status'])
+                       && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['membership'])
+                           || request.resource.data.membership.points <= resource.data.membership.points))
                     || isAdmin();
 
       // 删除：仅管理员
@@ -357,22 +350,8 @@ service cloud.firestore {
       // 读取：用户可以查看自己的年费记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();
 
-      // 所有角色都可为自己提交 Annual Pass；系统仍按用户 status 判断权益。
-      allow create: if isAnyAdmin()
-                    || (isSignedIn()
-                        && request.resource.data.userId == request.auth.uid
-                        && request.resource.data.status == 'pending'
-                        && request.resource.data.amount > 0
-                        && (request.resource.data.renewalType == 'renewal'
-                            || getUserData().status == 'inactive'));
-      allow update: if isAnyAdmin()
-                    || (isOwner(resource.data.userId)
-                        && resource.data.status == 'pending'
-                        && request.resource.data.status == 'paid'
-                        && request.resource.data.userId == resource.data.userId
-                        && request.resource.data.amount == resource.data.amount
-                        && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['status', 'deductedAt', 'pointsRecordId', 'updatedAt']));
+      // Annual Pass records are written by trusted server functions or administrators.
+      allow create, update: if isAnyAdmin();
       allow delete: if isAnyAdmin();
     }
     

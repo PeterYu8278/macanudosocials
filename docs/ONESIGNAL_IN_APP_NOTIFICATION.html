@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"
+  />
+  <style>
+    :root {
+      color-scheme: dark;
+      --font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+      --overlay-bg: rgba(0, 0, 0, 0.72);
+      --card-bg: #1a1a1a;
+      --card-bg-soft: #242118;
+      --title-color: #f8f8f8;
+      --text-color: #c0c0c0;
+      --muted-color: #999999;
+      --gold: #ffd700;
+      --gold-light: #fde08d;
+      --gold-dark: #c48d3a;
+      --border-color: rgba(255, 215, 0, 0.34);
+      --card-radius: 12px;
+      --button-radius: 8px;
+      --card-max-width: 420px;
+      --card-shadow: 0 22px 60px rgba(0, 0, 0, 0.62),
+        0 0 28px rgba(196, 141, 58, 0.16);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html,
+    body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+    }
+
+    body {
+      background: var(--overlay-bg);
+      color: var(--text-color);
+      font-family: var(--font-family);
+      letter-spacing: 0;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .iam-wrapper {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: max(16px, env(safe-area-inset-top))
+        max(16px, env(safe-area-inset-right))
+        max(16px, env(safe-area-inset-bottom))
+        max(16px, env(safe-area-inset-left));
+    }
+
+    .iam-card {
+      position: relative;
+      width: 100%;
+      max-width: var(--card-max-width);
+      max-height: 100%;
+      overflow: auto;
+      background: linear-gradient(160deg, var(--card-bg-soft) 0%, var(--card-bg) 48%, #111111 100%);
+      border: 1px solid var(--border-color);
+      border-radius: var(--card-radius);
+      box-shadow: var(--card-shadow);
+      scrollbar-width: none;
+    }
+
+    .iam-card::-webkit-scrollbar {
+      display: none;
+    }
+
+    .iam-header {
+      position: relative;
+      height: 160px;
+      overflow: hidden;
+      border-bottom: 1px solid rgba(255, 215, 0, 0.2);
+      background:
+        linear-gradient(180deg, rgba(10, 10, 10, 0.02) 20%, rgba(10, 10, 10, 0.94) 100%),
+        url("https://img.os-content.com/i/4722d713-821f-405d-b639-55c53037b512/WwNBOUFSOWhjZ2WsDejQ_4c786f1e99fb7f8f7905a51550ee07fdfea207a0%201.png") center / cover no-repeat,
+        #17140d;
+    }
+
+    .brand {
+      position: absolute;
+      left: 20px;
+      bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo {
+      width: 38px;
+      height: 38px;
+      object-fit: contain;
+      border-radius: 6px;
+    }
+
+    .brand-name {
+      color: var(--gold-light);
+      font-size: 16px;
+      font-weight: 600;
+    }
+
+    .close-btn {
+      position: absolute;
+      z-index: 2;
+      top: 12px;
+      right: 12px;
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      border-radius: 50%;
+      background: rgba(10, 10, 10, 0.72);
+      color: #ffffff;
+      cursor: pointer;
+    }
+
+    .close-btn svg {
+      width: 17px;
+      height: 17px;
+      stroke: currentColor;
+      stroke-linecap: round;
+      stroke-width: 2;
+    }
+
+    .iam-body {
+      padding: 22px 22px 4px;
+    }
+
+    .eyebrow {
+      margin-bottom: 8px;
+      color: var(--gold);
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .iam-title {
+      margin-bottom: 10px;
+      color: var(--title-color);
+      font-size: 24px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .iam-copy {
+      color: var(--text-color);
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .benefits {
+      display: grid;
+      gap: 10px;
+      margin-top: 18px;
+      list-style: none;
+    }
+
+    .benefits li {
+      position: relative;
+      padding-left: 20px;
+      color: #d8d8d8;
+      font-size: 14px;
+      line-height: 1.4;
+    }
+
+    .benefits li::before {
+      content: "";
+      position: absolute;
+      top: 7px;
+      left: 2px;
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold-light), var(--gold-dark));
+      box-shadow: 0 0 8px rgba(255, 215, 0, 0.35);
+    }
+
+    .privacy-note {
+      margin-top: 16px;
+      color: var(--muted-color);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .iam-footer {
+      display: flex;
+      gap: 10px;
+      padding: 20px 22px 22px;
+    }
+
+    .iam-btn {
+      min-width: 0;
+      height: 48px;
+      flex: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: var(--button-radius);
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 120ms ease, transform 120ms ease;
+    }
+
+    .iam-btn:active,
+    .close-btn:active {
+      opacity: 0.86;
+      transform: scale(0.97);
+    }
+
+    .btn-secondary {
+      border: 1px solid #444444;
+      background: #242424;
+      color: #f8f8f8;
+    }
+
+    .btn-primary {
+      border: 1px solid var(--gold-light);
+      background: linear-gradient(135deg, var(--gold-light) 0%, var(--gold-dark) 100%);
+      color: #111111;
+      box-shadow: 0 8px 20px rgba(196, 141, 58, 0.22);
+    }
+
+    .iam-btn:focus-visible,
+    .close-btn:focus-visible {
+      outline: 2px solid var(--gold);
+      outline-offset: 2px;
+    }
+
+    @media (max-width: 360px), (max-height: 600px) {
+      .iam-header {
+        height: 120px;
+      }
+
+      .iam-body {
+        padding: 18px 18px 2px;
+      }
+
+      .iam-title {
+        font-size: 21px;
+      }
+
+      .benefits {
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .iam-footer {
+        padding: 16px 18px 18px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="iam-wrapper">
+    <section class="iam-card" role="dialog" aria-modal="true" aria-labelledby="iam-title">
+      <header class="iam-header">
+        <button
+          id="close-btn"
+          class="close-btn"
+          type="button"
+          aria-label="Close"
+          data-onesignal-unique-label="permission-close"
+        >
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" />
+          </svg>
+        </button>
+
+        <div class="brand">
+          <img
+            class="brand-logo"
+            src="https://macanudosocials.com/icons/app-logo-512.png"
+            alt=""
+          />
+          <span class="brand-name">Macanudo Socials</span>
+        </div>
+      </header>
+
+      <div class="iam-body">
+        <p class="eyebrow">Stay connected</p>
+        <h1 id="iam-title" class="iam-title">Enable notifications</h1>
+        <p class="iam-copy">
+          Get timely updates from Macanudo Socials without missing what matters.
+        </p>
+
+        <ul class="benefits">
+          <li>New events and registration reminders</li>
+          <li>Annual Pass expiry reminders</li>
+          <li>Rewards, redemptions and account updates</li>
+        </ul>
+
+        <p class="privacy-note">
+          You can change this preference anytime in Profile Settings.
+        </p>
+      </div>
+
+      <footer class="iam-footer">
+        <button
+          id="maybe-later-btn"
+          class="iam-btn btn-secondary"
+          type="button"
+          data-onesignal-unique-label="permission-maybe-later"
+        >
+          Maybe later
+        </button>
+
+        <button
+          id="allow-btn"
+          class="iam-btn btn-primary"
+          type="button"
+          data-onesignal-unique-label="permission-allow"
+        >
+          Allow
+        </button>
+      </footer>
+    </section>
+  </div>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function () {
+      var closeBtn = document.getElementById("close-btn");
+      var maybeLaterBtn = document.getElementById("maybe-later-btn");
+      var allowBtn = document.getElementById("allow-btn");
+
+      closeBtn.addEventListener("click", function (event) {
+        OneSignalIamApi.close(event);
+      });
+
+      maybeLaterBtn.addEventListener("click", function (event) {
+        OneSignalIamApi.tagUser(event, { permission_prompt: "delayed" });
+        OneSignalIamApi.close(event);
+      });
+
+      allowBtn.addEventListener("click", function (event) {
+        OneSignalIamApi.triggerPushPrompt(event);
+        OneSignalIamApi.tagUser(event, { permission_prompt: "accepted" });
+        OneSignalIamApi.close(event);
+      });
+    });
+  </script>
+</body>
+</html>

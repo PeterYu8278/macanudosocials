@@ -9,6 +9,7 @@ import {
 import { db } from '../config/firebase'
 import type { User } from '../types'
 import type { PushSubscriptionSnapshot } from '../store/modules/pushNotifications'
+import { Capacitor } from '@capacitor/core'
 
 export const ONESIGNAL_APP_ID = 'af46548f-181c-40e3-8880-0aae079c20a3'
 const ONESIGNAL_WORKER_PATH = 'push/onesignal/OneSignalSDKWorker.js'
@@ -119,6 +120,10 @@ export const readPushSubscriptionSnapshot = (): PushSubscriptionSnapshot => {
 }
 
 export const requestPushSubscription = async (): Promise<PushSubscriptionSnapshot> => {
+  if (Capacitor.isNativePlatform()) {
+    const { requestNativePushSubscription } = await import('./nativeOneSignal')
+    return requestNativePushSubscription()
+  }
   await initializeOneSignal()
 
   if (OneSignal.Notifications.permissionNative === 'default') {
@@ -132,6 +137,10 @@ export const requestPushSubscription = async (): Promise<PushSubscriptionSnapsho
 }
 
 export const disablePushSubscription = async (): Promise<PushSubscriptionSnapshot> => {
+  if (Capacitor.isNativePlatform()) {
+    const { disableNativePushSubscription } = await import('./nativeOneSignal')
+    return disableNativePushSubscription()
+  }
   await initializeOneSignal()
   if (OneSignal.User.PushSubscription.optedIn) {
     await OneSignal.User.PushSubscription.optOut()
@@ -143,7 +152,7 @@ export const syncPushSubscriptionToFirestore = async (
   user: User,
   snapshot: PushSubscriptionSnapshot,
 ): Promise<void> => {
-  if (!isOneSignalOrigin() || !user.id) return
+  if ((!isOneSignalOrigin() && !Capacitor.isNativePlatform()) || !user.id) return
 
   const deviceId = getPushDeviceId()
   const deviceTags = getDeviceTags()

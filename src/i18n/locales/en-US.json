@@ -1985,6 +1985,8 @@
     "phoneUsed": "This phone number is already used by another user",
     "joinDate": "Join Date",
     "notActivated": "Not Activated",
+    "activated": "Activated",
+    "suspended": "Suspended",
     "avatarUpdated": "Avatar updated",
     "discount": "Discount Rate",
     "membership": "Membership",

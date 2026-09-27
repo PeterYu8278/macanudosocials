@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import OneSignal from 'react-onesignal'
+import { Capacitor } from '@capacitor/core'
 import { useAuthStore } from '../../store/modules/auth'
 import { usePushNotificationStore } from '../../store/modules/pushNotifications'
 import { normalizePhoneNumber } from '../../utils/phoneNormalization'
@@ -19,6 +20,79 @@ const OneSignalIntegration = () => {
 
   useEffect(() => {
     if (loading) return
+
+    if (Capacitor.isNativePlatform()) {
+      let active = true
+      let unsubscribe: (() => void) | undefined
+
+      const synchronize = async () => {
+        const {
+          configureNativeOneSignalUser,
+          initializeNativeOneSignal,
+          logoutNativeOneSignal,
+          readNativePushSubscriptionSnapshot,
+          subscribeToNativeOneSignalChanges,
+          syncNativeNotificationPermissionPrompt,
+        } = await import('../../services/nativeOneSignal')
+
+        initializeNativeOneSignal()
+        if (!user) {
+          logoutNativeOneSignal()
+          if (active) setSnapshot(await readNativePushSubscriptionSnapshot())
+          return
+        }
+
+        await configureNativeOneSignalUser(user)
+        const initialSnapshot = await readNativePushSubscriptionSnapshot()
+        if (user.preferences?.notifications === false && initialSnapshot.optedIn) {
+          const { disableNativePushSubscription } = await import('../../services/nativeOneSignal')
+          await disableNativePushSubscription()
+        }
+        const publishSnapshot = async () => {
+          const snapshot = await readNativePushSubscriptionSnapshot()
+          if (!active) return
+          syncNativeNotificationPermissionPrompt(
+            snapshot,
+            user.preferences?.notifications !== false,
+          )
+          setSnapshot(snapshot)
+          await syncPushSubscriptionToFirestore(user, snapshot)
+        }
+
+        unsubscribe = subscribeToNativeOneSignalChanges(() => {
+          void publishSnapshot().catch((error) => {
+            console.error('[OneSignal Native] Failed to synchronize subscription:', error)
+          })
+        })
+        await publishSnapshot()
+      }
+
+      setSnapshot({
+        status: 'loading',
+        permission: 'default',
+        optedIn: false,
+        subscriptionId: null,
+        supported: true,
+      })
+      void synchronize().catch((error) => {
+        console.error('[OneSignal Native] Failed to initialize:', error)
+        if (active) {
+          setSnapshot({
+            status: 'error',
+            permission: 'default',
+            optedIn: false,
+            subscriptionId: null,
+            supported: true,
+            error: error instanceof Error ? error.message : String(error),
+          })
+        }
+      })
+
+      return () => {
+        active = false
+        unsubscribe?.()
+      }
+    }
 
     if (!isOneSignalOrigin()) {
       setSnapshot({

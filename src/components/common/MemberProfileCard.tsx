@@ -121,12 +121,16 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   // 当 user 数据变化时重新获取会员有效期
   // auth store 已有 onSnapshot 监听 users/{uid}，user 对象变化会触发此 effect
   useEffect(() => {
-    if (!user?.id) {
+    if (!user?.id || user.status !== 'active') {
+      setMembershipPeriod(null)
+      return
+    }
+    if (user.membership?.activeFrom) {
       setMembershipPeriod(null)
       return
     }
     getUserMembershipPeriod(user.id).then(setMembershipPeriod)
-  }, [user?.id, user?.status, user?.membership?.level, user?.updatedAt])
+  }, [user?.id, user?.status, user?.membership?.activeFrom, user?.membership?.level, user?.updatedAt])
 
   // Use onSnapshot to monitor user check-in status in real-time
   useEffect(() => {
@@ -601,14 +605,22 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                   <div>
 
                     <div style={{
-                      color: membershipPeriod ? '#ffffff' : 'rgba(255,255,255,0.4)',
+                      color: user?.status === 'active' ? '#ffffff' : 'rgba(255,255,255,0.4)',
                       fontSize: 12,
                       fontWeight: 600,
                       fontFamily: "'Noto Sans SC', sans-serif",
                       textShadow: '0 1px 2px rgba(0,0,0,0.5)',
                       whiteSpace: 'nowrap'
                     }}>
-                      {membershipPeriod ? dayjs(membershipPeriod.startDate).format('YYYY-MM-DD') : t('profile.notActivated')}
+                      {user?.status === 'active'
+                        ? (user.membership?.activeFrom || membershipPeriod
+                            ? dayjs((user.membership?.activeFrom as any)?.toDate?.()
+                                || user.membership?.activeFrom
+                                || membershipPeriod?.startDate).format('YYYY-MM-DD')
+                            : t('profile.activated'))
+                        : user?.status === 'suspended'
+                          ? t('profile.suspended')
+                          : t('profile.notActivated')}
                     </div>
                   </div>
 

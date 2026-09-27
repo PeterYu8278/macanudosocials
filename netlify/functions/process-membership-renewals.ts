@@ -66,7 +66,9 @@ const processRenewals = async () => {
         if (!userSnapshot.exists) throw new Error(`User ${record.userId} not found`);
 
         const user = userSnapshot.data()!;
-        const amount = Number(record.amount || 0);
+        // Never trust the amount stored in an old client-created pending record.
+        const feeDate = toDate(record.dueDate) || now;
+        const amount = getAnnualFeeAmount(annualFees, feeDate);
         const currentPoints = Number(user.membership?.points || 0);
 
         if (amount <= 0) throw new Error('Invalid membership fee amount');
@@ -92,6 +94,8 @@ const processRenewals = async () => {
         const newPoints = currentPoints - amount;
         const userUpdate: Record<string, unknown> = {
           'membership.points': newPoints,
+          'membership.activeFrom': nowTimestamp,
+          'membership.activeUntil': Timestamp.fromDate(nextDueDate),
           status: 'active',
           role: user.role === 'guest' ? 'member' : user.role,
           updatedAt: nowTimestamp,

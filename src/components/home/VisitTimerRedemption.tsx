@@ -5,7 +5,8 @@ import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutline
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
-import { createMembershipFeeRecord, deductMembershipFee, getUserMembershipPeriod } from '../../services/firebase/membershipFee';
+import { getUserMembershipPeriod } from '../../services/firebase/membershipFee';
+import { activateMembership } from '../../services/membershipActivation';
 import { getUserData } from '../../services/firebase/auth';
 import StoreSelect from '../common/StoreSelect';
 import { useNavigate } from 'react-router-dom';
@@ -337,7 +338,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       return;
     }
 
-    if (user.status !== 'inactive') {
+    if (user.status === 'active') {
       message.warning(t('visitTimer.membershipAlreadyActive'));
       return;
     }
@@ -349,41 +350,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     setLoading(true);
 
     try {
-      // 优先复用已有的续费记录，避免到期后重新创建 initial 记录。
-      const { getUserMembershipFeeRecords } = await import('../../services/firebase/membershipFee');
-      const existingRecords = await getUserMembershipFeeRecords(user.id, 10);
-      const pendingRecords = existingRecords
-        .filter(r => r.status === 'pending')
-        .sort((a, b) => a.dueDate.getTime() - b.dueDate.getTime());
-      const pendingRecord = pendingRecords.find(r => r.renewalType === 'renewal')
-        || pendingRecords.find(r => r.renewalType === 'initial');
-
-      let recordId: string;
-
-      if (pendingRecord) {
-        recordId = pendingRecord.id;
-      } else {
-        const today = new Date();
-        const result = await createMembershipFeeRecord(
-          user.id,
-          today,
-          user.role === 'guest' ? 'initial' : 'renewal',
-          undefined,
-          user.displayName,
-          selectedStoreId
-        );
-
-        if (!result.success || !result.recordId) {
-          message.error(result.error || t('visitTimer.createMembershipFeeRecordFailed'));
-          setLoading(false);
-          return;
-        }
-
-        recordId = result.recordId;
-      }
-
-      // 立即尝试扣除年费
-      const deductResult = await deductMembershipFee(recordId);
+      const deductResult = await activateMembership(selectedStoreId);
 
       if (deductResult.success) {
         message.success(t('visitTimer.membershipActivateSuccess'));

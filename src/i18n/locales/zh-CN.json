@@ -1987,6 +1987,8 @@
     "phoneUsed": "该手机号已被其他用户使用",
     "joinDate": "加入日期",
     "notActivated": "未开通",
+    "activated": "已开通",
+    "suspended": "已暂停",
     "avatarUpdated": "头像已更新",
     "discount": "折扣率",
     "activatedMembershipAt": "会员开通于"
