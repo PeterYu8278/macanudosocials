@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "156399314004",
+    "project_id": "macanudosocial",
+    "storage_bucket": "macanudosocial.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:156399314004:android:6b30a3e850967390e9f9c1",
+        "android_client_info": {
+          "package_name": "com.macanudosocials.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "156399314004-49gik3s248h790der58f0bf73q369roi.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeGB0Ydfu4ctl17Gvrx-50jHLt2nuBBxM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "156399314004-49gik3s248h790der58f0bf73q369roi.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

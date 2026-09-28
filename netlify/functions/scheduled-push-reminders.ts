@@ -132,9 +132,6 @@ const sendPush = async (
       recipientIdentifiers.set(user.id, identifiers);
     }
 
-    // Prefer FCM for a user to avoid duplicate notifications on the same device.
-    if (!fcmSnapshot.empty) return;
-
     const subscriptions = await db.collection('users').doc(user.id)
       .collection('notificationSubscriptions').get();
     subscriptions.forEach((subscription) => {
@@ -186,6 +183,7 @@ const sendPush = async (
       data: { ...data, type, clickAction: trackedClickAction },
       tokens: batchTargets.map((target) => target.token),
       webpush: {
+        headers: { Urgency: 'high', TTL: '86400' },
         fcmOptions: { link: notificationUrl },
         notification: { icon, badge },
       },
@@ -223,6 +221,7 @@ const sendPush = async (
           url: notificationUrl,
           chrome_web_icon: icon,
           chrome_web_badge: badge,
+          priority: 10,
           data: { ...data, type, clickAction: trackedClickAction },
         }),
       });

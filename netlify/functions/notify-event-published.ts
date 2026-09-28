@@ -144,20 +144,31 @@ export const handler: Handler = async (event) => {
         && preferences?.pushNotifications?.types?.activity !== false;
     });
 
-    const fcmTargets: Array<{ token: string; ref: FirebaseFirestore.DocumentReference }> = [];
+    const fcmTargets: Array<{
+      token: string;
+      ref: FirebaseFirestore.DocumentReference;
+      userId: string;
+      deviceId?: string;
+    }> = [];
     const oneSignalIds = new Set<string>();
     const targetedUserIds = new Set<string>();
+    const recipientIdentifiers = new Map<string, { deviceIds: string[]; subscriptionIds: string[] }>();
     await Promise.all(users.map(async (user) => {
       const tokens = await user.ref.collection('fcmTokens').where('active', '==', true).get();
+      const identifiers = { deviceIds: [] as string[], subscriptionIds: [] as string[] };
       tokens.forEach((tokenDocument) => {
-        const token = tokenDocument.data().token;
+        const tokenData = tokenDocument.data();
+        const token = tokenData.token;
         if (typeof token === 'string' && token.trim()) {
-          fcmTargets.push({ token: token.trim(), ref: tokenDocument.ref });
+          const deviceId = typeof tokenData.deviceId === 'string' && tokenData.deviceId.trim()
+            ? tokenData.deviceId.trim()
+            : undefined;
+          fcmTargets.push({ token: token.trim(), ref: tokenDocument.ref, userId: user.id, deviceId });
           targetedUserIds.add(user.id);
+          if (deviceId) identifiers.deviceIds.push(deviceId);
         }
       });
 
-      if (!tokens.empty) return;
       const subscriptions = await user.ref.collection('notificationSubscriptions').get();
       subscriptions.forEach((subscription) => {
         const data = subscription.data();
@@ -168,10 +179,15 @@ export const handler: Handler = async (event) => {
           && typeof data.subscriptionId === 'string'
           && data.subscriptionId.trim()
         ) {
-          oneSignalIds.add(data.subscriptionId.trim());
+          const subscriptionId = data.subscriptionId.trim();
+          oneSignalIds.add(subscriptionId);
           targetedUserIds.add(user.id);
+          identifiers.subscriptionIds.push(subscriptionId);
         }
       });
+      if (identifiers.deviceIds.length || identifiers.subscriptionIds.length) {
+        recipientIdentifiers.set(user.id, identifiers);
+      }
     }));
 
     const title = `New Event: ${String(eventData.title || 'Cigar Gathering')}`;
@@ -185,13 +201,17 @@ export const handler: Handler = async (event) => {
       body,
       type: 'event_reminder',
       source: 'event_published',
-      provider: 'mixed',
+      provider: fcmTargets.length > 0 && oneSignalIds.size > 0
+        ? 'mixed'
+        : fcmTargets.length > 0 ? 'fcm' : 'onesignal',
       clickAction,
       relatedId: eventId,
       recipients: users.filter((user) => targetedUserIds.has(user.id)).map((user) => ({
         userId: user.id,
         displayName: user.data().displayName,
         email: user.data().email,
+        deviceIds: recipientIdentifiers.get(user.id)?.deviceIds,
+        subscriptionIds: recipientIdentifiers.get(user.id)?.subscriptionIds,
       })),
     });
     const trackedAction = trackedClickAction(clickAction, deliveryRef.id);
@@ -207,6 +227,7 @@ export const handler: Handler = async (event) => {
         data: { type: 'event_reminder', eventId, clickAction: trackedAction, deliveryId: deliveryRef.id },
         tokens: batchTargets.map((target) => target.token),
         webpush: {
+          headers: { Urgency: 'high', TTL: '86400' },
           fcmOptions: { link: notificationUrl },
           notification: { icon, badge },
         },
@@ -243,6 +264,7 @@ export const handler: Handler = async (event) => {
           url: notificationUrl,
           chrome_web_icon: icon,
           chrome_web_badge: badge,
+          priority: 10,
           data: { type: 'event_reminder', eventId, clickAction: trackedAction, deliveryId: deliveryRef.id },
         }),
       });
