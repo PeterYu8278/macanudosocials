@@ -13,6 +13,7 @@ import { saveAppConfigToIndexedDB } from './utils/indexedDB'
 import { PageLoading } from './components/common/LoadingSpinner'
 import OneSignalIntegration from './components/common/OneSignalIntegration'
 import NotificationOpenTracker from './components/common/NotificationOpenTracker'
+import { isFeatureVisible } from './services/firebase/featureVisibility'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -64,11 +65,32 @@ const AppContent: React.FC = () => {
   })
   const [siderCollapsed, setSiderCollapsed] = useState(false)
   const [viewportHeight, setViewportHeight] = useState('100vh')
+  const [guestPageVisible, setGuestPageVisible] = useState<boolean | null>(null)
 
   // 在应用启动时初始化认证（仅一次）
   useEffect(() => {
     initializeAuth()
   }, [initializeAuth])
+
+  useEffect(() => {
+    let active = true
+
+    if (authLoading || user || location.pathname !== '/') {
+      setGuestPageVisible(null)
+      return () => {
+        active = false
+      }
+    }
+
+    setGuestPageVisible(null)
+    void isFeatureVisible('guest-page').then((visible) => {
+      if (active) setGuestPageVisible(visible)
+    })
+
+    return () => {
+      active = false
+    }
+  }, [authLoading, location.pathname, user])
 
   // 响应式更新 isDesktop（监听窗口大小变化）
   useEffect(() => {
@@ -227,7 +249,7 @@ const AppContent: React.FC = () => {
     }
   }, [])
 
-  if (authLoading) {
+  if (authLoading || (!user && location.pathname === '/' && guestPageVisible === null)) {
     return (
       <Layout style={{
         height: viewportHeight,
@@ -320,7 +342,7 @@ const AppContent: React.FC = () => {
                   <Route path="/auth/complete-profile" element={<CompleteProfile />} />
 
                   {/* 前端路由 */}
-                  <Route path="/" element={user ? <Home /> : <Landing />} />
+                  <Route path="/" element={user ? <Home /> : <Landing loginOnly={guestPageVisible === false} />} />
                   <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
                   <Route path="/shop" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><Shop /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><Profile /></ProtectedRoute>} />

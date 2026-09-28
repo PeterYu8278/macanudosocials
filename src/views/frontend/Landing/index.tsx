@@ -52,7 +52,11 @@ const usePrefersReducedMotion = () => {
   return prefersReducedMotion
 }
 
-const Landing: React.FC = () => {
+interface LandingProps {
+  loginOnly?: boolean
+}
+
+const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const navigate = useNavigate()
   const { t } = useTranslation()
   const { message } = App.useApp()
@@ -73,7 +77,7 @@ const Landing: React.FC = () => {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992)
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
   const [salonModalVisible, setSalonModalVisible] = useState(false)
-  const [authModalVisible, setAuthModalVisible] = useState(false)
+  const [authModalVisible, setAuthModalVisible] = useState(loginOnly)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [authLoading, setAuthLoading] = useState(false)
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
@@ -82,13 +86,20 @@ const Landing: React.FC = () => {
   const [loginError, setLoginError] = useState<string>('')
 
   useEffect(() => {
-    if (prefersReducedMotion || isMobile) return
+    if (loginOnly || prefersReducedMotion || isMobile) return
 
     const timer = setTimeout(() => {
       setSalonModalVisible(true)
     }, 1500)
     return () => clearTimeout(timer)
-  }, [isMobile, prefersReducedMotion])
+  }, [isMobile, loginOnly, prefersReducedMotion])
+
+  useEffect(() => {
+    if (!loginOnly) return
+    setAuthMode('login')
+    setAuthModalVisible(true)
+    setSalonModalVisible(false)
+  }, [loginOnly])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -196,7 +207,7 @@ const Landing: React.FC = () => {
   }
 
   return (
-    <div className={`landing-page${prefersReducedMotion ? ' motion-reduced' : ''}`} style={{
+    <div className={`landing-page${loginOnly ? ' login-only' : ''}${prefersReducedMotion ? ' motion-reduced' : ''}`} style={{
       backgroundColor: '#0A0A0A',
       color: '#E5E5E5',
       fontFamily: "'Manrope', sans-serif",
@@ -214,6 +225,15 @@ const Landing: React.FC = () => {
           --text-secondary: #A1A1AA;
           --bg-card: #1A1A1A;
           --border: #2F2F2F;
+        }
+
+        .landing-page.login-only {
+          height: 100vh;
+          overflow: hidden;
+        }
+
+        .landing-page.login-only > :not(style) {
+          display: none !important;
         }
 
         .font-serif { font-family: 'Playfair Display', serif; }
@@ -932,9 +952,13 @@ const Landing: React.FC = () => {
       <Modal
         open={authModalVisible}
         onCancel={() => {
+          if (loginOnly) return
           setAuthModalVisible(false)
           setLoginError('')
         }}
+        closable={!loginOnly}
+        maskClosable={!loginOnly}
+        keyboard={!loginOnly}
         footer={null}
         width={400}
         centered
@@ -1066,7 +1090,7 @@ const Landing: React.FC = () => {
                   </>
                 )}
 
-                <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '10px' }}>
+                {!loginOnly && <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '10px' }}>
                   <Text style={{ color: '#999999', fontSize: '14px' }}>
                     {t('auth.noAccount')}{' '}
                     <a
@@ -1083,7 +1107,7 @@ const Landing: React.FC = () => {
                       {t('auth.registerNow')}
                     </a>
                   </Text>
-                </div>
+                </div>}
               </Form>
             ) : (
               <Form form={registerForm} onFinish={handleRegister} layout="vertical" size="large" style={{ padding: '0 30px' }}>

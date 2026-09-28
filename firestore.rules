@@ -474,8 +474,8 @@ service cloud.firestore {
     // Feature Visibility Collection
     // ================================
     match /feature_visibility/{configId} {
-      // 读取：所有已认证用户可查看功能可见性配置
-      allow read: if isSignedIn();
+      // 读取：访客需要在渲染首页前读取 guest-page 开关
+      allow read: if true;
 
       // 创建/更新/删除：仅管理员
       allow create, update, delete: if isAdmin();

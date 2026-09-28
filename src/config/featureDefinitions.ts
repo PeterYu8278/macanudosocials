@@ -11,6 +11,7 @@ export interface FeatureDefinition {
   description: string;
   descriptionEn: string;
   route: string;
+  routeMatch?: boolean;
   category: 'frontend' | 'admin' | 'cigar-database' | 'tools';
   icon: string;
   defaultVisible: boolean;
@@ -19,6 +20,18 @@ export interface FeatureDefinition {
 // 功能定义列表
 export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
   // 前端功能
+  {
+    key: 'guest-page',
+    name: '访客页面',
+    nameEn: 'Guest Page',
+    description: '未登录用户看到的品牌访客页面；隐藏时仅显示登录弹窗',
+    descriptionEn: 'Public brand page for signed-out visitors; when hidden, only the login modal is shown',
+    route: '/',
+    routeMatch: false,
+    category: 'frontend',
+    icon: 'GlobalOutlined',
+    defaultVisible: true,
+  },
   {
     key: 'home',
     name: '首页',
@@ -279,7 +292,7 @@ export const FEATURE_DEFINITIONS: FeatureDefinition[] = [
 
 // 根据路由获取功能键
 export const getFeatureKeyByRoute = (route: string): string | null => {
-  const feature = FEATURE_DEFINITIONS.find(f => f.route === route);
+  const feature = FEATURE_DEFINITIONS.find(f => f.routeMatch !== false && f.route === route);
   return feature?.key || null;
 };
 
