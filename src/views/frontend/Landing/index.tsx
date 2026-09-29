@@ -960,7 +960,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
         maskClosable={!loginOnly}
         keyboard={!loginOnly}
         footer={null}
-        width={400}
+        width={372}
         centered
         styles={{
           mask: {
@@ -968,7 +968,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             background: 'rgba(0, 0, 0, 0.4)'
           },
           content: {
-            maxWidth: '400px',
+            maxWidth: '372px',
             background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(45, 45, 45, 0.95) 100%)',
             border: '1px solid rgba(197, 165, 90, 0.4)',
             borderRadius: '20px',
@@ -983,22 +983,18 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             <div style={{ textAlign: 'center', paddingTop: '10px' }}>
               {appConfig?.logoUrl && (
                 <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
-                  <img src={appConfig.logoUrl} alt="Logo" style={{ height: '50px', objectFit: 'contain' }} />
+                  <img
+                    src={appConfig.logoUrl}
+                    alt="Logo"
+                    style={{
+                      width: 'auto',
+                      height: '72px',
+                      maxWidth: '100%',
+                      objectFit: 'contain'
+                    }}
+                  />
                 </div>
               )}
-              <Title level={2} style={{
-                marginTop: 10,
-                marginBottom: 8,
-                background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-                fontWeight: 700,
-                letterSpacing: '2px',
-                fontSize: '28px'
-              }}>
-                {appConfig?.appName || 'MS'}
-              </Title>
               <Text style={{ color: '#c0c0c0', fontSize: '16px' }}>
                 {authMode === 'login'
                   ? t('auth.welcomeBack')
@@ -1008,7 +1004,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             </div>
 
             {authMode === 'login' ? (
-              <Form form={loginForm} onFinish={handleLogin} layout="vertical" size="large" style={{ padding: '0 30px' }}>
+              <Form className="auth-form" form={loginForm} onFinish={handleLogin} layout="vertical" size="large" style={{ padding: '0 30px' }}>
                 <Form.Item name="email" rules={[{ required: true, message: loginError || 'Please input your email or phone!' }]}>
                   <Input
                     prefix={<UserOutlined style={{ color: loginError ? '#ff4d4f' : '#ffd700' }} />}
@@ -1090,7 +1086,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                   </>
                 )}
 
-                {!loginOnly && <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '10px' }}>
+                <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '10px' }}>
                   <Text style={{ color: '#999999', fontSize: '14px' }}>
                     {t('auth.noAccount')}{' '}
                     <a
@@ -1107,10 +1103,10 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                       {t('auth.registerNow')}
                     </a>
                   </Text>
-                </div>}
+                </div>
               </Form>
             ) : (
-              <Form form={registerForm} onFinish={handleRegister} layout="vertical" size="large" style={{ padding: '0 30px' }}>
+              <Form className="auth-form" form={registerForm} onFinish={handleRegister} layout="vertical" size="large" style={{ padding: '0 30px' }}>
                 <Form.Item
                   name="displayName"
                   rules={[{ required: true, message: t('auth.nameRequired') }]}

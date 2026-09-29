@@ -26,6 +26,7 @@ const Register: React.FC = () => {
   const { user } = useAuthStore()
   const { t } = useTranslation()
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
+  const [logoError, setLogoError] = useState(false)
 
   const from = location.state?.from?.pathname || '/'
 
@@ -177,7 +178,9 @@ const Register: React.FC = () => {
         </div>
       )}
       
-      <Card style={{ 
+      <Card
+        styles={{ body: { padding: '16px 24px' } }}
+        style={{
         width: '100%',
         maxWidth: 400,
         background: 'linear-gradient(135deg, rgba(26, 26, 26, 0.9) 0%, rgba(45, 45, 45, 0.8) 100%)',
@@ -187,11 +190,37 @@ const Register: React.FC = () => {
         backdropFilter: 'blur(10px)',
         position: 'relative',
         zIndex: 1
-      }}>
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ textAlign: 'center', paddingTop: '20px' }}>
+        }}
+      >
+        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+          <div style={{ textAlign: 'center' }}>
+            {appConfig?.logoUrl && !logoError && (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'center',
+                background: 'transparent'
+              }}>
+                <img
+                  src={appConfig.logoUrl}
+                  alt={appConfig?.appName || 'App Logo'}
+                  onError={() => {
+                    console.warn('[Register] Logo 加载失败:', appConfig.logoUrl)
+                    setLogoError(true)
+                  }}
+                  style={{
+                    width: 'auto',
+                    height: '44px',
+                    maxWidth: '100%',
+                    objectFit: 'contain',
+                    background: 'transparent',
+                    mixBlendMode: 'normal'
+                  }}
+                />
+              </div>
+            )}
             <Title level={2} style={{ 
-              marginBottom: 8,
+              marginTop: 6,
+              marginBottom: 4,
               background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
@@ -207,6 +236,7 @@ const Register: React.FC = () => {
           </div>
 
           <Form
+            className="auth-form"
             form={form}
             name="register"
             onFinish={onFinish}
@@ -467,7 +497,7 @@ const Register: React.FC = () => {
             </Form.Item>
           </Form>
 
-          <div style={{ textAlign: 'center', paddingBottom: '20px' }}>
+          <div style={{ textAlign: 'center' }}>
             <Text style={{ color: '#999999' }}>
               {t('auth.alreadyHaveAccount')}{' '}
               <Button 

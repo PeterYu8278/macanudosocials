@@ -466,6 +466,7 @@ const Login: React.FC = () => {
 
             {/* 显示登录表单（即使禁用电邮登录，仍允许手机号登录） */}
             <Form
+              className="auth-form"
               name="login"
               onFinish={onFinish}
               autoComplete="off"

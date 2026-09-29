@@ -1102,3 +1102,16 @@ a:hover {
 .ant-select-dropdown .ant-select-item-option-selected .ant-select-item-option-content {
   color: #111111 !important;
 }
+
+/* Keep browser-filled credentials consistent with the dark authentication UI. */
+.auth-form input:-webkit-autofill,
+.auth-form input:-webkit-autofill:hover,
+.auth-form input:-webkit-autofill:focus,
+.auth-form input:-webkit-autofill:active,
+.auth-form input:autofill {
+  -webkit-text-fill-color: #f8f8f8 !important;
+  caret-color: #f8f8f8;
+  -webkit-box-shadow: 0 0 0 1000px #2d2d2d inset !important;
+  box-shadow: 0 0 0 1000px #2d2d2d inset !important;
+  transition: background-color 9999s ease-out 0s;
+}
