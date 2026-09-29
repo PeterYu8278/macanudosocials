@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Card, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs } from 'antd';
+import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid } from 'antd';
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, LoginOutlined, LogoutOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -97,9 +97,11 @@ const VisitSessionsPage: React.FC = () => {
   const [redemptionSearch, setRedemptionSearch] = useState('');
   const [redemptionStatus, setRedemptionStatus] = useState<'all' | 'pending' | 'completed'>('all');
   const [redemptionType, setRedemptionType] = useState<'all' | 'mystery_gift' | 'referral_reward'>('all');
+  const [redemptionPage, setRedemptionPage] = useState(1);
   const [forceCheckoutForm] = Form.useForm();
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
-  const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
   const sessionDisplayRows = useMemo<VisitSessionDisplayRow[]>(() => sessions.flatMap(session => {
     const rows: VisitSessionDisplayRow[] = [{
       ...session,
@@ -120,6 +122,7 @@ const VisitSessionsPage: React.FC = () => {
 
   const loadAllRedemptions = useCallback(async () => {
     setRedemptionRecordsLoading(true);
+    setRedemptionPage(1);
     try {
       setAllRedemptionRecords(await getAllRedemptionRecords(isSuperAdmin ? undefined : user?.storeId));
     } catch (error) {
@@ -148,6 +151,19 @@ const VisitSessionsPage: React.FC = () => {
       return matchesStatus && matchesType && matchesSearch;
     });
   }, [allRedemptionRecords, redemptionSearch, redemptionStatus, redemptionType]);
+
+  useEffect(() => {
+    setRedemptionPage(1);
+  }, [redemptionSearch, redemptionStatus, redemptionType]);
+
+  const mobileRedemptionPageSize = 8;
+  const mobileRedemptions = useMemo(
+    () => filteredAllRedemptions.slice(
+      (redemptionPage - 1) * mobileRedemptionPageSize,
+      redemptionPage * mobileRedemptionPageSize
+    ),
+    [filteredAllRedemptions, redemptionPage]
+  );
 
   const redemptionColumns = useMemo(() => [
     {
@@ -1131,19 +1147,20 @@ const VisitSessionsPage: React.FC = () => {
             key: 'redemptions',
             label: <span style={{ fontSize: 16, fontWeight: 700, paddingInline: 8 }}><GiftOutlined /> {t('visitSessions.mysteryGiftRedemptions')}</span>,
             children: (
-              <Card>
-                <Space wrap style={{ width: '100%', justifyContent: 'space-between', marginBottom: 16 }}>
+              <section className="redemptions-panel points-config-form">
+                <div className="redemptions-toolbar">
                   <Search
                     allowClear
                     placeholder={t('visitSessions.searchRedemptions')}
                     onChange={(event) => setRedemptionSearch(event.target.value)}
-                    style={{ width: 360, maxWidth: '100%' }}
+                    className="redemptions-search"
                   />
-                  <Space>
+                  <div className="redemptions-filters">
                     <Select
                       value={redemptionStatus}
                       onChange={setRedemptionStatus}
-                      style={{ width: 140 }}
+                      className="redemptions-filter"
+                      popupClassName="points-config-form"
                       options={[
                         { value: 'all', label: t('visitSessions.all') },
                         { value: 'pending', label: t('visitSessions.statusToSelect') },
@@ -1153,28 +1170,106 @@ const VisitSessionsPage: React.FC = () => {
                     <Select
                       value={redemptionType}
                       onChange={setRedemptionType}
-                      style={{ width: 160 }}
+                      className="redemptions-filter redemptions-type-filter"
+                      popupClassName="points-config-form"
                       options={[
                         { value: 'all', label: t('visitSessions.allTypes') },
                         { value: 'mystery_gift', label: t('visitSessions.mysteryGift') },
                         { value: 'referral_reward', label: t('visitSessions.referralReward') },
                       ]}
                     />
-                    <Button icon={<ReloadOutlined />} loading={redemptionRecordsLoading} onClick={loadAllRedemptions}>
-                      {t('visitSessions.refresh')}
+                    <Button
+                      icon={<ReloadOutlined />}
+                      loading={redemptionRecordsLoading}
+                      onClick={loadAllRedemptions}
+                      className="redemptions-refresh"
+                      title={t('visitSessions.refresh')}
+                    >
+                      {!isMobile && t('visitSessions.refresh')}
                     </Button>
-                  </Space>
-                </Space>
-                <Table
-                  rowKey={(record) => record.id}
-                  loading={redemptionRecordsLoading}
-                  columns={redemptionColumns}
-                  dataSource={filteredAllRedemptions}
-                  scroll={{ x: 850 }}
-                  pagination={{ pageSize: 10, showSizeChanger: true }}
-                  locale={{ emptyText: t('visitSessions.noRedemptionRecords') }}
-                />
-              </Card>
+                  </div>
+                </div>
+
+                {!isMobile ? (
+                  <div className="redemptions-table-shell">
+                    <Table
+                      rowKey={(record) => record.id}
+                      loading={redemptionRecordsLoading}
+                      columns={redemptionColumns}
+                      dataSource={filteredAllRedemptions}
+                      scroll={{ x: 850 }}
+                      pagination={{ pageSize: 10, showSizeChanger: true }}
+                      locale={{ emptyText: t('visitSessions.noRedemptionRecords') }}
+                    />
+                  </div>
+                ) : (
+                  <Spin spinning={redemptionRecordsLoading}>
+                    <div className="redemptions-mobile-list">
+                      {mobileRedemptions.length === 0 ? (
+                        <Empty description={t('visitSessions.noRedemptionRecords')} />
+                      ) : mobileRedemptions.map((record) => (
+                        <article className="redemption-mobile-card" key={record.id}>
+                          <div className="redemption-card-head">
+                            <div className="redemption-user-block">
+                              <strong>{record.userName || '-'}</strong>
+                              <span>{dayjs(record.redeemedAt).format('DD MMM YYYY, HH:mm')}</span>
+                            </div>
+                            <Tag color={record.status === 'completed' ? 'green' : 'orange'}>
+                              {record.status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
+                            </Tag>
+                          </div>
+
+                          <div className="redemption-card-main">
+                            <div>
+                              <span className="redemption-field-label">{t('visitSessions.cigarName')}</span>
+                              <strong>
+                                {record.status === 'pending' ? t('visitSessions.statusToSelect') : record.cigarName || '-'}
+                              </strong>
+                            </div>
+                            <div>
+                              <span className="redemption-field-label">{t('visitSessions.quantity')}</span>
+                              <strong>{record.quantity} {t('visitSessions.sticks')}</strong>
+                            </div>
+                          </div>
+
+                          <div className="redemption-card-foot">
+                            <Tag color={record.type === 'referral_reward' ? 'purple' : 'gold'}>
+                              {record.type === 'referral_reward'
+                                ? t('visitSessions.referralReward')
+                                : t('visitSessions.mysteryGift')}
+                            </Tag>
+                            {record.status === 'pending' && (
+                              <Button
+                                size="small"
+                                icon={<EditOutlined />}
+                                onClick={() => {
+                                  const session = sessions.find(item => item.id === record.visitSessionId);
+                                  if (session) openSessionDrawer(session);
+                                  openRedemptionDrawer(record);
+                                  form.setFieldsValue({ cigarId: record.cigarId || undefined, quantity: record.quantity || 1 });
+                                }}
+                              >
+                                {t('common.edit')}
+                              </Button>
+                            )}
+                          </div>
+                        </article>
+                      ))}
+                    </div>
+                    {filteredAllRedemptions.length > mobileRedemptionPageSize && (
+                      <Pagination
+                        current={redemptionPage}
+                        pageSize={mobileRedemptionPageSize}
+                        total={filteredAllRedemptions.length}
+                        onChange={setRedemptionPage}
+                        showSizeChanger={false}
+                        size="small"
+                        className="redemptions-mobile-pagination"
+                      />
+                    )}
+                  </Spin>
+                )}
+              </section>
             )
           },
           ...(roomBookingVisible ? [{
