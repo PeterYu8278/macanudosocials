@@ -470,6 +470,15 @@ service cloud.firestore {
       allow delete: if isAnyAdmin();
     }
 
+    // Daily room occupancy summaries are maintained transactionally alongside
+    // roomBookings. Members need access so availability checks and booking
+    // creation can read and update the shared summary document.
+    match /roomDailyBookings/{dailyBookingId} {
+      allow read: if isSignedIn();
+      allow create, update: if isAnyAdmin() || isActiveMember();
+      allow delete: if isAnyAdmin();
+    }
+
     // ================================
     // Feature Visibility Collection
     // ================================

@@ -7,6 +7,7 @@ import { useAuthStore } from '../../store/modules/auth';
 import { useTranslation } from 'react-i18next';
 import { Store } from '../../types';
 import dayjs from 'dayjs';
+import { calculateBookingBalance, calculateBookingPayment } from '../../utils/roomBookingFees';
 
 interface RoomBookingSectionProps {
   style?: React.CSSProperties;
@@ -413,15 +414,16 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
     }
 
     const totalFee = hours * selectedRoom.fee;
-    const depositFee = Math.round(totalFee * 0.5);
+    const hasActiveVisitSession = Boolean(user?.membership?.currentVisitSessionId);
+    const paymentDueNow = calculateBookingPayment(totalFee, hasActiveVisitSession);
 
     // Find if user has an existing booking to determine points delta
     const myExistingBooking = bookings.find(b => b.userId === user?.id && b.status === 'confirmed');
     const oldPaidFee = myExistingBooking
-      ? (myExistingBooking.paidFee || Math.round((calculateHours(myExistingBooking.timeslot) * selectedRoom.fee) * 0.5))
+      ? (myExistingBooking.paidFee ?? calculateBookingPayment(calculateHours(myExistingBooking.timeslot) * selectedRoom.fee, false))
       : 0;
 
-    const netPointsRequired = Math.max(0, depositFee - oldPaidFee);
+    const netPointsRequired = Math.max(0, paymentDueNow - oldPaidFee);
     const userPoints = user?.membership?.points || 0;
 
     if (userPoints < netPointsRequired) {
@@ -440,7 +442,7 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
         date: selectedDate,
         timeslot: `${startTime} - ${endTime}`,
         fee: totalFee,
-        paidFee: depositFee,
+        paidFee: paymentDueNow,
         status: 'confirmed',
       });
 
@@ -632,13 +634,14 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
           // Calculate values for User Points & Balance status
           const hours = sliderValue ? (sliderValue[1] - sliderValue[0]) : 0;
           const totalFee = selectedRoom ? hours * selectedRoom.fee : 0;
-          const depositFee = Math.round(totalFee * 0.5);
+          const hasActiveVisitSession = Boolean(user?.membership?.currentVisitSessionId);
+          const paymentDueNow = calculateBookingPayment(totalFee, hasActiveVisitSession);
 
           const myExistingBooking = bookings.find(b => b.userId === user?.id && b.status === 'confirmed');
           const oldPaidFee = myExistingBooking
-            ? (myExistingBooking.paidFee || Math.round((calculateHours(myExistingBooking.timeslot) * (selectedRoom?.fee || 0)) * 0.5))
+            ? (myExistingBooking.paidFee ?? calculateBookingPayment(calculateHours(myExistingBooking.timeslot) * (selectedRoom?.fee || 0), false))
             : 0;
-          const netPointsRequired = Math.max(0, depositFee - oldPaidFee);
+          const netPointsRequired = Math.max(0, paymentDueNow - oldPaidFee);
           const userPoints = user?.membership?.points || 0;
           const minHours = selectedRoom?.minBookingHours || 2;
           const isInsufficient = userPoints < netPointsRequired;
@@ -1071,11 +1074,15 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
                       {/* Deposit Required / Net Deposit Required */}
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
                         <span style={{ color: 'rgba(255,255,255,0.6)' }}>
-                          {myExistingBooking ? t('roomBooking.netDepositRequired') : t('roomBooking.depositRequired')}
+                          {myExistingBooking
+                            ? t('roomBooking.netDepositRequired')
+                            : hasActiveVisitSession
+                              ? t('roomBooking.fullPaymentRequired')
+                              : t('roomBooking.depositRequired')}
                         </span>
                         <span style={{ color: '#FFD700', fontWeight: 700, fontSize: 13 }}>
                           {hours > 0
-                            ? (myExistingBooking ? `${netPointsRequired} ${t('roomBooking.points')}` : `${depositFee} ${t('roomBooking.points')}`)
+                            ? (myExistingBooking ? `${netPointsRequired} ${t('roomBooking.points')}` : `${paymentDueNow} ${t('roomBooking.points')}`)
                             : '-'
                           }
                         </span>
@@ -1085,7 +1092,7 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 11 }}>
                         <span style={{ color: 'rgba(255,255,255,0.45)' }}>{t('roomBooking.balanceAtCheckin')}</span>
                         <span style={{ color: 'rgba(255,255,255,0.6)' }}>
-                          {hours > 0 ? `${totalFee - depositFee} ${t('roomBooking.points')}` : '-'}
+                          {hours > 0 ? `${calculateBookingBalance(totalFee, paymentDueNow)} ${t('roomBooking.points')}` : '-'}
                         </span>
                       </div>
                     </div>

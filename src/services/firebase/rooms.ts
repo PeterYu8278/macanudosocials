@@ -15,6 +15,7 @@ import {
 import { db } from '../../config/firebase';
 import { convertFirestoreTimestamps } from './auth';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
+import { calculateBookingPayment } from '../../utils/roomBookingFees';
 
 const ROOMS_COLLECTION = 'rooms';
 const ROOM_BOOKINGS_COLLECTION = 'roomBookings';
@@ -44,7 +45,9 @@ export interface RoomBooking {
   date: string; // YYYY-MM-DD
   timeslot: string; // e.g. "10:00 - 14:00"
   fee: number; // Total fee
-  paidFee?: number; // Paid deposit (initially 50%)
+  paidFee?: number; // Amount already paid (deposit or full payment)
+  paymentMode?: 'deposit' | 'full';
+  visitSessionId?: string;
   status: 'confirmed' | 'cancelled' | 'checked_in';
   createdAt?: Date;
   updatedAt?: Date;
@@ -299,6 +302,16 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
       
       const userData = userSnap.data();
       const currentPoints = userData.membership?.points || 0;
+      const currentVisitSessionId = userData.membership?.currentVisitSessionId as string | undefined;
+      let hasActiveVisitSession = false;
+
+      if (currentVisitSessionId) {
+        const visitSessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, currentVisitSessionId);
+        const visitSessionSnap = await transaction.get(visitSessionRef);
+        hasActiveVisitSession = visitSessionSnap.exists()
+          && visitSessionSnap.data().userId === bookingData.userId
+          && visitSessionSnap.data().status === 'pending';
+      }
       
       // If we are replacing/extending an existing booking:
       if (myOldBookingId) {
@@ -306,11 +319,11 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
         const oldBookingSnap = await transaction.get(oldBookingDocRef);
         if (oldBookingSnap.exists()) {
           const oldData = oldBookingSnap.data();
-          myOldBookingPaidFee = oldData.paidFee || Math.round((oldData.fee || 0) * 0.5);
+          myOldBookingPaidFee = oldData.paidFee ?? calculateBookingPayment(oldData.fee || 0, false);
         }
       }
       
-      const newPaidFee = bookingData.paidFee || Math.round((bookingData.fee || 0) * 0.5);
+      const newPaidFee = calculateBookingPayment(bookingData.fee || 0, hasActiveVisitSession);
       const netFee = newPaidFee - myOldBookingPaidFee;
       
       if (netFee > 0 && currentPoints < netFee) {
@@ -335,7 +348,7 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
             type: netFee >= 0 ? 'spend' : 'earn',
             amount: Math.abs(netFee),
             source: 'visit',
-            description: `延长房间预订 (补付 50% 订金差额): ${bookingData.roomName} (由 ${myOldBookingTimeslot} 变更为 ${bookingData.timeslot})`,
+            description: `延长房间预订 (${hasActiveVisitSession ? '已驻店，补付全额差额' : '补付 50% 订金差额'}): ${bookingData.roomName} (由 ${myOldBookingTimeslot} 变更为 ${bookingData.timeslot})`,
             relatedId: bookingDocId,
             balance: newPoints,
             createdAt: Timestamp.fromDate(now)
@@ -349,7 +362,7 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
           type: 'spend',
           amount: newPaidFee,
           source: 'visit',
-          description: `房间预订 (扣除 50% 订金): ${bookingData.roomName} (${bookingData.date} ${bookingData.timeslot})`,
+          description: `房间预订 (${hasActiveVisitSession ? '已驻店，扣除 100% 房费' : '扣除 50% 订金'}): ${bookingData.roomName} (${bookingData.date} ${bookingData.timeslot})`,
           relatedId: bookingDocId,
           balance: newPoints,
           createdAt: Timestamp.fromDate(now)
@@ -367,6 +380,8 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
       const bookingDocData = {
         ...stripUndefined(bookingData as Record<string, any>),
         paidFee: newPaidFee,
+        paymentMode: hasActiveVisitSession ? 'full' : 'deposit',
+        ...(hasActiveVisitSession && currentVisitSessionId ? { visitSessionId: currentVisitSessionId } : {}),
         status: 'confirmed',
         createdAt: Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now)
@@ -403,7 +418,7 @@ export const createBooking = async (bookingData: Omit<RoomBooking, 'id' | 'creat
 };
 
 /**
- * 取消预订 (不予退还 50% 订金)
+ * 取消预订 (不退还已支付积分)
  */
 export const cancelBooking = async (bookingId: string) => {
   try {
@@ -463,7 +478,7 @@ export const cancelBooking = async (bookingId: string) => {
 };
 
 /**
- * 办理签到入座 (扣除剩余 50% 积分)
+ * 办理签到入座 (扣除尚未支付的余额)
  */
 export const checkInBooking = async (bookingId: string, operatorId: string = 'admin') => {
   try {
@@ -493,7 +508,7 @@ export const checkInBooking = async (bookingId: string, operatorId: string = 'ad
       const userData = userSnap.data();
       const currentPoints = userData.membership?.points || 0;
       
-      // Calculate remaining fee (50%)
+      // Calculate any unpaid balance. Fully paid bookings have no balance.
       const remainingFee = bookingData.fee - (bookingData.paidFee || 0);
       if (remainingFee > 0 && currentPoints < remainingFee) {
         throw new Error(`用户积分不足，签到失败。还需扣除 ${remainingFee} 积分。`);
@@ -509,7 +524,7 @@ export const checkInBooking = async (bookingId: string, operatorId: string = 'ad
         updatedAt: Timestamp.fromDate(new Date())
       });
       
-      // 2. Create points record for the remaining 50%
+      // 2. Create a points record only when an unpaid balance remains.
       if (remainingFee > 0) {
         const pointsRecordRef = doc(collection(db, GLOBAL_COLLECTIONS.POINTS_RECORDS));
         const pointsRecordData = {
