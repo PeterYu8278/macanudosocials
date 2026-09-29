@@ -1,12 +1,14 @@
 // QR码扫描组件 - 用于管理员check-in/check-out
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Modal, Button, App, Space, Typography } from 'antd';
+import { Modal, Button, App, Space, Typography, Select } from 'antd';
 import { QrcodeOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 import { createVisitSession, completeVisitSession, getPendingVisitSession } from '../../services/firebase/visitSessions';
 import { getUserByMemberId } from '../../utils/memberId';
 import { useAuthStore } from '../../store/modules/auth';
 import { useTranslation } from 'react-i18next';
+import { getActiveStores } from '../../services/firebase/stores';
+import type { Store } from '../../types';
 
 const { Text } = Typography;
 
@@ -20,16 +22,54 @@ interface QRScannerViewProps {
 
 export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onModeChange, onSuccess, onClose }) => {
   const { t } = useTranslation();
-  const { user: adminUser } = useAuthStore();
+  const { user: adminUser, isSuperAdmin } = useAuthStore();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStoppingRef = useRef<boolean>(false);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
+  const modeRef = useRef(mode);
+  const storesRef = useRef<Store[]>([]);
+  const selectedStoreIdRef = useRef<string | undefined>(undefined);
   const { message } = App.useApp();
   const [processing, setProcessing] = useState(false);
   const [scannedData, setScannedData] = useState<string | null>(null);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [retrying, setRetrying] = useState(false);
   const [checkInError, setCheckInError] = useState<string | null>(null);
+  const [stores, setStores] = useState<Store[]>([]);
+  const [selectedStoreId, setSelectedStoreId] = useState<string>();
+  const [storesLoading, setStoresLoading] = useState(false);
+
+  modeRef.current = mode;
+
+  useEffect(() => {
+    if (!active || mode !== 'checkin') return;
+
+    setStoresLoading(true);
+    getActiveStores()
+      .then(activeStores => {
+        const accessibleStores = isSuperAdmin
+          ? activeStores
+          : activeStores.filter(store => store.id === adminUser?.storeId);
+        setStores(accessibleStores);
+        storesRef.current = accessibleStores;
+
+        if (adminUser?.storeId && accessibleStores.some(store => store.id === adminUser.storeId)) {
+          setSelectedStoreId(adminUser.storeId);
+          selectedStoreIdRef.current = adminUser.storeId;
+        } else {
+          setSelectedStoreId(undefined);
+          selectedStoreIdRef.current = undefined;
+        }
+      })
+      .catch(() => {
+        setStores([]);
+        storesRef.current = [];
+        setSelectedStoreId(undefined);
+        selectedStoreIdRef.current = undefined;
+        message.error(t('scanner.loadStoresFailed'));
+      })
+      .finally(() => setStoresLoading(false));
+  }, [active, adminUser?.storeId, isSuperAdmin, message, mode, t]);
 
   // 启动扫描
   const startScanning = async (facingMode: 'environment' | 'user' = 'environment') => {
@@ -193,6 +233,12 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
   // 处理扫描结果
   const handleScanResult = async (qrData: string) => {
     if (processing) return;
+    const currentMode = modeRef.current;
+    const currentStoreId = selectedStoreIdRef.current;
+    if (currentMode === 'checkin' && !currentStoreId) {
+      message.warning(t('scanner.storeRequired'));
+      return;
+    }
 
     setProcessing(true);
     setScannedData(qrData);
@@ -237,9 +283,16 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         return;
       }
 
-      if (mode === 'checkin') {
+      if (currentMode === 'checkin') {
         // Check-in
-        const result = await createVisitSession(userId, adminUser.id, adminUser.storeId || '', '', userResult.user.displayName);
+        const selectedStore = storesRef.current.find(store => store.id === currentStoreId);
+        const result = await createVisitSession(
+          userId,
+          adminUser.id,
+          currentStoreId!,
+          selectedStore?.name || '',
+          userResult.user.displayName
+        );
         if (result.success) {
           message.success(t('scanner.checkinSuccess', { sessionId: result.sessionId }));
           setCheckInError(null);
@@ -308,6 +361,10 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
 
   // 手动输入memberId
   const handleManualInput = () => {
+    if (mode === 'checkin' && !selectedStoreId) {
+      message.warning(t('scanner.storeRequired'));
+      return;
+    }
     const memberId = prompt(t('scanner.enterMemberNumber'));
     if (memberId) {
       handleScanResult(memberId);
@@ -364,6 +421,28 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         </div>
       )}
       
+      {mode === 'checkin' && (
+        <div style={{ textAlign: 'left', marginBottom: 12 }}>
+          <Text style={{ display: 'block', color: 'rgba(255,255,255,0.85)', marginBottom: 6 }}>
+            {t('scanner.store')}
+          </Text>
+          <Select
+            value={selectedStoreId}
+            onChange={storeId => {
+              setSelectedStoreId(storeId);
+              selectedStoreIdRef.current = storeId;
+            }}
+            options={stores.map(store => ({ value: store.id, label: store.name }))}
+            placeholder={t('scanner.selectStore')}
+            loading={storesLoading}
+            disabled={processing || (!isSuperAdmin && stores.length <= 1)}
+            style={{ width: '100%' }}
+            className="points-config-form"
+            popupClassName="points-config-form"
+          />
+        </div>
+      )}
+
       <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
         {processing ? (
           <div style={{ padding: '24px 0' }}>

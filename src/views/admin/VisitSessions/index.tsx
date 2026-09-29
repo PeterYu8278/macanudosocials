@@ -28,6 +28,11 @@ import { RoomManagement } from '../../../components/admin/RoomManagement';
 const { Title, Text } = Typography;
 const { Search } = Input;
 
+type VisitSessionDisplayRow = VisitSession & {
+  displayRowId: string;
+  displayRowKind: 'deduction' | 'rebate';
+};
+
 const getDisplayedPointsDeducted = (session: VisitSession): number | undefined => {
   if (session.pointsDeducted === undefined || !session.dayPass?.isPurchased) {
     return session.pointsDeducted;
@@ -95,6 +100,23 @@ const VisitSessionsPage: React.FC = () => {
   const [forceCheckoutForm] = Form.useForm();
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
+  const sessionDisplayRows = useMemo<VisitSessionDisplayRow[]>(() => sessions.flatMap(session => {
+    const rows: VisitSessionDisplayRow[] = [{
+      ...session,
+      displayRowId: `${session.id}-deduction`,
+      displayRowKind: 'deduction'
+    }];
+
+    if ((session.rebatePoints || 0) > 0) {
+      rows.push({
+        ...session,
+        displayRowId: `${session.id}-rebate`,
+        displayRowKind: 'rebate'
+      });
+    }
+
+    return rows;
+  }), [sessions]);
 
   const loadAllRedemptions = useCallback(async () => {
     setRedemptionRecordsLoading(true);
@@ -297,7 +319,7 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'checkInAt',
       key: 'checkInAt',
       width: 130,
-      render: (date: Date) => (
+      render: (date: Date, record: VisitSessionDisplayRow) => record.displayRowKind === 'rebate' ? '-' : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontWeight: 500 }}>{dayjs(date).format('YYYY-MM-DD')}</span>
           <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.45)' }}>{dayjs(date).format('HH:mm:ss')}</span>
@@ -309,7 +331,7 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'userName',
       key: 'userName',
       width: 120,
-      render: (name: string, record: VisitSession) => (
+      render: (name: string, record: VisitSessionDisplayRow) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontWeight: 600, color: '#fff' }}>{name || '-'}</span>
           {record.userId && (
@@ -325,7 +347,7 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'storeId',
       key: 'storeId',
       width: 120,
-      render: (storeId: string, record: VisitSession) => {
+      render: (storeId: string, record: VisitSessionDisplayRow) => {
         if (!storeId) return '-';
         const store = stores.find(s => s.id === storeId);
         return <span style={{ color: 'rgba(255,255,255,0.85)' }}>{store?.name || record.storeName || storeId}</span>;
@@ -336,7 +358,10 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'checkInType',
       key: 'checkInType',
       width: 100,
-      render: (type: string, record: VisitSession) => {
+      render: (type: string, record: VisitSessionDisplayRow) => {
+        if (record.displayRowKind === 'rebate') {
+          return <Tag color="green" style={{ margin: 0, fontSize: 11 }}>{t('visitSessions.rebatePoints')}</Tag>;
+        }
         if (type === 'daypass' || record.dayPass?.isPurchased) {
           return <Tag color="gold" style={{ margin: 0, fontSize: 11 }}>Day Pass</Tag>;
         }
@@ -348,7 +373,9 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'checkOutAt',
       key: 'checkOutAt',
       width: 130,
-      render: (date: Date | undefined) => date ? (
+      render: (date: Date | undefined, record: VisitSessionDisplayRow) => record.displayRowKind === 'rebate'
+        ? '-'
+        : date ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontWeight: 500 }}>{dayjs(date).format('YYYY-MM-DD')}</span>
           <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.45)' }}>{dayjs(date).format('HH:mm:ss')}</span>
@@ -359,7 +386,8 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.duration'),
       key: 'duration',
       width: 90,
-      render: (_: any, record: VisitSession) => {
+      render: (_: any, record: VisitSessionDisplayRow) => {
+        if (record.displayRowKind === 'rebate') return '-';
         if (record.durationHours !== undefined) {
           return <span style={{ fontWeight: 500 }}>{record.durationHours} {t('visitSessions.hours')}</span>;
         }
@@ -378,21 +406,16 @@ const VisitSessionsPage: React.FC = () => {
       }
     },
     {
-      title: t('visitSessions.pointsDeducted'),
-      dataIndex: 'pointsDeducted',
-      key: 'pointsDeducted',
-      width: 80,
-      render: (_points: number | undefined, record: VisitSession) => {
+      title: t('visitSessions.pointsChange'),
+      key: 'pointsChange',
+      width: 90,
+      render: (_points: number | undefined, record: VisitSessionDisplayRow) => {
+        if (record.displayRowKind === 'rebate') {
+          return <span style={{ color: '#52c41a', fontWeight: 600 }}>+{record.rebatePoints}</span>;
+        }
         const points = getDisplayedPointsDeducted(record);
         return points !== undefined ? (
-          <div>
-            <div style={{ color: '#ff4d4f', fontWeight: 600 }}>-{points}</div>
-            {(record.rebatePoints || 0) > 0 && (
-              <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 600 }}>
-                {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
-              </div>
-            )}
-          </div>
+          <span style={{ color: '#ff4d4f', fontWeight: 600 }}>-{points}</span>
         ) : '-';
       }
     },
@@ -401,7 +424,8 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'status',
       key: 'status',
       width: 90,
-      render: (status: string, record: VisitSession) => {
+      render: (status: string, record: VisitSessionDisplayRow) => {
+        if (record.displayRowKind === 'rebate') return '-';
         const statusMap: Record<string, { color: string; text: string }> = {
           pending: { color: 'orange', text: t('visitSessions.statusPending') },
           completed: { color: 'green', text: t('visitSessions.statusCompleted') },
@@ -425,8 +449,8 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.actions'),
       key: 'action',
       width: 180,
-      render: (_: any, record: VisitSession) => {
-        if (record.status !== 'pending') {
+      render: (_: any, record: VisitSessionDisplayRow) => {
+        if (record.displayRowKind === 'rebate' || record.status !== 'pending') {
           return null;
         }
 
@@ -648,17 +672,17 @@ const VisitSessionsPage: React.FC = () => {
                         <Table
                           size="small"
                           columns={columns}
-                          dataSource={sessions}
-                          rowKey="id"
+                          dataSource={sessionDisplayRows}
+                          rowKey="displayRowId"
                           loading={loading}
-                          virtual={sessions.length > 50}
+                          virtual={sessionDisplayRows.length > 50}
                           scroll={{
                             y: 'calc(100vh - 350px)', // 启用虚拟滚动
                             x: 'max-content'
                           }}
                           pagination={{
                             pageSize: isMobile ? 10 : 20,
-                            total: sessions.length,
+                            total: sessionDisplayRows.length,
                             showSizeChanger: true,
                             showQuickJumper: true,
                             showTotal: (total, range) => t('common.paginationTotal', { start: range[0], end: range[1], total }),
@@ -668,7 +692,7 @@ const VisitSessionsPage: React.FC = () => {
                             background: 'transparent'
                           }}
                           expandable={{
-                            expandedRowRender: (record: VisitSession) => {
+                            expandedRowRender: (record: VisitSessionDisplayRow) => {
                               // 从 redemptionRecords state 中获取该 session 的所有兑换记录（包括待处理和已完成）
                               const allRedemptionRecords = redemptionRecords.get(record.id) || [];
 
@@ -811,10 +835,7 @@ const VisitSessionsPage: React.FC = () => {
                                 loadRedemptionRecords(record.id);
                               }
                             },
-                            rowExpandable: (record: VisitSession) => {
-                              // 如果有兑换记录或状态为pending，可以展开
-                              return true; // 总是可以展开，以便查看是否有待处理的记录
-                            }
+                            rowExpandable: (record: VisitSessionDisplayRow) => record.displayRowKind === 'deduction'
                           }}
                         />
                       )}
@@ -896,19 +917,19 @@ const VisitSessionsPage: React.FC = () => {
                                       {t("visitSessions.checkOut")}: {dayjs(checkOutDate).format('YYYY-MM-DD HH:mm')}
                                     </div>
                                   )}
-                                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
+                                  <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
                                     {t('visitSessions.duration')}: {calculateDuration()}
-                                    {getDisplayedPointsDeducted(record) !== undefined && (
-                                      <span style={{ marginLeft: 8 }}>
-                                        • {t('visitSessions.pointsDeducted')}: -{getDisplayedPointsDeducted(record)}
-                                      </span>
-                                    )}
-                                    {(record.rebatePoints || 0) > 0 && (
-                                      <span style={{ marginLeft: 8, color: '#52c41a' }}>
-                                        • {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
-                                      </span>
-                                    )}
                                   </div>
+                                  {getDisplayedPointsDeducted(record) !== undefined && (
+                                    <div style={{ fontSize: 12, color: '#ff7875', marginBottom: 4 }}>
+                                      {t('visitSessions.pointsDeducted')}: -{getDisplayedPointsDeducted(record)}
+                                    </div>
+                                  )}
+                                  {(record.rebatePoints || 0) > 0 && (
+                                    <div style={{ fontSize: 12, color: '#52c41a' }}>
+                                      {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
+                                    </div>
+                                  )}
                                 </div>
                                 <div style={{ textAlign: 'right', marginLeft: 12 }}>
                                   <div style={{
