@@ -70,8 +70,17 @@ const SystemConfig: React.FC = () => {
       const defaultPointsConfig = getDefaultPointsConfig()
       const membershipFeeConfig = await getMembershipFeeConfig()
       const defaultMembershipFeeConfig = getDefaultMembershipFeeConfig()
+      const resolvedPointsConfig = pointsConfig || defaultPointsConfig
+      const hasRebatePercent = Object.prototype.hasOwnProperty.call(
+        resolvedPointsConfig.purchase || {},
+        'rebatePercent'
+      )
       configForm.setFieldsValue({
-        ...(pointsConfig || defaultPointsConfig),
+        ...resolvedPointsConfig,
+        purchase: {
+          ...resolvedPointsConfig.purchase,
+          rebatePercent: hasRebatePercent ? resolvedPointsConfig.purchase.rebatePercent : null,
+        },
         membershipFee: {
           annualFees: (membershipFeeConfig?.annualFees || defaultMembershipFeeConfig.annualFees).map(fee => ({
             ...fee,
@@ -276,6 +285,15 @@ const SystemConfig: React.FC = () => {
                 <Col xs={24} sm={6}>
                   <Form.Item label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.purchase.perRinggit')}</span>} name={['purchase', 'perRinggit']} rules={[{ required: true, message: t('pointsConfig.validation.required') }]}>
                     <InputNumber min={0} max={100} step={0.1} precision={1} style={{ width: '100%' }} addonAfter={t('pointsConfig.units.pointsPerRM')} />
+                  </Form.Item>
+                </Col>
+                <Col xs={24} sm={6}>
+                  <Form.Item
+                    label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.purchase.rebatePercent')}</span>}
+                    name={['purchase', 'rebatePercent']}
+                    extra={<span style={{ color: 'rgba(255,255,255,0.45)' }}>{t('pointsConfig.purchase.rebatePercentHint')}</span>}
+                  >
+                    <InputNumber min={0} max={100} step={0.1} precision={1} style={{ width: '100%' }} addonAfter={t('pointsConfig.units.percent')} />
                   </Form.Item>
                 </Col>
                 <Col xs={24} sm={6}>

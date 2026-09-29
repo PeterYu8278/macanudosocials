@@ -21,6 +21,7 @@ import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { VisitSession, User, Order, OutboundOrder } from '../../types';
 import { COLLECTIONS, createOutboundOrder, getCigarById } from './firestore';
 import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement } from '../../utils/redemptionOrder';
+import { calculateRebateReward } from '../../utils/purchaseRewards';
 
 /**
  * 处理 visit session 数据，转换日期字段和 redemptions
@@ -280,7 +281,7 @@ export const completeVisitSession = async (
   checkOutBy: string,
   currentStoreId?: string,
   forceHours?: number // 强制使用指定小时数（忘记check-out时）
-): Promise<{ success: boolean; pointsDeducted?: number; error?: string }> => {
+): Promise<{ success: boolean; pointsDeducted?: number; rebatePoints?: number; error?: string }> => {
   try {
     const sessionDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
     if (!sessionDoc.exists()) {
@@ -344,6 +345,9 @@ export const completeVisitSession = async (
     // 计算应扣除的积分
     let pointsDeducted = 0;
     let realtimeBilledHours: number | undefined;
+    const usesRealtimeDeductions = Boolean(
+      session.realtimeDeductionsEnabled && !session.dayPass?.isPurchased
+    );
     if (!session.isFirstVisitAfterRenewal) {
       if (session.dayPass?.isPurchased) {
         // Day Pass 逻辑（checkout 时一次性结算）
@@ -352,15 +356,58 @@ export const completeVisitSession = async (
         if (durationHours > freeHours) {
           pointsDeducted = Math.round((durationHours - freeHours) * rateAfter);
         }
-      } else if (session.realtimeDeductionsEnabled) {
-        // Annual Membership 实时扣费模式：先补扣漏掉的区间，checkout 不再额外扣
-        await processSessionRealtimeDeduction(sessionId, session.userId);
-        // 读取最新已扣总量，写入 session 作为 pointsDeducted 汇总字段
-        const latestDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
-        const latestData = latestDoc.exists() ? latestDoc.data() : undefined;
-        pointsDeducted = latestData?.realtimePointsDeducted || session.realtimePointsDeducted || 0;
-        const deductionCount = latestData?.deductionCount || session.deductionCount || 0;
-        realtimeBilledHours = deductionCount > 0 ? 1 + Math.max(0, deductionCount - 1) * 0.5 : 0;
+      } else if (usesRealtimeDeductions) {
+        if (forceHours !== undefined) {
+          const sessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId);
+          const userRef = doc(db, GLOBAL_COLLECTIONS.USERS, session.userId);
+          const targetPoints = Math.round(forceHours * hourlyRate);
+
+          await runTransaction(db, async transaction => {
+            const latestSessionDoc = await transaction.get(sessionRef);
+            const latestUserDoc = await transaction.get(userRef);
+            if (!latestSessionDoc.exists() || !latestUserDoc.exists()) {
+              throw new Error('用户或驻店记录不存在');
+            }
+
+            const latestData = latestSessionDoc.data() as any;
+            const latestUserData = latestUserDoc.data() as User;
+            const alreadyDeducted = Number(latestData.realtimePointsDeducted || 0);
+            const deductionCount = Number(latestData.deductionCount || 0);
+            const alreadyBilledHours = deductionCount > 0
+              ? 1 + Math.max(0, deductionCount - 1) * 0.5
+              : 0;
+            const pointsAdjustment = targetPoints - alreadyDeducted;
+            const hoursAdjustment = forceHours - alreadyBilledHours;
+
+            transaction.update(userRef, {
+              'membership.points': (latestUserData.membership?.points || 0) - pointsAdjustment,
+              'membership.totalVisitHours': Math.max(
+                0,
+                (latestUserData.membership?.totalVisitHours || 0) + hoursAdjustment
+              ),
+              updatedAt: Timestamp.fromDate(now)
+            });
+            transaction.update(sessionRef, {
+              realtimePointsDeducted: targetPoints,
+              deductionCount: forceHours <= 1
+                ? 1
+                : 1 + Math.round((forceHours - 1) / 0.5),
+              updatedAt: Timestamp.fromDate(now)
+            });
+          });
+
+          pointsDeducted = targetPoints;
+          realtimeBilledHours = forceHours;
+        } else {
+          // Annual Membership 实时扣费模式：先补扣漏掉的区间，checkout 不再额外扣
+          await processSessionRealtimeDeduction(sessionId, session.userId);
+          // 读取最新已扣总量，写入 session 作为 pointsDeducted 汇总字段
+          const latestDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
+          const latestData = latestDoc.exists() ? latestDoc.data() : undefined;
+          pointsDeducted = latestData?.realtimePointsDeducted || session.realtimePointsDeducted || 0;
+          const deductionCount = latestData?.deductionCount || session.deductionCount || 0;
+          realtimeBilledHours = deductionCount > 0 ? 1 + Math.max(0, deductionCount - 1) * 0.5 : 0;
+        }
       } else {
         // 旧逻辑：按总时长一次性扣费
         pointsDeducted = Math.round(durationHours * hourlyRate);
@@ -372,11 +419,22 @@ export const completeVisitSession = async (
       return { success: false, error: '用户不存在' };
     }
     const userData = userDoc.data() as User;
+    const { getPointsConfig } = await import('./pointsConfig');
+    const pointsConfig = await getPointsConfig();
+    const dayPassPoints = session.dayPass?.isPurchased
+      ? Number(session.dayPass.config.cost || 0)
+      : 0;
+    const totalPointsDeducted = pointsDeducted + dayPassPoints;
+    const rebate = calculateRebateReward(totalPointsDeducted, pointsConfig?.purchase?.rebatePercent);
+    const rebatePoints = rebate.points;
 
     let pointsRecordId: string | undefined;
+    let rebatePointsRecordId: string | undefined;
 
-    if (session.realtimeDeductionsEnabled) {
+    if (usesRealtimeDeductions) {
       // 实时扣费模式：余额已实时扣除，checkout 时才生成一条可见的汇总流水
+      const currentPoints = userData.membership?.points || 0;
+      const finalPoints = currentPoints + rebatePoints;
       if (pointsDeducted > 0) {
         const { createPointsRecord } = await import('./pointsRecords');
         const billedHours = realtimeBilledHours ?? durationHours;
@@ -395,7 +453,24 @@ export const completeVisitSession = async (
         pointsRecordId = pointsRecord?.id;
       }
 
+      if (rebatePoints > 0) {
+        const { createPointsRecord } = await import('./pointsRecords');
+        const rebateRecord = await createPointsRecord({
+          userId: session.userId,
+          userName: session.userName,
+          type: 'earn',
+          amount: rebatePoints,
+          source: 'visit',
+          description: `驻店消费返点 ${rebate.rate}% (${rebatePoints}积分)`,
+          relatedId: sessionId,
+          balance: finalPoints,
+          createdBy: checkOutBy
+        });
+        rebatePointsRecordId = rebateRecord?.id;
+      }
+
       await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, session.userId), {
+        ...(rebatePoints > 0 ? { 'membership.points': finalPoints } : {}),
         'membership.currentVisitSessionId': null,
         updatedAt: Timestamp.fromDate(now)
       });
@@ -403,6 +478,7 @@ export const completeVisitSession = async (
       // 传统模式：一次性扣费
       const currentPoints = userData.membership?.points || 0;
       const newPoints = currentPoints - pointsDeducted;
+      const finalPoints = newPoints + rebatePoints;
 
       if (pointsDeducted > 0) {
         const { createPointsRecord } = await import('./pointsRecords');
@@ -428,8 +504,24 @@ export const completeVisitSession = async (
         pointsRecordId = pointsRecord?.id;
       }
 
+      if (rebatePoints > 0) {
+        const { createPointsRecord } = await import('./pointsRecords');
+        const rebateRecord = await createPointsRecord({
+          userId: session.userId,
+          userName: session.userName,
+          type: 'earn',
+          amount: rebatePoints,
+          source: 'visit',
+          description: `驻店消费返点 ${rebate.rate}% (${rebatePoints}积分)`,
+          relatedId: sessionId,
+          balance: finalPoints,
+          createdBy: checkOutBy
+        });
+        rebatePointsRecordId = rebateRecord?.id;
+      }
+
       const userUpdateData: any = {
-        'membership.points': newPoints,
+        'membership.points': finalPoints,
         'membership.currentVisitSessionId': null,
         updatedAt: Timestamp.fromDate(now)
       };
@@ -705,7 +797,7 @@ export const completeVisitSession = async (
     }
 
     // 实时扣费模式下，按已执行的 0.5 小时扣费次数记录计费时长
-    const billedHours = session.realtimeDeductionsEnabled
+    const billedHours = usesRealtimeDeductions
       ? (realtimeBilledHours ?? durationHours)
       : durationHours;
 
@@ -716,15 +808,17 @@ export const completeVisitSession = async (
       durationMinutes,
       durationHours: billedHours,
       calculatedAt: Timestamp.fromDate(now),
-      pointsDeducted,
+      pointsDeducted: totalPointsDeducted,
       pointsRecordId: pointsRecordId || null,
+      rebatePoints,
+      rebatePointsRecordId: rebatePointsRecordId || null,
       orderId: orderId || null,
       outboundOrderId: outboundOrderId || null,
       status: 'completed',
       updatedAt: Timestamp.fromDate(now)
     });
 
-    return { success: true, pointsDeducted };
+    return { success: true, pointsDeducted: totalPointsDeducted, rebatePoints };
   } catch (error: any) {
     return { success: false, error: error.message || '完成驻店记录失败' };
   }

@@ -609,6 +609,7 @@
     "duration": "Duration",
     "hours": "Hours",
     "pointsDeducted": "Points Deducted",
+    "rebatePoints": "Visit Rebate",
     "status": "Status",
     "statusPending": "Pending",
     "statusCompleted": "Completed",
@@ -649,6 +650,7 @@
     "confirmCheckoutContent": "Are you sure to check-out? Points will be deducted based on duration.",
     "confirmCheckout": "Confirm Check-out",
     "checkoutSuccess": "Check-out success, deducted {{points}} points",
+    "checkoutRebateSuccess": "Rebate credited: {{points}} points",
     "checkoutFailed": "Check-out failed",
     "batchProcessExpired": "Batch Process Expired",
     "batchProcessExpiredConfirm": "Are you sure to batch set overdue sessions to expired?",
@@ -2040,7 +2042,9 @@
     },
     "purchase": {
       "title": "Purchase Points",
-      "perRinggit": "Points per Ringgit Spent"
+      "perRinggit": "Points per Ringgit Spent",
+      "rebatePercent": "Purchase Rebate",
+      "rebatePercentHint": "When set, this percentage overrides the points-per-RM rule. Set 0% to disable purchase rewards."
     },
     "reload": {
       "title": "Reload Points",
@@ -2059,7 +2063,8 @@
     },
     "units": {
       "points": "points",
-      "pointsPerRM": "points/RM"
+      "pointsPerRM": "points/RM",
+      "percent": "%"
     },
     "validation": {
       "required": "Please enter points value"

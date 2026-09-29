@@ -66,6 +66,7 @@ export const getDefaultPointsConfig = (): PointsConfig => {
     id: 'default',
     purchase: {
       perRinggit: 1,         // 每消费1马币获得1积分
+      rebatePercent: 0,      // 默认关闭按消费金额百分比返点
     },
     reload: {
       referrerFirstReload: 0,  // 默认不发放引荐人首充积分

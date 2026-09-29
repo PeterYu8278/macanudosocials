@@ -1,6 +1,13 @@
 import type { PointsRecord } from '../types'
 
 const VISIT_SUMMARY_DESCRIPTION = '驻店计时扣费（本次驻店汇总）'
+const DAY_PASS_SUMMARY_DESCRIPTION = 'Day Pass 驻店消费合计'
+
+const isDayPassPurchaseRecord = (record: PointsRecord): boolean => (
+  record.source === 'visit'
+  && record.type === 'spend'
+  && record.description.startsWith('购买 Day Pass')
+)
 
 export const isVisitDurationRecord = (record: PointsRecord): boolean => {
   if (record.source !== 'visit') return false
@@ -10,6 +17,7 @@ export const isVisitDurationRecord = (record: PointsRecord): boolean => {
     || record.description.startsWith('驻店计时扣费')
     || record.description.startsWith('驻店时长费用')
     || record.description.startsWith('Day Pass 超时费用')
+    || isDayPassPurchaseRecord(record)
 }
 
 const isCumulativeVisitSummary = (record: PointsRecord): boolean => (
@@ -34,8 +42,15 @@ export const consolidateVisitPointsRecords = (
   const canonicalRecordBySession = new Map<string, PointsRecord>()
   for (const [sessionId, sessionRecords] of durationRecordsBySession) {
     const summary = sessionRecords.find(isCumulativeVisitSummary)
+    const dayPassPurchaseTotal = sessionRecords
+      .filter(isDayPassPurchaseRecord)
+      .reduce((total, record) => total + record.amount, 0)
     if (summary) {
-      canonicalRecordBySession.set(sessionId, summary)
+      canonicalRecordBySession.set(sessionId, dayPassPurchaseTotal > 0 ? {
+        ...summary,
+        amount: summary.amount + dayPassPurchaseTotal,
+        description: DAY_PASS_SUMMARY_DESCRIPTION
+      } : summary)
       continue
     }
 
@@ -43,7 +58,11 @@ export const consolidateVisitPointsRecords = (
     canonicalRecordBySession.set(sessionId, {
       ...latest,
       amount: older.reduce((total, record) => total + record.amount, latest.amount),
-      description: sessionRecords.length > 1 ? VISIT_SUMMARY_DESCRIPTION : latest.description
+      description: dayPassPurchaseTotal > 0 && sessionRecords.length > 1
+        ? DAY_PASS_SUMMARY_DESCRIPTION
+        : sessionRecords.length > 1
+          ? VISIT_SUMMARY_DESCRIPTION
+          : latest.description
     })
   }
 

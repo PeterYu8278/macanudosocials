@@ -28,6 +28,24 @@ import { RoomManagement } from '../../../components/admin/RoomManagement';
 const { Title, Text } = Typography;
 const { Search } = Input;
 
+const getDisplayedPointsDeducted = (session: VisitSession): number | undefined => {
+  if (session.pointsDeducted === undefined || !session.dayPass?.isPurchased) {
+    return session.pointsDeducted;
+  }
+
+  const cost = Number(session.dayPass.config.cost || 0);
+  const freeHours = Number(session.dayPass.config.freeHours || 0);
+  const overtimeRate = Number(session.dayPass.config.hourlyRateAfter || 0);
+  const durationHours = Number(session.durationHours || 0);
+  const overtimePoints = Math.round(Math.max(0, durationHours - freeHours) * overtimeRate);
+
+  // Legacy sessions stored only the overtime charge. New sessions already store
+  // the Day Pass purchase and overtime as one total.
+  return session.pointsDeducted === overtimePoints
+    ? cost + overtimePoints
+    : session.pointsDeducted;
+};
+
 const VisitSessionsPage: React.FC = () => {
   const { t } = useTranslation();
   const { user, isSuperAdmin } = useAuthStore();
@@ -221,7 +239,10 @@ const VisitSessionsPage: React.FC = () => {
           try {
             const result = await completeVisitSession(sessionId, user.id, user.storeId, forceHours);
             if (result.success) {
-              message.success(t('visitSessions.checkoutSuccess', { points: result.pointsDeducted || 0 }));
+              const checkoutMessage = t('visitSessions.checkoutSuccess', { points: result.pointsDeducted || 0 });
+              message.success(result.rebatePoints
+                ? `${checkoutMessage} ${t('visitSessions.checkoutRebateSuccess', { points: result.rebatePoints })}`
+                : checkoutMessage);
               // 重新加载所有数据
               await refreshSessions();
             } else {
@@ -361,9 +382,19 @@ const VisitSessionsPage: React.FC = () => {
       dataIndex: 'pointsDeducted',
       key: 'pointsDeducted',
       width: 80,
-      render: (points: number | undefined) => points !== undefined ? (
-        <span style={{ color: '#ff4d4f', fontWeight: 600 }}>-{points}</span>
-      ) : '-'
+      render: (_points: number | undefined, record: VisitSession) => {
+        const points = getDisplayedPointsDeducted(record);
+        return points !== undefined ? (
+          <div>
+            <div style={{ color: '#ff4d4f', fontWeight: 600 }}>-{points}</div>
+            {(record.rebatePoints || 0) > 0 && (
+              <div style={{ color: '#52c41a', fontSize: 12, fontWeight: 600 }}>
+                {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
+              </div>
+            )}
+          </div>
+        ) : '-';
+      }
     },
     {
       title: t('visitSessions.status'),
@@ -867,9 +898,14 @@ const VisitSessionsPage: React.FC = () => {
                                   )}
                                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
                                     {t('visitSessions.duration')}: {calculateDuration()}
-                                    {record.pointsDeducted !== undefined && (
+                                    {getDisplayedPointsDeducted(record) !== undefined && (
                                       <span style={{ marginLeft: 8 }}>
-                                        • {t('visitSessions.pointsDeducted')}: -{record.pointsDeducted}
+                                        • {t('visitSessions.pointsDeducted')}: -{getDisplayedPointsDeducted(record)}
+                                      </span>
+                                    )}
+                                    {(record.rebatePoints || 0) > 0 && (
+                                      <span style={{ marginLeft: 8, color: '#52c41a' }}>
+                                        • {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
                                       </span>
                                     )}
                                   </div>

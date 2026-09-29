@@ -608,6 +608,7 @@ export interface PointsConfig {
   // 购买相关积分
   purchase: {
     perRinggit: number;        // 每消费1马币获得积分
+    rebatePercent?: number | null; // 每笔消费按实付金额返点百分比；未设置时沿用 perRinggit
   };
   
   // 充值相关积分
@@ -688,6 +689,8 @@ export interface VisitSession {
   // 费用结算
   pointsDeducted?: number;  // 扣除的积分（checkout 时记录总扣除量）
   pointsRecordId?: string;  // 关联的积分记录ID（checkout 汇总记录）
+  rebatePoints?: number;    // 驻店消费返点积分
+  rebatePointsRecordId?: string; // 驻店返点积分记录ID
 
   // 实时扣费（Annual Membership）
   realtimeDeductionsEnabled?: boolean; // true = 使用实时阶梯扣费，checkout 不再重复扣

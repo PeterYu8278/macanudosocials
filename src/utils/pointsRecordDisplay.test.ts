@@ -64,6 +64,64 @@ describe('consolidateVisitPointsRecords', () => {
     ])
   })
 
+  it('combines Day Pass purchase and overtime into one visible spend record', () => {
+    const records = [
+      record({
+        id: 'overtime',
+        relatedId: 'day-pass-session',
+        amount: 60,
+        balance: 420,
+        description: 'Day Pass 超时费用 (总5h, 免3h, 超时费30/h)'
+      }),
+      record({
+        id: 'purchase',
+        relatedId: 'day-pass-session',
+        amount: 100,
+        balance: 480,
+        description: '购买 Day Pass'
+      })
+    ]
+
+    expect(consolidateVisitPointsRecords(records, new Set())).toEqual([
+      expect.objectContaining({
+        id: 'overtime',
+        amount: 160,
+        balance: 420,
+        description: 'Day Pass 驻店消费合计'
+      })
+    ])
+  })
+
+  it('keeps the visit rebate separate from the combined Day Pass spend', () => {
+    const rebate = record({
+      id: 'rebate',
+      relatedId: 'day-pass-session',
+      type: 'earn',
+      amount: 18,
+      description: '驻店消费返点 30% (18积分)'
+    })
+    const records = [
+      rebate,
+      record({
+        id: 'overtime',
+        relatedId: 'day-pass-session',
+        amount: 60,
+        description: 'Day Pass 超时费用 (总5h, 免3h, 超时费30/h)'
+      }),
+      record({
+        id: 'purchase',
+        relatedId: 'day-pass-session',
+        amount: 100,
+        description: '购买 Day Pass'
+      })
+    ]
+
+    const consolidated = consolidateVisitPointsRecords(records, new Set())
+    expect(consolidated).toHaveLength(2)
+    expect(consolidated[0]).toBe(rebate)
+    expect(consolidated[1]).toEqual(expect.objectContaining({ amount: 160 }))
+  })
+
   it('does not merge unrelated visit charges that share a related id', () => {
     const records = [
       record({ id: 'deposit', relatedId: 'booking-1', amount: 50, description: '房间预订订金' }),

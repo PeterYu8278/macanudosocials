@@ -289,9 +289,9 @@ const AdminUsers: React.FC = () => {
                 const next = checked ? 'active' : 'inactive'
                 setStatusMap((m) => ({ ...m, [record.id]: next }))
 
-                // ✅ 当状态变为活跃时，角色自动变为 VIP；变为非活跃时，角色改回 member（不影响 admin）
+                // 会员状态只联动会员角色，管理员和开发者角色始终保持不变。
                 const updateData: Partial<User> = { status: next }
-                if (checked && record.role !== 'superAdmin') {
+                if (checked && (record.role === 'guest' || record.role === 'member')) {
                   updateData.role = 'vip'
                 } else if (!checked && record.role === 'vip') {
                   updateData.role = 'member'

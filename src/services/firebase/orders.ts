@@ -16,6 +16,7 @@ import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { Order, User, OutboundOrder } from '../../types';
 import { createPointsRecord } from './pointsRecords';
 import { createOutboundOrder, getCigarById } from './firestore';
+import { calculatePurchaseReward } from '../../utils/purchaseRewards';
 /**
  * 创建订单
  */
@@ -99,8 +100,8 @@ export const createOrder = async (
       try {
         const { getPointsConfig } = await import('./pointsConfig');
         const config = await getPointsConfig();
-        const perRinggit = config?.purchase?.perRinggit ?? 0;
-        const earnedPoints = perRinggit > 0 ? Math.floor(orderData.total * perRinggit) : 0;
+        const reward = calculatePurchaseReward(orderData.total, config?.purchase);
+        const earnedPoints = reward.points;
         if (earnedPoints > 0) {
           const userRef = doc(db, GLOBAL_COLLECTIONS.USERS, orderData.userId);
           const userSnap = await getDoc(userRef);
@@ -115,7 +116,9 @@ export const createOrder = async (
               type: 'earn',
               amount: earnedPoints,
               source: 'purchase',
-              description: `消费奖励积分: ${orderNo}`,
+              description: reward.method === 'rebatePercent'
+                ? `消费返点 ${reward.rate}%: ${orderNo}`
+                : `消费奖励积分: ${orderNo}`,
               relatedId: docRef.id,
               balance: newPoints,
             });

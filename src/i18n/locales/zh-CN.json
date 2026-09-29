@@ -609,6 +609,7 @@
     "duration": "时长",
     "hours": "小时",
     "pointsDeducted": "扣除积分",
+    "rebatePoints": "驻店返点",
     "status": "状态",
     "statusPending": "进行中",
     "statusCompleted": "已完成",
@@ -649,6 +650,7 @@
     "confirmCheckoutContent": "确定要结算该驻店记录吗？将根据停留时长自动扣除对应积分。",
     "confirmCheckout": "确认结算",
     "checkoutSuccess": "结算成功，扣除 {{points}} 积分",
+    "checkoutRebateSuccess": "消费返点：{{points}} 积分",
     "checkoutFailed": "结算失败",
     "batchProcessExpired": "批量处理过期记录",
     "batchProcessExpiredConfirm": "确定要批量将超时的驻店记录置为过期状态吗？",
@@ -2040,7 +2042,9 @@
     },
     "purchase": {
       "title": "购买相关积分",
-      "perRinggit": "每消费1马币积分"
+      "perRinggit": "每消费1马币积分",
+      "rebatePercent": "消费返点比例",
+      "rebatePercentHint": "设置后将覆盖每 RM 积分规则；设为 0% 可关闭消费返点。"
     },
     "reload": {
       "title": "充值相关积分",
@@ -2059,7 +2063,8 @@
     },
     "units": {
       "points": "积分",
-      "pointsPerRM": "积分/RM"
+      "pointsPerRM": "积分/RM",
+      "percent": "%"
     },
     "validation": {
       "required": "请输入积分值"
