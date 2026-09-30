@@ -1180,10 +1180,7 @@ a:hover {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 16px;
-  margin: 13px 0;
-  padding: 12px 0;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 12px;
 }
 
 .redemption-card-main > div {
@@ -1197,6 +1194,27 @@ a:hover {
   overflow-wrap: anywhere;
   color: rgba(255, 255, 255, 0.9);
   font-size: 13px;
+}
+
+.redemption-card-head {
+  flex-wrap: wrap;
+}
+
+.redemption-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+}
+
+.redemption-card-tags .ant-tag {
+  margin-inline-end: 0;
+}
+
+.redemption-card-foot {
+  justify-content: flex-end;
+  margin-top: 10px;
 }
 
 .redemption-card-foot .ant-btn {

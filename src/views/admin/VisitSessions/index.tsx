@@ -1182,9 +1182,16 @@ const VisitSessionsPage: React.FC = () => {
                               <strong>{record.userName || '-'}</strong>
                               <span>{dayjs(record.redeemedAt).format('DD MMM YYYY, HH:mm')}</span>
                             </div>
-                            <Tag color={record.status === 'completed' ? 'green' : 'orange'}>
-                              {record.status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
-                            </Tag>
+                            <div className="redemption-card-tags">
+                              <Tag color={record.type === 'referral_reward' ? 'purple' : 'gold'}>
+                                {record.type === 'referral_reward'
+                                  ? t('visitSessions.referralReward')
+                                  : t('visitSessions.mysteryGift')}
+                              </Tag>
+                              <Tag color={record.status === 'completed' ? 'green' : 'orange'}>
+                                {record.status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
+                              </Tag>
+                            </div>
                           </div>
 
                           <div className="redemption-card-main">
@@ -1200,13 +1207,8 @@ const VisitSessionsPage: React.FC = () => {
                             </div>
                           </div>
 
-                          <div className="redemption-card-foot">
-                            <Tag color={record.type === 'referral_reward' ? 'purple' : 'gold'}>
-                              {record.type === 'referral_reward'
-                                ? t('visitSessions.referralReward')
-                                : t('visitSessions.mysteryGift')}
-                            </Tag>
-                            {record.status === 'pending' && (
+                          {record.status === 'pending' && (
+                            <div className="redemption-card-foot">
                               <Button
                                 size="small"
                                 icon={<EditOutlined />}
@@ -1219,8 +1221,8 @@ const VisitSessionsPage: React.FC = () => {
                               >
                                 {t('common.edit')}
                               </Button>
-                            )}
-                          </div>
+                            </div>
+                          )}
                         </article>
                       ))}
                     </div>
