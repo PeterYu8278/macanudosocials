@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Macanudo Socials</string>
-    <string name="title_activity_main">Macanudo Socials</string>
-    <string name="package_name">com.macanudosocials.app</string>
-    <string name="custom_url_scheme">com.macanudosocials.app</string>
-</resources>

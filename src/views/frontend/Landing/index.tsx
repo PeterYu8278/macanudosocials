@@ -27,6 +27,7 @@ import { loginWithEmailOrPhone, registerUser, loginWithGoogle } from '../../../s
 import { getAppConfig } from '../../../services/firebase/appConfig'
 import type { Brand, Event as CigarEvent, AppConfig } from '../../../types'
 import { identifyInputType, normalizePhoneNumber, isValidEmail } from '../../../utils/phoneNormalization'
+import ResetPasswordModal from '../../../components/common/ResetPasswordModal'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -80,6 +81,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const [authModalVisible, setAuthModalVisible] = useState(loginOnly)
   const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
   const [authLoading, setAuthLoading] = useState(false)
+  const [resetPasswordVisible, setResetPasswordVisible] = useState(false)
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const [loginForm] = Form.useForm()
   const [registerForm] = Form.useForm()
@@ -1035,9 +1037,14 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                 </Form.Item>
 
                 <div style={{ textAlign: 'right', marginBottom: '24px' }}>
-                  <a onClick={() => navigate('/')} style={{ color: '#ffd700', fontSize: '14px', cursor: 'pointer' }}>
+                  <Button
+                    type="link"
+                    htmlType="button"
+                    onClick={() => setResetPasswordVisible(true)}
+                    style={{ height: 'auto', padding: 0, color: '#ffd700', fontSize: '14px' }}
+                  >
                     {t('auth.resetPassword')}
-                  </a>
+                  </Button>
                 </div>
 
                 <Button
@@ -1301,6 +1308,12 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
           </Space>
         </div>
       </Modal>
+
+      <ResetPasswordModal
+        open={resetPasswordVisible}
+        onClose={() => setResetPasswordVisible(false)}
+        appConfig={appConfig}
+      />
 
       {/* Salon Special Offer Modal */}
       <Modal
