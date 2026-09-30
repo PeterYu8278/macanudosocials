@@ -24,6 +24,7 @@ import type { ReloadRecord, User } from '../../types';
 import { createPointsRecord } from './pointsRecords';
 import { getPointsConfig } from './pointsConfig';
 import { calculateReferralPointsFromArray } from '../../utils/referral';
+import { MINIMUM_RELOAD_AMOUNT_RM } from '../../utils/visitCheckout';
 
 // 充值汇率（1 RM = 多少积分）
 const RELOAD_EXCHANGE_RATE = 1; // 1 RM = 1 积分（可根据配置调整）
@@ -39,6 +40,10 @@ export const createReloadRecord = async (
   billplzId?: string
 ): Promise<{ success: boolean; recordId?: string; error?: string }> => {
   try {
+    if (!Number.isFinite(requestedAmount) || requestedAmount < MINIMUM_RELOAD_AMOUNT_RM) {
+      return { success: false, error: `最低充值金额为 RM ${MINIMUM_RELOAD_AMOUNT_RM}` };
+    }
+
     const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId));
     if (!userDoc.exists()) {
       return { success: false, error: '用户不存在' };
@@ -772,4 +777,3 @@ export const getPendingReloadRecords = async (limitCount: number = 50): Promise<
     }
   }
 };
-

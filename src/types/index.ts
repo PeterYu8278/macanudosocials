@@ -692,6 +692,23 @@ export interface VisitSession {
   rebatePoints?: number;    // 驻店消费返点积分
   rebatePointsRecordId?: string; // 驻店返点积分记录ID
 
+  // 积分不足时保留待结算状态，由充值完成事件自动重试
+  checkoutPending?: {
+    status: 'awaiting_reload' | 'processing' | 'failed';
+    pointsDueNow: number;
+    shortfall: number;
+    minimumReloadAmount: number;
+    durationMinutes: number;
+    durationHours: number;
+    forceHours?: number;
+    realtimeHoursAdjustment?: number;
+    realtimeDeductionCountTarget?: number;
+    requestedBy: string;
+    requestedStoreId?: string;
+    requestedAt: Date;
+    lastError?: string;
+  };
+
   // 实时扣费（Annual Membership）
   realtimeDeductionsEnabled?: boolean; // true = 使用实时阶梯扣费，checkout 不再重复扣
   realtimePointsDeducted?: number;     // 实时已扣积分累计
