@@ -9,7 +9,6 @@ import {
   RightOutlined,
   UserOutlined,
 } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
 
 const { Text } = Typography
 
@@ -54,6 +53,14 @@ const formatDisplayDateRange = (startValue: unknown, endValue: unknown, language
   const start = toDateOrNull(startValue)
   const end = toDateOrNull(endValue)
   if (!start || !end) return `${formatDisplayDate(start, language)} - ${formatDisplayDate(end, language)}`
+
+  if (
+    start.getFullYear() === end.getFullYear()
+    && start.getMonth() === end.getMonth()
+    && start.getDate() === end.getDate()
+  ) {
+    return formatDisplayDate(start, language)
+  }
 
   if (language.startsWith('zh')) {
     if (start.getFullYear() === end.getFullYear()) {
@@ -132,6 +139,7 @@ const Events: React.FC = () => {
     refreshAnnouncements()
   }
   const [loadingId, setLoadingId] = useState<string | null>(null)
+  const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [selectedAnnouncement, setSelectedAnnouncement] = useState<Announcement | null>(null)
 
   const getDisplayStatus = (event: Event): 'upcoming' | 'ongoing' | 'completed' => {
@@ -224,21 +232,50 @@ const Events: React.FC = () => {
     return { color: tagColor }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'upcoming': return 'blue'
-      case 'ongoing': return 'green'
-      case 'completed': return 'default'
-      default: return 'default'
-    }
-  }
-
   const getStatusText = (event: Event) => {
     const display = getDisplayStatus(event)
     switch (display) {
       case 'upcoming': return t('events.upcoming')
       case 'ongoing': return t('events.ongoing')
       case 'completed': return t('events.completed')
+    }
+  }
+
+  const getEventImage = (event: Event): string => {
+    return event.image
+      || event.coverImage
+      || (event as any).imageUrl
+      || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHkrz9j7PM4w5oJ-Ev89VkzHjq_v56FKnoLokAM_pzgzM6iNfbhlUqD41_YlPuL4JuB_cB8FzngJx-Ha2y__35Q0NvH6BwubyOXdY9GvnvbwOpdZ6Edy1OyMJPkfG6-efD4YBYLZSO1BFlMu6u6T3Vujsd4rKIgWOwxgLHVkDsWwS72e271qwxZ4vothKhf_zW-CiGBhoIQQsvWO9zQCYJuVevXIVGOwLdkBIDO_b0EdZISgCxP0RGVW71K71lUAE_lwj27PQZiuVb'
+  }
+
+  const handleEventRegistration = async (event: Event) => {
+    const registeredIds = event.participants?.registered || []
+    const isUserRegistered = user ? registeredIds.includes(user.id) : false
+    const canCurrentUserRegister = user ? hasPermission(user.role, 'canRegisterEvent') : false
+    const closed = isRegistrationClosed(event)
+
+    if (!user) { message.info(t('auth.pleaseLogin')); return }
+    if (closed) { message.warning(getRegistrationClosedText(event)); return }
+    if (!isUserRegistered && !canCurrentUserRegister) {
+      message.warning(t('common.noPermission')); return
+    }
+    const max = event.participants?.maxParticipants || 0
+    if (!isUserRegistered && max > 0 && registeredIds.length >= max) {
+      message.warning(t('events.fullCapacity')); return
+    }
+    try {
+      setLoadingId(event.id)
+      const res = isUserRegistered
+        ? await unregisterFromEvent(event.id, user.id)
+        : await registerForEvent(event.id, user.id)
+      if (res.success) {
+        message.success(isUserRegistered ? t('events.unregistered') : t('events.registered'))
+        refresh()
+      } else {
+        message.error(res.error?.message || t('messages.operationFailed'))
+      }
+    } finally {
+      setLoadingId(null)
     }
   }
 
@@ -334,6 +371,16 @@ const Events: React.FC = () => {
             return (
               <article
                 key={`announcement-${announcement.id}`}
+                role="button"
+                tabIndex={0}
+                onClick={() => setSelectedAnnouncement(announcement)}
+                onKeyDown={(event) => {
+                  if (event.target !== event.currentTarget) return
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    setSelectedAnnouncement(announcement)
+                  }
+                }}
                 style={{
                   borderRadius: 12,
                   overflow: 'hidden',
@@ -342,6 +389,8 @@ const Events: React.FC = () => {
                   background: '#1a1a1a',
                   boxShadow: '0 4px 20px rgba(0,0,0,0.4)',
                   transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                  cursor: 'pointer',
+                  outline: 'none',
                 }}
                 onMouseEnter={(event) => {
                   event.currentTarget.style.transform = 'translateY(-3px)'
@@ -359,8 +408,7 @@ const Events: React.FC = () => {
                     style={{
                       position: 'relative',
                       width: '100%',
-                      height: isMobile ? 151 : undefined,
-                      aspectRatio: isMobile ? undefined : '16/9',
+                      aspectRatio: '2/1',
                       flexShrink: 0,
                       backgroundImage: `url("${announcement.image}")`,
                       backgroundSize: 'cover',
@@ -421,7 +469,10 @@ const Events: React.FC = () => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end' }}>
                     <button
                       type="button"
-                      onClick={() => setSelectedAnnouncement(announcement)}
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setSelectedAnnouncement(announcement)
+                      }}
                       style={{
                         border: 'none',
                         background: 'transparent',
@@ -449,7 +500,6 @@ const Events: React.FC = () => {
           const socialTag = getSocialRelationTag(event)
           const registeredIds = event.participants?.registered || []
           const isUserRegistered = user ? registeredIds.includes(user.id) : false
-          const canCurrentUserRegister = user ? hasPermission(user.role, 'canRegisterEvent') : false
           const closed = isRegistrationClosed(event)
           const displayStatus = getDisplayStatus(event)
 
@@ -476,6 +526,16 @@ const Events: React.FC = () => {
           return (
             <div
               key={event.id}
+              role="button"
+              tabIndex={0}
+              onClick={() => setSelectedEvent(event)}
+              onKeyDown={(keyboardEvent) => {
+                if (keyboardEvent.target !== keyboardEvent.currentTarget) return
+                if (keyboardEvent.key === 'Enter' || keyboardEvent.key === ' ') {
+                  keyboardEvent.preventDefault()
+                  setSelectedEvent(event)
+                }
+              }}
               style={{
                 borderRadius: '12px',
                 overflow: 'hidden',
@@ -484,6 +544,8 @@ const Events: React.FC = () => {
                 flexDirection: 'column',
                 background: '#1a1a1a',
                 transition: 'transform 0.25s ease, box-shadow 0.25s ease',
+                cursor: 'pointer',
+                outline: 'none',
               }}
               onMouseEnter={(e) => {
                 e.currentTarget.style.transform = 'translateY(-3px)'
@@ -498,12 +560,10 @@ const Events: React.FC = () => {
               <div style={{
                 position: 'relative',
                 width: '100%',
-                height: isMobile ? 151 : undefined,
-                aspectRatio: isMobile ? undefined : '16/9',
+                aspectRatio: '2/1',
                 flexShrink: 0,
-                backgroundImage: `url("${(event as any).imageUrl || (event as any).coverImage || 'https://lh3.googleusercontent.com/aida-public/AB6AXuCHkrz9j7PM4w5oJ-Ev89VkzHjq_v56FKnoLokAM_pzgzM6iNfbhlUqD41_YlPuL4JuB_cB8FzngJx-Ha2y__35Q0NvH6BwubyOXdY9GvnvbwOpdZ6Edy1OyMJPkfG6-efD4YBYLZSO1BFlMu6u6T3Vujsd4rKIgWOwxgLHVkDsWwS72e271qwxZ4vothKhf_zW-CiGBhoIQQsvWO9zQCYJuVevXIVGOwLdkBIDO_b0EdZISgCxP0RGVW71K71lUAE_lwj27PQZiuVb'}"})`,
+                backgroundImage: `url("${getEventImage(event)}")`,
                 backgroundSize: 'cover',
-                ...(event.image ? { backgroundImage: `url("${event.image}")` } : {}),
                 backgroundPosition: 'center',
               }}>
                 {/* Status badge */}
@@ -663,30 +723,9 @@ const Events: React.FC = () => {
                       cursor: closed ? 'not-allowed' : 'pointer',
                       transition: 'opacity 0.2s',
                     }}
-                    onClick={async () => {
-                      if (!user) { message.info(t('auth.pleaseLogin')); return }
-                      if (closed) { message.warning(getRegistrationClosedText(event)); return }
-                      if (!isUserRegistered && !canCurrentUserRegister) {
-                        message.warning(t('common.noPermission')); return
-                      }
-                      const max = (event as any)?.participants?.maxParticipants || 0
-                      if (!isUserRegistered && max > 0 && registeredIds.length >= max) {
-                        message.warning(t('events.fullCapacity')); return
-                      }
-                      try {
-                        setLoadingId(event.id)
-                        const res = isUserRegistered
-                          ? await unregisterFromEvent(event.id, user.id)
-                          : await registerForEvent(event.id, user.id)
-                        if (res.success) {
-                          message.success(isUserRegistered ? t('events.unregistered') : t('events.registered'))
-                          refresh()
-                        } else {
-                          message.error(res.error?.message || t('messages.operationFailed'))
-                        }
-                      } finally {
-                        setLoadingId(null)
-                      }
+                    onClick={(clickEvent) => {
+                      clickEvent.stopPropagation()
+                      handleEventRegistration(event)
                     }}
                   >
                     {loadingId === event.id
@@ -705,6 +744,196 @@ const Events: React.FC = () => {
           )
         })}
       </div>
+
+      <Drawer
+        placement="bottom"
+        open={Boolean(selectedEvent)}
+        onClose={() => setSelectedEvent(null)}
+        height={isMobile ? '86vh' : 680}
+        title={(
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: '#FDE08D' }}>
+            <CalendarOutlined />
+            {t('events.eventDetails')}
+          </span>
+        )}
+        styles={{
+          header: {
+            background: '#171612',
+            borderBottom: '1px solid rgba(244,175,37,0.25)',
+          },
+          body: {
+            padding: 0,
+            background: '#171612',
+          },
+          content: {
+            background: '#171612',
+            borderTop: '1px solid rgba(244,175,37,0.35)',
+            borderRadius: '12px 12px 0 0',
+          },
+        }}
+      >
+        {selectedEvent && (() => {
+          const language = i18n.language || 'zh-CN'
+          const registeredIds = selectedEvent.participants?.registered || []
+          const isUserRegistered = user ? registeredIds.includes(user.id) : false
+          const closed = isRegistrationClosed(selectedEvent)
+          const startDate = toDateOrNull(selectedEvent.schedule?.startDate)
+          const endDate = toDateOrNull(selectedEvent.schedule?.endDate)
+          const registrationDeadline = toDateOrNull(selectedEvent.schedule?.registrationDeadline)
+          const maxParticipants = selectedEvent.participants?.maxParticipants || 0
+          const availablePax = maxParticipants > 0
+            ? Math.max(maxParticipants - registeredIds.length, 0)
+            : null
+          const eventFee = selectedEvent.participants?.fee ?? 0
+          const venue = selectedEvent.location?.name || selectedEvent.location?.address || '-'
+
+          return (
+            <article style={{ width: '100%', maxWidth: 820, margin: '0 auto', paddingBottom: 32 }}>
+              <div style={{
+                width: '100%',
+                height: isMobile ? 260 : 360,
+                background: '#0d0d0d',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                overflow: 'hidden',
+              }}>
+                <img
+                  src={getEventImage(selectedEvent)}
+                  alt={selectedEvent.title}
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    display: 'block',
+                  }}
+                />
+              </div>
+
+              <div style={{ padding: isMobile ? '18px 16px' : '24px', display: 'flex', flexDirection: 'column', gap: 18 }}>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                  <div style={{ minWidth: 0 }}>
+                    <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, textTransform: 'uppercase' }}>
+                      {getStatusText(selectedEvent)}
+                    </span>
+                    <h2 style={{ margin: '8px 0 0', color: '#fff', fontSize: isMobile ? 24 : 30, lineHeight: 1.25 }}>
+                      {selectedEvent.title}
+                    </h2>
+                  </div>
+                  <span style={{ color: '#FDE08D', fontSize: 13, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                    {availablePax === null
+                      ? t('events.availablePaxUnlimited')
+                      : t('events.availablePax', { count: availablePax })}
+                  </span>
+                </div>
+
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+                  gap: 12,
+                }}>
+                  <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                    <CalendarOutlined style={{ color: '#FDE08D', marginTop: 3 }} />
+                    <span>
+                      <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>{t('events.eventTime')}</strong>
+                      {formatDisplayDateRange(startDate, endDate, language)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                    <ClockCircleOutlined style={{ color: '#FDE08D', marginTop: 3 }} />
+                    <span>
+                      <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>{t('events.startTime')} / {t('events.endTime')}</strong>
+                      {formatDisplayTime(startDate, language)} - {formatDisplayTime(endDate, language)}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                    <EnvironmentOutlined style={{ color: '#FDE08D', marginTop: 3 }} />
+                    <span>
+                      <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>{t('events.location')}</strong>
+                      {venue}
+                      {selectedEvent.location?.address && selectedEvent.location.address !== venue && (
+                        <span style={{ display: 'block', color: 'rgba(255,255,255,0.58)', marginTop: 3 }}>
+                          {selectedEvent.location.address}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                    <UserOutlined style={{ color: '#FDE08D', marginTop: 3 }} />
+                    <span>
+                      <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>{t('events.registration')}</strong>
+                      {registeredIds.length}{maxParticipants > 0 ? ` / ${maxParticipants}` : ''} {t('events.people')}
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                    <span style={{ color: '#FDE08D', width: 14, marginTop: 1, fontWeight: 800 }}>RM</span>
+                    <span>
+                      <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>{t('events.fee')}</strong>
+                      {eventFee > 0 ? `RM ${eventFee}` : (language.startsWith('zh') ? '免费' : 'Free')}
+                    </span>
+                  </div>
+                  {registrationDeadline && (
+                    <div style={{ display: 'flex', gap: 10, color: 'rgba(255,255,255,0.78)' }}>
+                      <ClockCircleOutlined style={{ color: '#FDE08D', marginTop: 3 }} />
+                      <span>
+                        <strong style={{ display: 'block', color: '#fff', marginBottom: 3 }}>
+                          {t('events.registrationDeadline', 'Registration Deadline')}
+                        </strong>
+                        {formatDisplayDate(registrationDeadline, language)} {formatDisplayTime(registrationDeadline, language)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                {selectedEvent.description && (
+                  <p style={{ margin: 0, color: 'rgba(255,255,255,0.78)', fontSize: 15, lineHeight: 1.75, whiteSpace: 'pre-wrap' }}>
+                    {selectedEvent.description}
+                  </p>
+                )}
+
+                <button
+                  type="button"
+                  disabled={closed || loadingId === selectedEvent.id}
+                  onClick={() => handleEventRegistration(selectedEvent)}
+                  style={{
+                    width: '100%',
+                    background: closed
+                      ? 'rgba(255,255,255,0.08)'
+                      : isUserRegistered
+                        ? 'rgba(239,68,68,0.15)'
+                        : 'linear-gradient(to right,#FDE08D,#C48D3A)',
+                    border: closed
+                      ? '1px solid rgba(255,255,255,0.1)'
+                      : isUserRegistered
+                        ? '1px solid rgba(239,68,68,0.4)'
+                        : 'none',
+                    color: closed
+                      ? 'rgba(255,255,255,0.35)'
+                      : isUserRegistered
+                        ? '#f87171'
+                        : '#111',
+                    borderRadius: 8,
+                    padding: '11px 0',
+                    fontSize: 14,
+                    fontWeight: 700,
+                    cursor: closed ? 'not-allowed' : 'pointer',
+                  }}
+                >
+                  {loadingId === selectedEvent.id
+                    ? t('events.processing')
+                    : closed
+                      ? getRegistrationClosedText(selectedEvent)
+                      : !user
+                        ? t('auth.pleaseLogin')
+                        : isUserRegistered
+                          ? t('events.leave')
+                          : t('events.join')}
+                </button>
+              </div>
+            </article>
+          )
+        })()}
+      </Drawer>
 
       <Drawer
         placement="bottom"
@@ -741,8 +970,9 @@ const Events: React.FC = () => {
                 alt={selectedAnnouncement.title}
                 style={{
                   width: '100%',
-                  height: isMobile ? 190 : 260,
-                  objectFit: 'cover',
+                  height: isMobile ? 240 : 320,
+                  objectFit: 'contain',
+                  background: '#0d0d0d',
                   display: 'block',
                 }}
               />
