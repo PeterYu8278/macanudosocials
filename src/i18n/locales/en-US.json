@@ -2966,7 +2966,7 @@
     "member": "Member",
     "memberId": "Member ID",
     "noActiveVisit": "No active visit. Check-in will be created.",
-    "activeVisitFound": "Active visit found. Check-out will be completed.",
+    "activeVisitFound": "Active visit found.",
     "currentVisitDuration": "Current Visit Duration",
     "currentPoints": "Current Points",
     "totalVisitPoints": "Total Visit Points",

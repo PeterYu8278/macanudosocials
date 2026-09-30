@@ -729,7 +729,6 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
           </div>
         ) : scannedMember ? (
           <div style={{ textAlign: 'left', paddingTop: 8 }}>
-            <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <Avatar
                   size={54}
@@ -917,7 +916,6 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
                   )}
                 </div>
               )}
-            </div>
 
             <Space style={{ display: 'flex', marginTop: 16 }}>
               <Button onClick={resetScanner} disabled={processing || savingRedemption} style={{ flex: 1 }}>

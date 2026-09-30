@@ -2966,7 +2966,7 @@
     "member": "会员",
     "memberId": "会员编号",
     "noActiveVisit": "没有驻店记录，将执行 Check-in。",
-    "activeVisitFound": "发现驻店记录，将执行 Check-out。",
+    "activeVisitFound": "发现驻店记录。",
     "currentVisitDuration": "当前驻店时长",
     "currentPoints": "当前积分",
     "totalVisitPoints": "总驻店积分",
