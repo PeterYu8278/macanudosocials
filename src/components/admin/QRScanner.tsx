@@ -1,15 +1,17 @@
 // QR码扫描组件 - 用于管理员check-in/check-out
-import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Modal, Button, App, Space, Typography, Select, Avatar, Tag, Input } from 'antd';
-import { QrcodeOutlined, CheckCircleOutlined, UserOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons';
+import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { Modal, Button, App, Space, Typography, Select, Avatar, Tag, Input, InputNumber } from 'antd';
+import { QrcodeOutlined, CheckCircleOutlined, UserOutlined, LoginOutlined, LogoutOutlined, ClockCircleOutlined, GiftOutlined, SaveOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
-import { createVisitSession, completeVisitSession, getPendingVisitSession } from '../../services/firebase/visitSessions';
-import { getUserById } from '../../services/firebase/firestore';
+import { calculateVisitDuration, createVisitSession, completeVisitSession, getPendingVisitSession } from '../../services/firebase/visitSessions';
+import { getCigars, getUserById } from '../../services/firebase/firestore';
+import { getCurrentHourlyRate } from '../../services/firebase/membershipFee';
+import { createRedemptionRecord, getRedemptionRecordsBySession, updateRedemptionRecord } from '../../services/firebase/redemption';
 import { getUserByMemberId } from '../../utils/memberId';
 import { useAuthStore } from '../../store/modules/auth';
 import { useTranslation } from 'react-i18next';
 import { getActiveStores } from '../../services/firebase/stores';
-import type { Store, User, VisitSession } from '../../types';
+import type { Cigar, RedemptionRecord, Store, User, VisitSession } from '../../types';
 
 const { Text } = Typography;
 
@@ -23,7 +25,70 @@ interface ScannedMember {
   user: User;
   pendingSession: VisitSession | null;
   action: 'checkin' | 'checkout';
+  hourlyRate: number;
 }
+
+interface VisitPointsPreview {
+  currentPoints: number;
+  totalVisitPoints: number;
+  pointsDueNow: number;
+  isSufficient: boolean;
+  shortfall: number;
+}
+
+const calculateVisitPointsPreview = (
+  session: VisitSession,
+  user: User,
+  hourlyRate: number,
+  now: number
+): VisitPointsPreview => {
+  const currentPoints = Number(user.membership?.points || 0);
+  const elapsedMinutes = Math.max(0, Math.floor((now - session.checkInAt.getTime()) / 60000));
+  const durationHours = session.checkoutPending?.durationHours ?? calculateVisitDuration(elapsedMinutes);
+
+  let totalVisitPoints = 0;
+  let pointsDueNow = 0;
+
+  if (session.checkoutPending?.status === 'awaiting_reload') {
+    pointsDueNow = Number(session.checkoutPending.pointsDueNow || 0);
+    if (session.dayPass?.isPurchased) {
+      totalVisitPoints = Number(session.dayPass.config.cost || 0) + pointsDueNow;
+    } else if (session.realtimeDeductionsEnabled) {
+      totalVisitPoints = Number(session.realtimePointsDeducted || 0) + pointsDueNow;
+    } else {
+      totalVisitPoints = pointsDueNow;
+    }
+  } else if (session.isFirstVisitAfterRenewal) {
+    totalVisitPoints = 0;
+  } else if (session.dayPass?.isPurchased) {
+    const cost = Number(session.dayPass.config.cost || 0);
+    const freeHours = Number(session.dayPass.config.freeHours || 0);
+    const overtimeRate = Number(session.dayPass.config.hourlyRateAfter || 0);
+    const overtimePoints = Math.round(Math.max(0, durationHours - freeHours) * overtimeRate);
+    totalVisitPoints = cost + overtimePoints;
+    pointsDueNow = overtimePoints;
+  } else if (session.realtimeDeductionsEnabled) {
+    const alreadyDeducted = Number(session.realtimePointsDeducted || 0);
+    const nextDeductionAt = session.nextDeductionAt?.getTime();
+    const dueIntervals = nextDeductionAt && now >= nextDeductionAt
+      ? 1 + Math.floor((now - nextDeductionAt) / (30 * 60 * 1000))
+      : 0;
+    pointsDueNow = (hourlyRate / 2) * dueIntervals;
+    totalVisitPoints = alreadyDeducted + pointsDueNow;
+  } else {
+    pointsDueNow = Math.round(durationHours * hourlyRate);
+    totalVisitPoints = pointsDueNow;
+  }
+
+  const normalizedDueNow = Math.max(0, pointsDueNow);
+  return {
+    currentPoints,
+    totalVisitPoints,
+    pointsDueNow: normalizedDueNow,
+    isSufficient: currentPoints >= normalizedDueNow,
+    shortfall: Math.max(0, normalizedDueNow - currentPoints),
+  };
+};
 
 export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess, onClose }) => {
   const { t, i18n } = useTranslation();
@@ -45,6 +110,141 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
   const [storesLoading, setStoresLoading] = useState(false);
   const [scannedMember, setScannedMember] = useState<ScannedMember | null>(null);
   const [manualMemberId, setManualMemberId] = useState('');
+  const [activeVisitDuration, setActiveVisitDuration] = useState('00:00:00');
+  const [durationNow, setDurationNow] = useState(Date.now());
+  const [cigars, setCigars] = useState<Cigar[]>([]);
+  const [redemptionRecords, setRedemptionRecords] = useState<RedemptionRecord[]>([]);
+  const [selectedCigarId, setSelectedCigarId] = useState<string>();
+  const [redemptionQuantity, setRedemptionQuantity] = useState(1);
+  const [redemptionsLoading, setRedemptionsLoading] = useState(false);
+  const [savingRedemption, setSavingRedemption] = useState(false);
+
+  useEffect(() => {
+    const checkInAt = scannedMember?.pendingSession?.checkInAt;
+    if (!checkInAt) {
+      setActiveVisitDuration('00:00:00');
+      return;
+    }
+
+    const updateDuration = () => {
+      const now = Date.now();
+      const elapsedSeconds = Math.max(0, Math.floor((now - checkInAt.getTime()) / 1000));
+      const hours = Math.floor(elapsedSeconds / 3600);
+      const minutes = Math.floor((elapsedSeconds % 3600) / 60);
+      const seconds = elapsedSeconds % 60;
+      setActiveVisitDuration(
+        `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+      );
+      setDurationNow(now);
+    };
+
+    updateDuration();
+    const interval = window.setInterval(updateDuration, 1000);
+    return () => window.clearInterval(interval);
+  }, [scannedMember?.pendingSession?.checkInAt]);
+
+  const visitPointsPreview = useMemo(() => {
+    if (!scannedMember?.pendingSession) return null;
+    return calculateVisitPointsPreview(
+      scannedMember.pendingSession,
+      scannedMember.user,
+      scannedMember.hourlyRate,
+      durationNow
+    );
+  }, [durationNow, scannedMember]);
+
+  useEffect(() => {
+    const sessionId = scannedMember?.pendingSession?.id;
+    if (!sessionId) {
+      setRedemptionRecords([]);
+      setSelectedCigarId(undefined);
+      setRedemptionQuantity(1);
+      return;
+    }
+
+    let cancelled = false;
+    setRedemptionsLoading(true);
+    Promise.all([
+      getCigars({ limit: 500 }),
+      getRedemptionRecordsBySession(sessionId),
+    ])
+      .then(([availableCigars, records]) => {
+        if (cancelled) return;
+        setCigars(availableCigars);
+        setRedemptionRecords(records);
+      })
+      .catch(error => {
+        console.error('[QRScanner] Failed to load visit redemptions:', error);
+        if (!cancelled) message.error(t('scanner.loadVisitCigarsFailed'));
+      })
+      .finally(() => {
+        if (!cancelled) setRedemptionsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [message, scannedMember?.pendingSession?.id, t]);
+
+  const sessionRedemptions = scannedMember?.pendingSession?.redemptions || [];
+  const displayedRedemptions = redemptionRecords.length > 0 ? redemptionRecords : sessionRedemptions;
+  const configuredRedemptions = displayedRedemptions.filter(redemption => Boolean(redemption.cigarId?.trim()));
+  const pendingRedemption = redemptionRecords.find(redemption => redemption.status === 'pending' || !redemption.cigarId?.trim());
+  const canSetVisitCigar = Boolean(
+    scannedMember?.pendingSession && (pendingRedemption || configuredRedemptions.length === 0)
+  );
+
+  const saveVisitCigar = async () => {
+    if (!scannedMember?.pendingSession || !adminUser?.id || !selectedCigarId || savingRedemption) return;
+
+    const cigar = cigars.find(item => item.id === selectedCigarId);
+    if (!cigar) {
+      message.warning(t('visitSessions.selectCigar'));
+      return;
+    }
+
+    setSavingRedemption(true);
+    try {
+      const result = pendingRedemption
+        ? await updateRedemptionRecord(
+            pendingRedemption.id,
+            cigar.id,
+            cigar.name,
+            redemptionQuantity,
+            adminUser.id
+          )
+        : await createRedemptionRecord(
+            scannedMember.user.id,
+            scannedMember.pendingSession.id,
+            cigar.id,
+            cigar.name,
+            redemptionQuantity,
+            adminUser.id
+          );
+
+      if (!result.success) {
+        message.error(result.error || t('scanner.saveVisitCigarFailed'));
+        return;
+      }
+
+      const [records, refreshedSession] = await Promise.all([
+        getRedemptionRecordsBySession(scannedMember.pendingSession.id),
+        getPendingVisitSession(scannedMember.user.id),
+      ]);
+      setRedemptionRecords(records);
+      if (refreshedSession) {
+        setScannedMember(current => current ? { ...current, pendingSession: refreshedSession } : current);
+      }
+      setSelectedCigarId(undefined);
+      setRedemptionQuantity(1);
+      message.success(t('scanner.visitCigarSaved'));
+    } catch (error: any) {
+      console.error('[QRScanner] Failed to save visit cigar:', error);
+      message.error(error?.message || t('scanner.saveVisitCigarFailed'));
+    } finally {
+      setSavingRedemption(false);
+    }
+  };
 
   const localizeMemberLookupError = (error?: string) => {
     if (error && /(不存在|not found)/i.test(error)) {
@@ -333,10 +533,20 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
         role: 'member',
       } as User);
 
+      let hourlyRate = 10;
+      if (pendingSession && !pendingSession.isFirstVisitAfterRenewal && !pendingSession.dayPass?.isPurchased) {
+        try {
+          hourlyRate = await getCurrentHourlyRate(pendingSession.checkInAt);
+        } catch (error) {
+          console.error('[QRScanner] Failed to load visit hourly rate:', error);
+        }
+      }
+
       setScannedMember({
         user: member,
         pendingSession,
         action: pendingSession ? 'checkout' : 'checkin',
+        hourlyRate,
       });
       setCheckInError(null);
       processingRef.current = false;
@@ -454,7 +664,15 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
   };
 
   return (
-    <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+    <div style={{
+      textAlign: 'center',
+      display: 'flex',
+      flexDirection: 'column',
+      maxHeight: 'calc(100vh - 190px)',
+      overflowX: 'hidden',
+      overflowY: 'auto',
+      paddingRight: 2
+    }}>
       {/* Check-in 错误提示 */}
       {checkInError && (
         <div style={{
@@ -566,15 +784,156 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
                     : t('scanner.activeVisitFound')}
                 </Text>
                 {scannedMember.pendingSession && (
-                  <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
-                    {scannedMember.pendingSession.storeName || '-'} · {scannedMember.pendingSession.checkInAt.toLocaleString(i18n.language)}
-                  </Text>
+                  <div style={{ marginTop: 4 }}>
+                    <Text style={{ display: 'block', color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+                      {scannedMember.pendingSession.storeName || '-'} · {scannedMember.pendingSession.checkInAt.toLocaleString(i18n.language)}
+                    </Text>
+                    <Text style={{ display: 'block', color: 'rgba(255,255,255,0.82)', fontSize: 13, marginTop: 6 }}>
+                      <ClockCircleOutlined style={{ marginRight: 6 }} />
+                      {t('scanner.currentVisitDuration', {
+                        defaultValue: t('visitTimer.stayDurationTimer')
+                      })}: {' '}
+                      <span style={{ color: '#FDE08D', fontFamily: 'monospace', fontWeight: 700 }}>
+                        {activeVisitDuration}
+                      </span>
+                    </Text>
+                    {visitPointsPreview && (
+                      <div style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                        gap: 8,
+                        marginTop: 10,
+                        paddingTop: 10,
+                        borderTop: '1px solid rgba(255,255,255,0.12)'
+                      }}>
+                        <div>
+                          <Text style={{ display: 'block', color: 'rgba(255,255,255,0.58)', fontSize: 11 }}>
+                            {t('scanner.currentPoints')}
+                          </Text>
+                          <Text style={{ color: '#fff', fontWeight: 700 }}>
+                            {visitPointsPreview.currentPoints.toLocaleString(i18n.language)}
+                          </Text>
+                        </div>
+                        <div>
+                          <Text style={{ display: 'block', color: 'rgba(255,255,255,0.58)', fontSize: 11 }}>
+                            {t('scanner.totalVisitPoints')}
+                          </Text>
+                          <Text style={{ color: '#FDE08D', fontWeight: 700 }}>
+                            {visitPointsPreview.totalVisitPoints.toLocaleString(i18n.language)}
+                          </Text>
+                        </div>
+                        <div style={{ gridColumn: '1 / -1' }}>
+                          <Tag color={visitPointsPreview.isSufficient ? 'green' : 'red'} style={{ margin: 0 }}>
+                            {visitPointsPreview.isSufficient
+                              ? t('scanner.pointsSufficient')
+                              : t('scanner.pointsInsufficient', { shortfall: visitPointsPreview.shortfall })}
+                          </Tag>
+                        </div>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
+
+              {scannedMember.pendingSession && (
+                <div style={{
+                  marginTop: 12,
+                  padding: 12,
+                  borderRadius: 8,
+                  border: '1px solid rgba(244, 175, 37, 0.3)',
+                  background: 'rgba(0, 0, 0, 0.18)'
+                }}>
+                  <Text style={{ display: 'block', color: '#FDE08D', fontWeight: 700, marginBottom: 8 }}>
+                    <GiftOutlined style={{ marginRight: 6 }} />
+                    {t('scanner.visitCigars')}
+                  </Text>
+
+                  {configuredRedemptions.length > 0 ? (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                      {configuredRedemptions.map((redemption, index) => (
+                        <div
+                          key={('id' in redemption ? redemption.id : redemption.recordId) || `${redemption.cigarId}-${index}`}
+                          style={{
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            gap: 12,
+                            color: 'rgba(255,255,255,0.82)',
+                            fontSize: 13
+                          }}
+                        >
+                          <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{redemption.cigarName}</span>
+                          <span style={{ flexShrink: 0, color: '#FDE08D', fontWeight: 700 }}>
+                            × {redemption.quantity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <Text style={{ display: 'block', color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
+                      {redemptionsLoading ? t('common.loading') : t('scanner.noVisitCigarSet')}
+                    </Text>
+                  )}
+
+                  {canSetVisitCigar && (
+                    <div style={{
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      gap: 8,
+                      alignItems: 'center',
+                      marginTop: 10,
+                      paddingTop: 10,
+                      borderTop: '1px solid rgba(255,255,255,0.1)'
+                    }}>
+                      <Select
+                        value={selectedCigarId}
+                        onChange={setSelectedCigarId}
+                        placeholder={t('visitSessions.selectCigar')}
+                        showSearch
+                        loading={redemptionsLoading}
+                        disabled={savingRedemption}
+                        filterOption={(input, option) =>
+                          String(option?.label || '').toLowerCase().includes(input.toLowerCase())
+                        }
+                        options={cigars.map(cigar => ({
+                          value: cigar.id,
+                          label: `${cigar.name} - RM${cigar.price}`
+                        }))}
+                        className="points-config-form"
+                        popupClassName="points-config-form"
+                        style={{ flex: '1 1 190px', minWidth: 0 }}
+                      />
+                      <InputNumber
+                        min={1}
+                        max={100}
+                        value={redemptionQuantity}
+                        onChange={value => setRedemptionQuantity(value || 1)}
+                        disabled={savingRedemption}
+                        aria-label={t('visitSessions.quantity')}
+                        className="points-config-form"
+                        style={{ width: 72 }}
+                      />
+                      <Button
+                        icon={<SaveOutlined />}
+                        onClick={saveVisitCigar}
+                        loading={savingRedemption}
+                        disabled={!selectedCigarId || redemptionsLoading}
+                        style={{
+                          background: selectedCigarId ? 'linear-gradient(to right, #FDE08D, #C48D3A)' : undefined,
+                          border: selectedCigarId ? 'none' : undefined,
+                          color: selectedCigarId ? '#111' : undefined,
+                          fontWeight: 700
+                        }}
+                      >
+                        {t('common.save')}
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <Space style={{ display: 'flex', marginTop: 16 }}>
-              <Button onClick={resetScanner} disabled={processing} style={{ flex: 1 }}>
+              <Button onClick={resetScanner} disabled={processing || savingRedemption} style={{ flex: 1 }}>
                 {t('scanner.scanAgain')}
               </Button>
               <Button
@@ -582,6 +941,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
                 icon={scannedMember.action === 'checkin' ? <LoginOutlined /> : <LogoutOutlined />}
                 onClick={confirmVisitAction}
                 loading={processing}
+                disabled={savingRedemption}
                 style={{
                   flex: 1,
                   background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
