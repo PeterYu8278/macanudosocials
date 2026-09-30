@@ -442,6 +442,9 @@ const VisitSessionsPage: React.FC = () => {
       width: 90,
       render: (status: string, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate') return '-';
+        if (record.checkoutPending?.status === 'awaiting_reload') {
+          return <Tag color="orange" style={{ margin: 0, fontSize: 11 }}>{t('visitSessions.awaitingReload')}</Tag>;
+        }
         const statusMap: Record<string, { color: string; text: string }> = {
           pending: { color: 'orange', text: t('visitSessions.statusPending') },
           completed: { color: 'green', text: t('visitSessions.statusCompleted') },
