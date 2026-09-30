@@ -7,6 +7,7 @@ import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createHmac } from 'crypto';
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections';
+import { settlePendingVisitCheckout } from './_shared/pendingVisitCheckout';
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -132,6 +133,14 @@ export const handler: Handler = async (event) => {
             createdAt: FieldValue.serverTimestamp()
           });
         });
+
+        try {
+          const checkoutResult = await settlePendingVisitCheckout(db, userId);
+          console.log(`[billplz-callback] Pending checkout result for ${userId}: ${checkoutResult.status}`);
+        } catch (checkoutError) {
+          // The scheduled function retries durable pending checkouts every minute.
+          console.error(`[billplz-callback] Automatic checkout failed for ${userId}:`, checkoutError);
+        }
 
         console.log(`[billplz-callback] Successfully processed reload for user ${userId}`);
         return { statusCode: 200, body: 'OK' };

@@ -22,7 +22,6 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
     const { t } = useTranslation();
     const { isAdmin, isDeveloper } = useAuthStore();
     const [activeTab, setActiveTab] = useState<string>(defaultTab);
-    const [qrMode, setQrMode] = useState<'checkin' | 'checkout'>('checkin');
     const [aiCigarVisible, setAiCigarVisible] = useState<boolean>(true);
     
     // 只有管理员和开发者可以访问扫码功能
@@ -106,8 +105,6 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
                     {canAccessQR ? (
                         <QRScannerView
                             active={activeTab === 'qr' && visible}
-                            mode={qrMode}
-                            onModeChange={setQrMode}
                             onSuccess={onClose}
                         />
                     ) : (

@@ -12,6 +12,7 @@ import dayjs from 'dayjs';
 import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { useTranslation } from 'react-i18next';
 import StoreSelect from '../../../components/common/StoreSelect';
+import { MINIMUM_RELOAD_AMOUNT_RM } from '../../../utils/visitCheckout';
 
 const { Title, Text } = Typography;
 
@@ -24,7 +25,7 @@ const ReloadPage: React.FC = () => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
-  const amountOptions = [100, 200, 300, 500, 1000];
+  const amountOptions = [MINIMUM_RELOAD_AMOUNT_RM, 500, 1000];
 
   // 支付配置
   const { data: appConfig } = useFirestoreDoc(getAppConfig);
@@ -54,6 +55,11 @@ const ReloadPage: React.FC = () => {
     if (!user?.id) {
       message.warning(t('auth.pleaseLogin'));
       navigate('/');
+      return;
+    }
+
+    if (amount < MINIMUM_RELOAD_AMOUNT_RM) {
+      message.warning(t('reload.minimumReloadAmount', { amount: MINIMUM_RELOAD_AMOUNT_RM }));
       return;
     }
 
@@ -428,4 +434,3 @@ const ReloadPage: React.FC = () => {
 };
 
 export default ReloadPage;
-

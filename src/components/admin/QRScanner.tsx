@@ -1,32 +1,37 @@
 // QR码扫描组件 - 用于管理员check-in/check-out
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Modal, Button, App, Space, Typography, Select } from 'antd';
-import { QrcodeOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Modal, Button, App, Space, Typography, Select, Avatar, Tag, Input } from 'antd';
+import { QrcodeOutlined, CheckCircleOutlined, UserOutlined, LoginOutlined, LogoutOutlined } from '@ant-design/icons';
 import { Html5Qrcode } from 'html5-qrcode';
 import { createVisitSession, completeVisitSession, getPendingVisitSession } from '../../services/firebase/visitSessions';
+import { getUserById } from '../../services/firebase/firestore';
 import { getUserByMemberId } from '../../utils/memberId';
 import { useAuthStore } from '../../store/modules/auth';
 import { useTranslation } from 'react-i18next';
 import { getActiveStores } from '../../services/firebase/stores';
-import type { Store } from '../../types';
+import type { Store, User, VisitSession } from '../../types';
 
 const { Text } = Typography;
 
 interface QRScannerViewProps {
   active: boolean;
-  mode: 'checkin' | 'checkout';
-  onModeChange: (mode: 'checkin' | 'checkout') => void;
   onSuccess?: () => void;
   onClose?: () => void; // Optional, for "Close" button inside view if needed
 }
 
-export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onModeChange, onSuccess, onClose }) => {
-  const { t } = useTranslation();
-  const { user: adminUser, isSuperAdmin } = useAuthStore();
+interface ScannedMember {
+  user: User;
+  pendingSession: VisitSession | null;
+  action: 'checkin' | 'checkout';
+}
+
+export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess, onClose }) => {
+  const { t, i18n } = useTranslation();
+  const { user: adminUser } = useAuthStore();
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const isStoppingRef = useRef<boolean>(false);
   const videoTrackRef = useRef<MediaStreamTrack | null>(null);
-  const modeRef = useRef(mode);
+  const processingRef = useRef(false);
   const storesRef = useRef<Store[]>([]);
   const selectedStoreIdRef = useRef<string | undefined>(undefined);
   const { message } = App.useApp();
@@ -38,24 +43,42 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
   const [stores, setStores] = useState<Store[]>([]);
   const [selectedStoreId, setSelectedStoreId] = useState<string>();
   const [storesLoading, setStoresLoading] = useState(false);
+  const [scannedMember, setScannedMember] = useState<ScannedMember | null>(null);
+  const [manualMemberId, setManualMemberId] = useState('');
 
-  modeRef.current = mode;
+  const localizeMemberLookupError = (error?: string) => {
+    if (error && /(不存在|not found)/i.test(error)) {
+      return t('scanner.memberNotFound');
+    }
+    return t('scanner.memberLookupFailed');
+  };
+
+  const localizeVisitError = (error: string | undefined, fallbackKey: string) => {
+    if (!error) return t(fallbackKey);
+    if (/(Firestore索引|index.*required)/i.test(error)) return t('scanner.systemConfigurationError');
+    if (/(用户不存在|member.*not found)/i.test(error)) return t('scanner.memberNotFound');
+    if (/(驻店记录不存在|visit.*not found)/i.test(error)) return t('scanner.visitNotFound');
+    if (/(会员状态|开通会员|membership.*inactive)/i.test(error)) return t('scanner.membershipRequired');
+    if (/(已有未完成|active visit already exists)/i.test(error)) return t('scanner.activeVisitAlreadyExists');
+    if (/(积分不足|insufficient points)/i.test(error)) return t('scanner.insufficientPoints');
+    if (/(已完成|已过期|already completed|expired)/i.test(error)) return t('scanner.visitAlreadyClosed');
+    if (/(原门店|original store)/i.test(error)) return t('scanner.visitStoreRestricted');
+    if (/(雪茄不存在|兑换|库存|redemption|inventory)/i.test(error)) return t('scanner.visitSettlementFailed');
+    return t(fallbackKey);
+  };
 
   useEffect(() => {
-    if (!active || mode !== 'checkin') return;
+    if (!active) return;
 
     setStoresLoading(true);
     getActiveStores()
       .then(activeStores => {
-        const accessibleStores = isSuperAdmin
-          ? activeStores
-          : activeStores.filter(store => store.id === adminUser?.storeId);
-        setStores(accessibleStores);
-        storesRef.current = accessibleStores;
+        setStores(activeStores);
+        storesRef.current = activeStores;
 
-        if (adminUser?.storeId && accessibleStores.some(store => store.id === adminUser.storeId)) {
-          setSelectedStoreId(adminUser.storeId);
-          selectedStoreIdRef.current = adminUser.storeId;
+        if (activeStores.length === 1) {
+          setSelectedStoreId(activeStores[0].id);
+          selectedStoreIdRef.current = activeStores[0].id;
         } else {
           setSelectedStoreId(undefined);
           selectedStoreIdRef.current = undefined;
@@ -69,7 +92,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         message.error(t('scanner.loadStoresFailed'));
       })
       .finally(() => setStoresLoading(false));
-  }, [active, adminUser?.storeId, isSuperAdmin, message, mode, t]);
+  }, [active, message, t]);
 
   // 启动扫描
   const startScanning = async (facingMode: 'environment' | 'user' = 'environment') => {
@@ -127,8 +150,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
       } else if (errorString.includes('Could not start video source')) {
         errorMessage = t('scanner.videoSourceError');
       } else if (errorString) {
-        // 尝试从错误消息中提取有用信息
-        errorMessage = errorString.length > 100 ? t('scanner.cameraStartFailed') : errorString;
+        console.error('[QRScanner] Unrecognized camera error:', errorString);
+        errorMessage = t('scanner.cameraStartFailed');
       }
       
       setCameraError(errorMessage);
@@ -232,14 +255,14 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
 
   // 处理扫描结果
   const handleScanResult = async (qrData: string) => {
-    if (processing) return;
-    const currentMode = modeRef.current;
+    if (processingRef.current) return;
     const currentStoreId = selectedStoreIdRef.current;
-    if (currentMode === 'checkin' && !currentStoreId) {
+    if (!currentStoreId) {
       message.warning(t('scanner.storeRequired'));
       return;
     }
 
+    processingRef.current = true;
     setProcessing(true);
     setScannedData(qrData);
     // 先停止扫描，避免重复扫描
@@ -249,6 +272,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
       const memberId = parseQRCode(qrData);
       if (!memberId) {
         message.error(t('scanner.invalidQRCode'));
+        processingRef.current = false;
         setProcessing(false);
         setScannedData(null);
         // 重新启动扫描
@@ -260,7 +284,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
 
       const userResult = await getUserByMemberId(memberId);
       if (!userResult.success || !userResult.user) {
-        setCheckInError(userResult.error || `签到失败：用户不存在`);
+        setCheckInError(localizeMemberLookupError(userResult.error));
+        processingRef.current = false;
         setProcessing(false);
         setScannedData(null);
         // 重新启动扫描
@@ -274,6 +299,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
 
       if (!adminUser?.id) {
         message.error(t('scanner.adminNotFound'));
+        processingRef.current = false;
         setProcessing(false);
         setScannedData(null);
         // 重新启动扫描
@@ -283,71 +309,42 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         return;
       }
 
-      if (currentMode === 'checkin') {
-        // Check-in
+      const [fullUser, pendingSession] = await Promise.all([
+        getUserById(userId),
+        getPendingVisitSession(userId),
+      ]);
+      if (pendingSession && pendingSession.storeId !== currentStoreId) {
         const selectedStore = storesRef.current.find(store => store.id === currentStoreId);
-        const result = await createVisitSession(
-          userId,
-          adminUser.id,
-          currentStoreId!,
-          selectedStore?.name || '',
-          userResult.user.displayName
-        );
-        if (result.success) {
-          message.success(t('scanner.checkinSuccess', { sessionId: result.sessionId }));
-          setCheckInError(null);
-          // 延迟关闭，确保消息显示
-          setTimeout(() => {
-            onSuccess?.();
-          }, 500);
-        } else {
-          const errorMsg = result.error || 'Check-in 失败';
-          console.error('[QRScanner] Check-in失败:', errorMsg);
-          
-          // 统一在页面顶部显示业务逻辑错误，确保醒目
-          if (errorMsg.includes('签到失败') || errorMsg.includes('会员状态') || errorMsg.includes('已有未完成') || errorMsg.includes('请先check-out')) {
-            setCheckInError(errorMsg);
-          } else {
-            message.error(errorMsg);
-          }
-          
-          setProcessing(false);
-          setScannedData(null);
-          // 重新启动扫描
-          setTimeout(() => {
-            startScanning();
-          }, 800); // 稍长一点的延迟，让管理员看清错误
-        }
-      } else {
-        // Check-out
-        const pendingSession = await getPendingVisitSession(userId);
-        if (!pendingSession) {
-          message.error(t('scanner.noActiveSession'));
-          setProcessing(false);
-          setScannedData(null);
-          // 重新启动扫描
-          setTimeout(() => {
-            startScanning();
-          }, 500);
-          return;
-        }
-
-        const result = await completeVisitSession(pendingSession.id, adminUser.id, adminUser.storeId);
-        if (result.success) {
-          message.success(t('scanner.checkoutSuccess', { points: result.pointsDeducted || 0 }));
-          onSuccess?.();
-        } else {
-          message.error(result.error || t('common.checkoutFailed'));
-          setProcessing(false);
-          setScannedData(null);
-          // 重新启动扫描
-          setTimeout(() => {
-            startScanning();
-          }, 500);
-        }
+        setCheckInError(t('scanner.visitStoreMismatch', {
+          visitStore: pendingSession.storeName || pendingSession.storeId,
+          selectedStore: selectedStore?.name || currentStoreId,
+        }));
+        processingRef.current = false;
+        setProcessing(false);
+        setScannedData(null);
+        setTimeout(() => startScanning(), 800);
+        return;
       }
+      const member = fullUser || ({
+        id: userId,
+        memberId,
+        displayName: userResult.user.displayName || memberId,
+        email: '',
+        role: 'member',
+      } as User);
+
+      setScannedMember({
+        user: member,
+        pendingSession,
+        action: pendingSession ? 'checkout' : 'checkin',
+      });
+      setCheckInError(null);
+      processingRef.current = false;
+      setProcessing(false);
     } catch (error: any) {
-      message.error(error.message || t('scanner.processFailed'));
+      console.error('[QRScanner] Failed to process member:', error);
+      message.error(t('scanner.processFailed'));
+      processingRef.current = false;
       setProcessing(false);
       setScannedData(null);
       // 重新启动扫描
@@ -357,18 +354,71 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
     }
   };
 
-  // 点击屏幕聚焦
+  const resetScanner = () => {
+    processingRef.current = false;
+    setProcessing(false);
+    setScannedData(null);
+    setScannedMember(null);
+    setCheckInError(null);
+    setTimeout(() => startScanning(), 100);
+  };
 
-  // 手动输入memberId
-  const handleManualInput = () => {
-    if (mode === 'checkin' && !selectedStoreId) {
+  const confirmVisitAction = async () => {
+    if (!scannedMember || !adminUser?.id || processingRef.current) return;
+
+    const currentStoreId = selectedStoreIdRef.current;
+    if (scannedMember.action === 'checkin' && !currentStoreId) {
       message.warning(t('scanner.storeRequired'));
       return;
     }
-    const memberId = prompt(t('scanner.enterMemberNumber'));
-    if (memberId) {
-      handleScanResult(memberId);
+
+    processingRef.current = true;
+    setProcessing(true);
+    try {
+      if (scannedMember.action === 'checkin') {
+        const selectedStore = storesRef.current.find(store => store.id === currentStoreId);
+        const result = await createVisitSession(
+          scannedMember.user.id,
+          adminUser.id,
+          currentStoreId!,
+          selectedStore?.name || '',
+          scannedMember.user.displayName
+        );
+        if (!result.success) {
+          throw new Error(localizeVisitError(result.error, 'scanner.checkinFailed'));
+        }
+        message.success(t('scanner.checkinSuccess', { sessionId: result.sessionId }));
+      } else {
+        const result = await completeVisitSession(
+          scannedMember.pendingSession!.id,
+          adminUser.id,
+          scannedMember.pendingSession!.storeId
+        );
+        if (!result.success) {
+          throw new Error(localizeVisitError(result.error, 'common.checkoutFailed'));
+        }
+        message.success(t('scanner.checkoutSuccess', { points: result.pointsDeducted || 0 }));
+      }
+      onSuccess?.();
+    } catch (error: any) {
+      const errorMessage = error?.message || t('scanner.processFailed');
+      setCheckInError(errorMessage);
+      message.error(errorMessage);
+      processingRef.current = false;
+      setProcessing(false);
     }
+  };
+
+  // 点击屏幕聚焦
+
+  const submitManualInput = async () => {
+    const memberId = manualMemberId.trim().toUpperCase();
+    if (!memberId) {
+      message.warning(t('scanner.memberIdRequired'));
+      return;
+    }
+    setManualMemberId('');
+    await handleScanResult(memberId);
   };
 
   useEffect(() => {
@@ -377,6 +427,9 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
       setCameraError(null);
       setRetrying(false);
       setCheckInError(null);
+      setScannedMember(null);
+      setManualMemberId('');
+      processingRef.current = false;
       // 延迟启动，确保DOM已渲染
       setTimeout(() => {
         startScanning();
@@ -421,8 +474,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         </div>
       )}
       
-      {mode === 'checkin' && (
-        <div style={{ textAlign: 'left', marginBottom: 12 }}>
+      {(!scannedMember || scannedMember.action === 'checkin') && (
+        <div style={{ textAlign: 'left', margin: '0 4px 12px' }}>
           <Text style={{ display: 'block', color: 'rgba(255,255,255,0.85)', marginBottom: 6 }}>
             {t('scanner.store')}
           </Text>
@@ -435,7 +488,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
             options={stores.map(store => ({ value: store.id, label: store.name }))}
             placeholder={t('scanner.selectStore')}
             loading={storesLoading}
-            disabled={processing || (!isSuperAdmin && stores.length <= 1)}
+            disabled={processing || stores.length === 1}
             style={{ width: '100%' }}
             className="points-config-form"
             popupClassName="points-config-form"
@@ -448,13 +501,100 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
           <div style={{ padding: '24px 0' }}>
             <CheckCircleOutlined style={{ fontSize: 48, color: '#34d399', marginBottom: 16 }} />
             <Text style={{ display: 'block', color: '#FFFFFF', fontSize: 14 }}>
-              {mode === 'checkin' ? t('scanner.checkingStatus') : t('scanner.fetchingRecords')}
+              {t('scanner.checkingStatus')}
             </Text>
             {scannedData && (
               <Text type="secondary" style={{ display: 'block', marginTop: 8, fontSize: 12, color: 'rgba(255, 255, 255, 0.45)' }}>
-                扫描到: {scannedData.substring(0, 30)}...
+                {t('scanner.scannedValue', { value: `${scannedData.substring(0, 30)}...` })}
               </Text>
             )}
+          </div>
+        ) : scannedMember ? (
+          <div style={{ textAlign: 'left', paddingTop: 8 }}>
+            <div style={{
+              padding: 16,
+              border: '1px solid rgba(244, 175, 37, 0.45)',
+              borderRadius: 12,
+              background: 'rgba(255, 255, 255, 0.04)'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+                <Avatar
+                  size={54}
+                  src={scannedMember.user.profile?.avatar || scannedMember.user.photoURL}
+                  icon={<UserOutlined />}
+                  style={{ background: 'linear-gradient(135deg, #FDE08D, #C48D3A)', color: '#111' }}
+                />
+                <div style={{ minWidth: 0 }}>
+                  <Text style={{ display: 'block', color: '#fff', fontSize: 17, fontWeight: 700 }}>
+                    {scannedMember.user.displayName || t('scanner.member')}
+                  </Text>
+                  <Text style={{ color: 'rgba(255,255,255,0.6)' }}>
+                    {t('scanner.memberId')}: {scannedMember.user.memberId || '-'}
+                  </Text>
+                </div>
+              </div>
+
+              <Space size={[6, 6]} wrap style={{ marginBottom: 12 }}>
+                <Tag color={scannedMember.user.status === 'active' ? 'green' : 'default'}>
+                  {t(`scanner.statuses.${scannedMember.user.status || 'active'}`)}
+                </Tag>
+                <Tag color="gold">{t(`scanner.roles.${scannedMember.user.role}`)}</Tag>
+              </Space>
+
+              {(scannedMember.user.email || scannedMember.user.profile?.phone || scannedMember.user.phone) && (
+                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>
+                  {scannedMember.user.email && <div>{scannedMember.user.email}</div>}
+                  {(scannedMember.user.profile?.phone || scannedMember.user.phone) && (
+                    <div>{scannedMember.user.profile?.phone || scannedMember.user.phone}</div>
+                  )}
+                </div>
+              )}
+
+              <div style={{
+                padding: 12,
+                borderRadius: 8,
+                background: scannedMember.action === 'checkin'
+                  ? 'rgba(82, 196, 26, 0.12)'
+                  : 'rgba(250, 173, 20, 0.12)',
+                border: `1px solid ${scannedMember.action === 'checkin'
+                  ? 'rgba(82, 196, 26, 0.35)'
+                  : 'rgba(250, 173, 20, 0.35)'}`
+              }}>
+                <Text style={{ display: 'block', color: '#fff', fontWeight: 700 }}>
+                  {scannedMember.action === 'checkin'
+                    ? t('scanner.noActiveVisit')
+                    : t('scanner.activeVisitFound')}
+                </Text>
+                {scannedMember.pendingSession && (
+                  <Text style={{ color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+                    {scannedMember.pendingSession.storeName || '-'} · {scannedMember.pendingSession.checkInAt.toLocaleString(i18n.language)}
+                  </Text>
+                )}
+              </div>
+            </div>
+
+            <Space style={{ display: 'flex', marginTop: 16 }}>
+              <Button onClick={resetScanner} disabled={processing} style={{ flex: 1 }}>
+                {t('scanner.scanAgain')}
+              </Button>
+              <Button
+                type="primary"
+                icon={scannedMember.action === 'checkin' ? <LoginOutlined /> : <LogoutOutlined />}
+                onClick={confirmVisitAction}
+                loading={processing}
+                style={{
+                  flex: 1,
+                  background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
+                  border: 'none',
+                  color: '#111',
+                  fontWeight: 700
+                }}
+              >
+                {scannedMember.action === 'checkin'
+                  ? t('scanner.confirmCheckin')
+                  : t('scanner.confirmCheckout')}
+              </Button>
+            </Space>
           </div>
         ) : cameraError ? (
           <div style={{ padding: '24px 0' }}>
@@ -476,17 +616,6 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
                 }}
               >
                 {t('common.retry')}
-              </Button>
-              <Button
-                onClick={handleManualInput}
-                style={{
-                  background: 'rgba(255, 255, 255, 0.05)',
-                  border: '1px solid rgba(255, 255, 255, 0.15)',
-                  color: '#FFFFFF',
-                  borderRadius: 8
-                }}
-              >
-                {t('scanner.manualInput')}
               </Button>
             </Space>
           </div>
@@ -514,64 +643,40 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
         )}
       </div>
 
-      <div style={{ marginTop: 24 }}>
-        <Space wrap style={{ justifyContent: 'center' }}>
-          <Button 
-            onClick={() => {
-              onModeChange('checkin');
-              setCheckInError(null);
-            }} 
-            disabled={processing} 
-            type={mode === 'checkin' ? 'primary' : 'default'}
-            style={mode === 'checkin' ? {
-              background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-              border: 'none',
-              color: '#111',
-              fontWeight: 700,
-              borderRadius: 8
-            } : {
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#FFFFFF',
-              borderRadius: 8
-            }}
-          >
-            Check-in
-          </Button>
-          <Button 
-            onClick={() => {
-              onModeChange('checkout');
-              setCheckInError(null);
-            }} 
-            disabled={processing} 
-            type={mode === 'checkout' ? 'primary' : 'default'}
-            style={mode === 'checkout' ? {
-              background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-              border: 'none',
-              color: '#111',
-              fontWeight: 700,
-              borderRadius: 8
-            } : {
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#FFFFFF',
-              borderRadius: 8
-            }}
-          >
-            Check-out
-          </Button>
-          <Button 
-            onClick={handleManualInput} 
+      {!scannedMember && <div style={{ marginTop: 24 }}>
+        <div style={{ display: 'flex', gap: 8, width: '100%', maxWidth: 420, margin: '0 auto' }}>
+          <Input
+            value={manualMemberId}
+            onChange={event => setManualMemberId(event.target.value.toUpperCase())}
+            onPressEnter={submitManualInput}
+            placeholder={t('scanner.memberIdPlaceholder', {
+              defaultValue: i18n.language.startsWith('zh') ? '输入会员编号' : 'Enter member ID'
+            })}
+            maxLength={20}
             disabled={processing}
+            className="points-config-form"
+            style={{ flex: 1, minWidth: 0 }}
+          />
+          <Button
+            onClick={submitManualInput}
+            disabled={processing || !manualMemberId.trim()}
             style={{
-              background: 'rgba(255, 255, 255, 0.05)',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              color: '#FFFFFF',
+              flexShrink: 0,
+              background: manualMemberId.trim()
+                ? 'linear-gradient(to right, #FDE08D, #C48D3A)'
+                : 'rgba(255, 255, 255, 0.05)',
+              border: manualMemberId.trim() ? 'none' : '1px solid rgba(255, 255, 255, 0.15)',
+              color: manualMemberId.trim() ? '#111' : 'rgba(255,255,255,0.45)',
+              fontWeight: 700,
               borderRadius: 8
             }}
           >
-            {t('scanner.manualInput')}
+            {t('scanner.findMember', {
+              defaultValue: t('common.search')
+            })}
           </Button>
+        </div>
+        <Space wrap style={{ justifyContent: 'center', marginTop: onClose ? 12 : 0 }}>
           {onClose && (
             <Button
               onClick={onClose}
@@ -587,7 +692,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
             </Button>
           )}
         </Space>
-      </div>
+      </div>}
     </div>
   );
 };
@@ -595,24 +700,18 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, mode, onMo
 interface QRScannerProps {
   visible: boolean;
   onClose: () => void;
-  mode: 'checkin' | 'checkout';
   onSuccess?: () => void;
 }
 
-export const QRScanner: React.FC<QRScannerProps> = ({ visible, onClose, mode: initialMode, onSuccess }) => {
+export const QRScanner: React.FC<QRScannerProps> = ({ visible, onClose, onSuccess }) => {
   const { t } = useTranslation();
-  const [mode, setQrScannerMode] = useState<'checkin' | 'checkout'>(initialMode);
-
-  useEffect(() => {
-    setQrScannerMode(initialMode);
-  }, [initialMode]);
 
   return (
     <Modal
       title={
         <span style={{ color: '#FFFFFF', fontSize: 17, fontWeight: 700 }}>
           <QrcodeOutlined style={{ marginRight: 8, color: '#FFD700' }} />
-          {mode === 'checkin' ? t('scanner.checkinScan') : t('scanner.checkoutScan')}
+          {t('scanner.memberScan')}
         </span>
       }
       open={visible}
@@ -645,8 +744,6 @@ export const QRScanner: React.FC<QRScannerProps> = ({ visible, onClose, mode: in
       {/* Pass active=visible to trigger camera start/stop */}
       <QRScannerView
         active={visible}
-        mode={mode}
-        onModeChange={setQrScannerMode}
         onSuccess={() => {
           onSuccess?.();
           onClose();
