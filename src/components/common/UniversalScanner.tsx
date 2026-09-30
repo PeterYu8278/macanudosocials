@@ -97,7 +97,7 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
             label: (
                 <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
                     <QrcodeOutlined style={{ marginRight: 4 }} />
-                    {t('scanner.scan')}
+                    {t('scanner.smartScan')}
                 </span>
             ),
             children: (
@@ -130,38 +130,33 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
     });
 
     const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
+    const themeStyles = getModalThemeStyles(isMobile);
 
     return (
         <Modal
-            title={
-                <span style={{
-                    backgroundImage: 'linear-gradient(to right, #FDE08D, #C48D3A)',
-                    WebkitBackgroundClip: 'text',
-                    backgroundClip: 'text',
-                    color: 'transparent',
-                    fontWeight: 700,
-                    fontSize: 18
-                }}>
-                    {t('scanner.smartScan')}
-                </span>
-            }
+            title={(
+                <Tabs
+                    activeKey={activeTab}
+                    onChange={setActiveTab}
+                    items={[...items].reverse().map(({ key, label }) => ({ key, label }))}
+                    style={{ paddingRight: 28 }}
+                    className="universal-scanner-tabs"
+                />
+            )}
             open={visible}
             onCancel={onClose}
             footer={null}
-            width={isMobile ? '90%' : 600}
+            width={isMobile ? 'calc(100% - 24px)' : 600}
             destroyOnHidden
-            styles={getModalThemeStyles(isMobile)}
+            styles={{
+                ...themeStyles,
+                content: { ...themeStyles?.content, padding: isMobile ? 16 : 20 },
+                header: { ...themeStyles?.header, borderBottom: 'none', paddingBottom: 0, marginBottom: 12 },
+                body: { ...themeStyles?.body, maxHeight: 'calc(85dvh - 80px)' },
+            }}
             centered
         >
-            <Tabs
-                activeKey={activeTab}
-                onChange={setActiveTab}
-                items={items}
-                centered
-                style={{
-                    background: 'transparent'
-                }}
-            />
+            {items.find(item => item.key === activeTab)?.children}
         </Modal>
     );
 };

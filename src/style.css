@@ -1134,6 +1134,79 @@ a:hover {
   padding-inline: 12px;
 }
 
+@property --member-border-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: true;
+}
+
+@keyframes member-border-travel {
+  to { --member-border-angle: 360deg; }
+}
+
+.member-card-shell {
+  isolation: isolate;
+  animation: member-border-travel 4s linear infinite;
+}
+
+.member-card-shell::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 20px;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--member-border-angle),
+    transparent 0% 35%, rgba(248, 223, 133, 0.35) 40%,
+    rgba(255, 245, 196, 0.85) 50%, rgba(248, 223, 133, 0.35) 60%,
+    transparent 65% 100%
+  );
+  filter: blur(16px);
+  transition: opacity 0.3s ease;
+}
+
+.member-card-shell.member-card-rotating::before {
+  opacity: 0;
+}
+
+.member-card-shell > .card-3d-effect {
+  z-index: 1;
+}
+
+.card-3d-effect::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  padding: 2px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: conic-gradient(
+    from var(--member-border-angle),
+    #a77a24 0%, #d4af37 25%, #f8df85 40%,
+    #fff5c4 50%, #f8df85 60%, #d4af37 75%, #a77a24 100%
+  );
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .member-card-shell {
+    animation: none;
+  }
+}
+
+.universal-scanner-tabs > .ant-tabs-nav {
+  margin-bottom: 0;
+}
+
+.universal-scanner-tabs .ant-tabs-tab {
+  padding: 8px 0;
+}
+
 .redemptions-mobile-list {
   display: grid;
   gap: 10px;

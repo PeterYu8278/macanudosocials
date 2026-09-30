@@ -729,12 +729,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
           </div>
         ) : scannedMember ? (
           <div style={{ textAlign: 'left', paddingTop: 8 }}>
-            <div style={{
-              padding: 16,
-              border: '1px solid rgba(244, 175, 37, 0.45)',
-              borderRadius: 12,
-              background: 'rgba(255, 255, 255, 0.04)'
-            }}>
+            <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
                 <Avatar
                   size={54}
@@ -760,7 +755,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
               </Space>
 
               {(scannedMember.user.email || scannedMember.user.profile?.phone || scannedMember.user.phone) && (
-                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>
+                <div style={{ color: 'rgba(255,255,255,0.72)', fontSize: 13, lineHeight: 1.7, marginBottom: 12, overflowWrap: 'anywhere' }}>
                   {scannedMember.user.email && <div>{scannedMember.user.email}</div>}
                   {(scannedMember.user.profile?.phone || scannedMember.user.phone) && (
                     <div>{scannedMember.user.profile?.phone || scannedMember.user.phone}</div>
@@ -769,14 +764,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
               )}
 
               <div style={{
-                padding: 12,
-                borderRadius: 8,
-                background: scannedMember.action === 'checkin'
-                  ? 'rgba(82, 196, 26, 0.12)'
-                  : 'rgba(250, 173, 20, 0.12)',
-                border: `1px solid ${scannedMember.action === 'checkin'
-                  ? 'rgba(82, 196, 26, 0.35)'
-                  : 'rgba(250, 173, 20, 0.35)'}`
+                padding: '12px 0',
+                borderTop: '1px solid rgba(255,255,255,0.12)',
               }}>
                 <Text style={{ display: 'block', color: '#fff', fontWeight: 700 }}>
                   {scannedMember.action === 'checkin'
@@ -838,10 +827,8 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
               {scannedMember.pendingSession && (
                 <div style={{
                   marginTop: 12,
-                  padding: 12,
-                  borderRadius: 8,
-                  border: '1px solid rgba(244, 175, 37, 0.3)',
-                  background: 'rgba(0, 0, 0, 0.18)'
+                  paddingTop: 12,
+                  borderTop: '1px solid rgba(255,255,255,0.12)',
                 }}>
                   <Text style={{ display: 'block', color: '#FDE08D', fontWeight: 700, marginBottom: 8 }}>
                     <GiftOutlined style={{ marginRight: 6 }} />

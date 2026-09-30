@@ -90,6 +90,11 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   const [touchEnd, setTouchEnd] = useState<number | null>(null)
   // QR code enlarged display state
   const [qrModalVisible, setQrModalVisible] = useState(false)
+  const referralOpenTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => () => {
+    if (referralOpenTimer.current) clearTimeout(referralOpenTimer.current)
+  }, [])
   // Used to track previous check-in status
   const prevHasPendingSessionRef = useRef<boolean | null>(null)
   // Used to mark if it's the first callback
@@ -290,6 +295,18 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
     }
   }
 
+  const openReferralWithRotation = (direction: 'left' | 'right') => {
+    if (isRotating || !enableQrModal) return
+    setRotationDirection(direction)
+    setIsRotating(true)
+    setQrModalVisible(true)
+    const delay = window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 600
+    referralOpenTimer.current = setTimeout(() => {
+      setIsRotating(false)
+      referralOpenTimer.current = null
+    }, delay)
+  }
+
   // Touch event handlers
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchEnd(null)
@@ -303,11 +320,14 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   const handleTouchEnd = () => {
     if (!touchStart || !touchEnd || isRotating) return
 
-    // Removed logic to open QR modal on card click, only on QR area click
-
     const distance = touchStart - touchEnd
     const isLeftSwipe = distance > 50
     const isRightSwipe = distance < -50
+
+    if (showMemberCard && enableQrModal && (isLeftSwipe || isRightSwipe)) {
+      openReferralWithRotation(isLeftSwipe ? 'left' : 'right')
+      return
+    }
 
     if (isLeftSwipe) {
       // Left swipe: avatar disappear from left to right, card appear from left to right
@@ -328,11 +348,14 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
   const handleClick = (e: React.MouseEvent) => {
     if (isRotating) return
 
-    // Removed QR click detection from parent, handled by child directly
-
     const rect = e.currentTarget.getBoundingClientRect()
     const clickX = e.clientX - rect.left
     const centerX = rect.width / 2
+
+    if (showMemberCard && enableQrModal) {
+      openReferralWithRotation(clickX < centerX ? 'left' : 'right')
+      return
+    }
 
     if (clickX < centerX) {
       // Click left: avatar disappear from left to right, card appear from left to right
@@ -380,7 +403,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
 
       {/* Avatar/Member Card Toggle */}
       <div
-        className={className}
+        className={`${className} ${showMemberCard ? 'member-card-shell' : ''} ${isRotating ? 'member-card-rotating' : ''}`}
         style={{
           position: 'relative',
           display: 'inline-block',
@@ -395,6 +418,17 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
         onClick={handleClick}
+        role="button"
+        tabIndex={0}
+        aria-label={showMemberCard && enableQrModal ? t('profile.myReferralCode') : t('usersAdmin.clickToViewMemberCard')}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || isRotating) return
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault()
+            if (showMemberCard && enableQrModal) openReferralWithRotation('right')
+            else onToggleMemberCard(!showMemberCard)
+          }
+        }}
         onMouseEnter={(e) => {
           if (!isRotating) {
             e.currentTarget.style.transform = showMemberCard ? 'scale(1.05)' : 'scale(1.02)'
@@ -414,6 +448,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
               position: 'relative',
               borderRadius: 20,
               background: 'linear-gradient(145deg, #1A1A1A 0%, #0A0A0A 100%)',
+              backgroundColor: '#101010',
               backgroundImage: `url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100"><defs><pattern id="p" width="10" height="10" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><path d="M0 0h5v5H0z" fill="%23D4AF37" fill-opacity="0.05"/></pattern></defs><rect width="100" height="100" fill="url(%23p)"/></svg>')`,
               border: '1px solid rgba(212, 175, 55, 0.25)',
               overflow: 'hidden',
@@ -430,15 +465,12 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
               transition: 'all 0.6s cubic-bezier(0.4, 0, 0.2, 1)',
               transformOrigin: 'center center',
               animation: isRotating
-                ? `cardSlideIn${rotationDirection === 'left' ? 'Left' : 'Right'} 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards`
+                ? `${qrModalVisible && enableQrModal ? 'avatarSlideOut' : 'cardSlideIn'}${rotationDirection === 'left' ? 'Left' : 'Right'} 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards`
                 : 'none',
               // 3D shadow effect
               boxShadow: `
                 0px 15px 35px rgba(0,0,0,0.5), 
-                0px 5px 15px rgba(0,0,0,0.4),
-                0 0 20px rgba(212, 175, 55, 0.3),
-                0 0 40px rgba(212, 175, 55, 0.2),
-                0 0 60px rgba(212, 175, 55, 0.1)
+                0px 5px 15px rgba(0,0,0,0.4)
               `
             }}
             onMouseEnter={(e) => {
@@ -446,10 +478,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                 e.currentTarget.style.transform = 'translateY(-5px) rotateX(5deg) rotateY(2deg)';
                 e.currentTarget.style.boxShadow = `
                   0px 25px 45px rgba(0,0,0,0.6), 
-                  0px 10px 25px rgba(0,0,0,0.5),
-                  0 0 30px rgba(212, 175, 55, 0.4),
-                  0 0 60px rgba(212, 175, 55, 0.3),
-                  0 0 90px rgba(212, 175, 55, 0.2)
+                  0px 10px 25px rgba(0,0,0,0.5)
                 `;
               }
             }}
@@ -458,10 +487,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                 e.currentTarget.style.transform = 'perspective(1000px) rotateY(0deg)';
                 e.currentTarget.style.boxShadow = `
                   0px 15px 35px rgba(0,0,0,0.5), 
-                  0px 5px 15px rgba(0,0,0,0.4),
-                  0 0 20px rgba(212, 175, 55, 0.3),
-                  0 0 40px rgba(212, 175, 55, 0.2),
-                  0 0 60px rgba(212, 175, 55, 0.1)
+                  0px 5px 15px rgba(0,0,0,0.4)
                 `;
               }
             }}
@@ -500,7 +526,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
                   onClick={(e) => {
                     e.stopPropagation();
                     if (enableQrModal) {
-                      setQrModalVisible(true);
+                      openReferralWithRotation('right');
                     }
                   }}
                   onDragStart={(e) => e.preventDefault()}
@@ -732,7 +758,15 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
         centered
         width={420}
         styles={{
+          mask: {
+            backgroundColor: 'rgba(0, 0, 0, 0.55)',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)',
+          },
           content: {
+            animation: isRotating
+              ? `cardSlideIn${rotationDirection === 'left' ? 'Left' : 'Right'} 0.6s cubic-bezier(0.4, 0, 0.2, 1) forwards`
+              : 'none',
             background: 'linear-gradient(135deg, #FDE08D 0%, #C48D3A 50%, #D4AF37 100%)',
             borderRadius: '12px',
             padding: '1px',
@@ -751,7 +785,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
           }
         }}
         style={{
-          background: 'rgba(0, 0, 0, 0.8)'
+          background: 'transparent'
         }}
       >
         <div style={{
