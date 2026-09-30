@@ -1199,6 +1199,17 @@ a:hover {
   }
 }
 
+.universal-scanner-modal .ant-modal-body,
+.qr-scanner-scroll {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.universal-scanner-modal .ant-modal-body::-webkit-scrollbar,
+.qr-scanner-scroll::-webkit-scrollbar {
+  display: none;
+}
+
 .universal-scanner-tabs > .ant-tabs-nav {
   margin-bottom: 0;
 }

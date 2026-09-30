@@ -134,6 +134,7 @@ export const UniversalScanner: React.FC<UniversalScannerProps> = ({
 
     return (
         <Modal
+            className="universal-scanner-modal"
             title={(
                 <Tabs
                     activeKey={activeTab}

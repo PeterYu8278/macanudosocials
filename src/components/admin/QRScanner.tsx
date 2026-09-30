@@ -664,7 +664,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
   };
 
   return (
-    <div style={{
+    <div className="qr-scanner-scroll" style={{
       textAlign: 'center',
       display: 'flex',
       flexDirection: 'column',
