@@ -16,6 +16,7 @@ import { collection, query as firestoreQuery, where, getDocs, limit as firestore
 import { getOrdersPaginated } from '../../../services/firebase/paginatedQueries'
 import { usePaginatedData } from '../../../hooks/usePaginatedData'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
+import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useTranslation } from 'react-i18next'
 import { filterOrders, sortOrders, getStatusColor, getStatusText, getUserName, getUserPhone } from './helpers'
@@ -29,6 +30,7 @@ const { Search } = Input
 const { Option } = Select
 
 const AdminOrders: React.FC = () => {
+  const tableScroll = useVirtualTableScroll(1600)
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const { isSuperAdmin, user: authUser } = useAuthStore()
@@ -606,10 +608,7 @@ const AdminOrders: React.FC = () => {
                           loading={loading || paginatedLoading}
                           rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
                           virtual={filteredSorted.length > 50}
-                          scroll={{
-                            y: 'calc(100vh - 350px)',
-                            x: 'max-content'
-                          }}
+                          scroll={tableScroll}
 
                           pagination={{
                             current: pagination.current,

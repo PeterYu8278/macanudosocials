@@ -19,6 +19,7 @@ import { doc, setDoc, getDoc, getDocFromCache, getDocFromServer, collection, get
 import { auth, db } from '../../config/firebase';
 import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
+import { loginPhoneWithPassword } from './phoneLogin';
 import { normalizePhoneNumber, identifyInputType } from '../../utils/phoneNormalization';
 import { generateMemberId, getUserByMemberId } from '../../utils/memberId';
 
@@ -247,23 +248,7 @@ export const loginWithEmailOrPhone = async (identifier: string, password: string
       return { success: false, error: new Error('手机号格式无效') } as { success: false; error: Error }
       }
     
-    // 查找 Firestore 中绑定该手机号的用户（使用标准化格式）
-    const usersRef = collection(db, 'users')
-    const q = query(usersRef, where('profile.phone', '==', normalizedPhone), limit(1))
-    const snap = await getDocs(q)
-    
-      if (snap.empty) {
-      return { success: false, error: new Error('未找到绑定该手机号的账户') } as { success: false; error: Error }
-      }
-    
-    const userDoc = snap.docs[0]
-    const email = (userDoc.data() as any)?.email
-    
-      if (!email) {
-      return { success: false, error: new Error('该手机号未绑定邮箱账户') } as { success: false; error: Error }
-    }
-    
-    return await loginUser(email, password)
+    return await loginPhoneWithPassword(normalizedPhone, password)
   } catch (error) {
     const err = error as any
     return { success: false, error: err as Error } as { success: false; error: Error }

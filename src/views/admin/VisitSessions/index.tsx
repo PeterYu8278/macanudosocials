@@ -14,6 +14,7 @@ import {
 // 不再使用服务端分页，改为加载所有数据并使用客户端分页
 import { getCigars } from '../../../services/firebase/firestore';
 import { getUserDisplayNames } from '../../../services/firebase/userDisplayNames';
+import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll';
 import { getAllStores } from '../../../services/firebase/stores';
 import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession, getAllRedemptionRecords } from '../../../services/firebase/redemption';
 import { useAuthStore } from '../../../store/modules/auth';
@@ -103,6 +104,7 @@ const VisitSessionsPage: React.FC = () => {
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  const tableScroll = useVirtualTableScroll();
   useEffect(() => {
     let cancelled = false;
     const records = [...allRedemptionRecords, ...Array.from(redemptionRecords.values()).flat()];
@@ -674,10 +676,7 @@ const VisitSessionsPage: React.FC = () => {
                           rowKey="displayRowId"
                           loading={loading}
                           virtual={sessionDisplayRows.length > 50}
-                          scroll={{
-                            y: 'calc(100vh - 350px)', // 启用虚拟滚动
-                            x: 'max-content'
-                          }}
+                          scroll={tableScroll}
                           pagination={{
                             pageSize: isMobile ? 10 : 20,
                             total: sessionDisplayRows.length,

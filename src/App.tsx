@@ -14,6 +14,7 @@ import { saveAppConfigToIndexedDB } from './utils/indexedDB'
 import { PageLoading } from './components/common/LoadingSpinner'
 import OneSignalIntegration from './components/common/OneSignalIntegration'
 import NotificationOpenTracker from './components/common/NotificationOpenTracker'
+import AppMessageBridge from './components/common/AppMessageBridge'
 import { isFeatureVisible } from './services/firebase/featureVisibility'
 
 // --- 前端页面 (Lazy Loaded) ---
@@ -397,6 +398,7 @@ function App() {
   return (
     <Router>
       <AntApp>
+        <AppMessageBridge />
         <OneSignalIntegration />
         <NotificationOpenTracker />
         <AppContent />

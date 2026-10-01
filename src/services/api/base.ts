@@ -3,7 +3,7 @@
  * 提供统一的 API 调用接口和错误处理
  */
 
-import { message } from 'antd'
+import { getAppMessage } from '../../utils/appMessage'
 import i18n from '../../i18n'
 
 /**
@@ -115,12 +115,13 @@ export async function apiCall<T>(
   config?: ApiConfig
 ): Promise<ApiResponse<T>> {
   const finalConfig = { ...DEFAULT_CONFIG, ...config }
+  const message = getAppMessage()
   let loadingHide: (() => void) | null = null
 
   try {
     // 显示加载提示
     if (finalConfig.showLoading) {
-      loadingHide = message.loading(i18n.t('common.loading'), 0)
+      loadingHide = message?.loading(i18n.t('common.loading'), 0) || null
     }
 
     // 执行 API 调用（带重试）
@@ -149,7 +150,7 @@ export async function apiCall<T>(
 
         // 显示成功提示
         if (finalConfig.showSuccess) {
-          message.success(finalConfig.successMessage || i18n.t('common.operationSuccess'))
+          message?.success(finalConfig.successMessage || i18n.t('common.operationSuccess'))
         }
 
         return {
@@ -198,7 +199,7 @@ export async function apiCall<T>(
 
     // 显示错误提示
     if (finalConfig.showError) {
-      message.error(finalConfig.errorMessage || apiError.message)
+      message?.error(finalConfig.errorMessage || apiError.message)
     }
 
     return {

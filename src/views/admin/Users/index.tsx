@@ -12,6 +12,7 @@ const { Option } = Select
 
 import { getUsers, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
+import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import type { User, Event, Order } from '../../../types'
 import dayjs from 'dayjs'
@@ -45,6 +46,7 @@ const glassmorphismInputStyle = {
 }
 
 const AdminUsers: React.FC = () => {
+  const tableScroll = useVirtualTableScroll()
   const { t, i18n } = useTranslation()
   const { modal, message } = App.useApp() // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const { user: currentUser } = useAuthStore()
@@ -751,10 +753,7 @@ const AdminUsers: React.FC = () => {
                       selectedRowKeys,
                       onChange: setSelectedRowKeys,
                     }}
-                    scroll={{
-                      y: isMobile ? 'calc(100vh - 250px)' : 'calc(100vh - 350px)',
-                      x: 'max-content'
-                    }}
+                    scroll={tableScroll}
                     pagination={{
                       pageSize: isMobile ? 10 : 20,
                       total: filteredUsers.length,

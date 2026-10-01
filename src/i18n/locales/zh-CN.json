@@ -238,6 +238,9 @@
     "noData": "暂无数据"
   },
   "auth": {
+    "phoneLoginInvalidCredentials": "手机号或密码不正确",
+    "phoneLoginTooManyAttempts": "尝试次数过多，请在5分钟后重试",
+    "phoneLoginUnavailable": "手机号登录暂时不可用，请稍后重试",
     "login": "登录",
     "security": "安全设置",
     "emailPlaceholder": "请输入邮箱",

@@ -238,6 +238,9 @@
     "noData": "No data"
   },
   "auth": {
+    "phoneLoginInvalidCredentials": "Incorrect phone number or password",
+    "phoneLoginTooManyAttempts": "Too many attempts. Please try again in 5 minutes.",
+    "phoneLoginUnavailable": "Phone login is temporarily unavailable. Please try again later.",
     "login": "Login",
     "security": "Security",
     "emailPlaceholder": "Enter email",

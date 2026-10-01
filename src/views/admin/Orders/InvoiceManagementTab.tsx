@@ -12,6 +12,7 @@ import { InvoiceA4Render, mapBusinessDataToInvoiceModel } from '@/views/admin/In
 import { getStatusColor, getStatusText, getUserName, getUserPhone } from './helpers'
 import { OrderSkeleton } from '../../../components/features/admin/OrderSkeleton'
 import { SearchOutlined, CloseOutlined } from '@ant-design/icons'
+import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 
 type InvoiceFormValues = {
   invoiceNo: string
@@ -78,6 +79,7 @@ export const InvoiceManagementTab: React.FC<InvoiceManagementTabProps> = ({
   onRefresh,
   onViewOrder,
 }) => {
+  const tableScroll = useVirtualTableScroll(1800, 400)
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { user } = useAuthStore()
@@ -748,7 +750,7 @@ export const InvoiceManagementTab: React.FC<InvoiceManagementTabProps> = ({
               rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys, columnWidth: 50 }}
               virtual={filteredOrders.length > 50}
               pagination={{ pageSize: 20 }}
-              scroll={{ x: 'max-content', y: 'calc(100vh - 400px)' }}
+              scroll={tableScroll}
               style={{
                 background: 'transparent',
                 borderRadius: 12,
