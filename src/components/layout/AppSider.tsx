@@ -34,10 +34,12 @@ const { Text } = Typography
 
 interface AppSiderProps {
   onCollapseChange?: (collapsed: boolean) => void
+  forceCollapsed?: boolean
 }
 
-const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
+const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange, forceCollapsed = false }) => {
   const [collapsed, setCollapsed] = useState(false)
+  const effectiveCollapsed = forceCollapsed || collapsed
   const [featuresVisibility, setFeaturesVisibility] = useState<Record<string, boolean>>({})
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
   const navigate = useNavigate()
@@ -67,14 +69,18 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
   }, [])
 
   // 处理侧边栏收起/展开
-  const handleCollapseChange = (collapsed: boolean) => {
-    setCollapsed(collapsed)
-    onCollapseChange?.(collapsed)
+  const handleCollapseChange = (nextCollapsed: boolean) => {
+    if (forceCollapsed) return
+    setCollapsed(nextCollapsed)
+    onCollapseChange?.(nextCollapsed)
+  }
+
+  useEffect(() => {
     try {
-      const width = collapsed ? '64px' : '240px'
+      const width = effectiveCollapsed ? '64px' : '240px'
       document.documentElement.style.setProperty('--sider-width', width)
     } catch { }
-  }
+  }, [effectiveCollapsed])
 
   // 前端菜单项
   const frontendMenuItemsBase = [
@@ -178,7 +184,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         items.push({ type: 'divider' })
         items.push({
           key: 'admin-section',
-          label: !collapsed ? t('navigation.adminSection') : '',
+          label: !effectiveCollapsed ? t('navigation.adminSection') : '',
           type: 'group',
           children: filteredAdminBase
         })
@@ -218,14 +224,14 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
       items.push({ type: 'divider' })
       items.push({
         key: 'developer-section',
-        label: !collapsed ? t('navigation.developerSection') : '',
+        label: !effectiveCollapsed ? t('navigation.developerSection') : '',
         type: 'group',
         children: developerItems
       })
     }
 
     return items
-  }, [frontendMenuItems, adminMenuItemsBase, featuresVisibility, isAdmin, isStoreAdmin, isSuperAdmin, isDeveloper, collapsed, t])
+  }, [frontendMenuItems, adminMenuItemsBase, featuresVisibility, isAdmin, isStoreAdmin, isSuperAdmin, isDeveloper, effectiveCollapsed, t])
 
   const handleMenuClick = ({ key }: { key: string }) => {
     navigate(key)
@@ -235,7 +241,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
     <Sider
       trigger={null}
       collapsible
-      collapsed={collapsed}
+      collapsed={effectiveCollapsed}
       width={240}
       collapsedWidth={64}
       className="cigar-sider-scroll"
@@ -265,12 +271,12 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
-        padding: collapsed ? '10px 8px' : '10px 12px',
+        padding: effectiveCollapsed ? '10px 8px' : '10px 12px',
         minHeight: 52,
         borderBottom: '1px solid #333333',
         position: 'relative'
       }}>
-        {!collapsed && (
+        {!effectiveCollapsed && (
           <div style={{ display: 'flex', alignItems: 'center', gap: '7px', minWidth: 0 }}>
             <img
               src={appConfig?.logoUrl || '/icons/icon-96x96.svg'}
@@ -299,8 +305,9 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange }) => {
         )}
         <Button
           type="text"
-          icon={collapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-          onClick={() => handleCollapseChange(!collapsed)}
+          icon={effectiveCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+          onClick={() => handleCollapseChange(!effectiveCollapsed)}
+          disabled={forceCollapsed}
           style={{
             fontSize: '16px',
             width: 28,

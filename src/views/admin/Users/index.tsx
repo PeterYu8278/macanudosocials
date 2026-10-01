@@ -1,6 +1,6 @@
 // 用户管理页面
 import React, { useEffect, useMemo, useState } from 'react'
-import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber, Tooltip } from 'antd'
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
@@ -109,7 +109,8 @@ const emptyBulkImportRow = (): BulkImportRow => ({
 })
 
 const AdminUsers: React.FC = () => {
-  const tableScroll = useVirtualTableScroll()
+  const virtualTableScroll = useVirtualTableScroll(980, 290)
+  const tableScroll = { ...virtualTableScroll, x: 'max-content' as const }
   const { t, i18n } = useTranslation()
   const { modal, message } = App.useApp() // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const { user: currentUser } = useAuthStore()
@@ -268,28 +269,24 @@ const AdminUsers: React.FC = () => {
     {
       title: 'ID',
       key: 'id_combined',
-      width: 140,
+      width: 100,
       render: (_: any, record: User) => (
-        <div>
-          <div style={{ fontWeight: 600, color: '#FDE08D' }}>
+        <Tooltip title={currentUser?.role === 'developer' ? `UID: ${record.id}` : record.memberId}>
+          <div style={{ fontWeight: 700, color: '#FDE08D', whiteSpace: 'nowrap' }}>
             {record.memberId || '-'}
           </div>
-          {currentUser?.role === 'developer' && (
-            <div style={{ fontSize: '10px', opacity: 0.5, fontFamily: 'monospace', marginTop: 2 }}>
-              {record.id}
-            </div>
-          )}
-        </div>
+        </Tooltip>
       ),
     },
     {
       title: t('usersAdmin.name'),
       dataIndex: 'displayName',
       key: 'displayName',
+      width: 180,
       render: (_: any, record: any) => (
         <div>
-          <div style={{ fontWeight: 600, color: '#FFFFFF' }}>{record.displayName || '-'}</div>
-          <div style={{ fontSize: 12, color: '#CCCCCC' }}>{(record as any)?.profile?.phone || ''}</div>
+          <div style={{ fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.displayName || '-'}</div>
+          <div style={{ fontSize: 11, color: '#CCCCCC', whiteSpace: 'nowrap' }}>{(record as any)?.profile?.phone || ''}</div>
         </div>
       ),
     },
@@ -297,13 +294,20 @@ const AdminUsers: React.FC = () => {
       title: t('usersAdmin.email'),
       dataIndex: 'email',
       key: 'email',
-      render: (val: string) => <span style={{ color: '#FFFFFF' }}>{val || '-'}</span>
+      width: 210,
+      ellipsis: true,
+      render: (val: string) => (
+        <Tooltip title={val}>
+          <span style={{ color: '#FFFFFF' }}>{val || '-'}</span>
+        </Tooltip>
+      )
     },
     ...(canManageDiscount ? [{
       title: t('usersAdmin.discount'),
       dataIndex: 'discount',
       key: 'discount',
-      width: 80,
+      width: 72,
+      responsive: ['xl'] as any,
       render: (_: any, record: any) => {
         const rate = record.discount?.rate
         return rate !== undefined && rate !== null ? (
@@ -315,6 +319,7 @@ const AdminUsers: React.FC = () => {
       title: t('usersAdmin.role'),
       dataIndex: 'role',
       key: 'role',
+      width: 105,
       render: (role: string) => {
         // ✅ VIP 标签使用金色渐变背景和黑色字体
         if (role === 'vip') {
@@ -324,7 +329,8 @@ const AdminUsers: React.FC = () => {
                 background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
                 color: '#000000',
                 border: 'none',
-                fontWeight: 600
+                fontWeight: 600,
+                marginInlineEnd: 0,
               }}
             >
               {getRoleText(role)}
@@ -333,7 +339,7 @@ const AdminUsers: React.FC = () => {
         }
         // 其他角色使用默认颜色
         return (
-          <Tag color={getRoleColor(role)}>
+          <Tag color={getRoleColor(role)} style={{ marginInlineEnd: 0 }}>
             {getRoleText(role)}
           </Tag>
         )
@@ -346,11 +352,12 @@ const AdminUsers: React.FC = () => {
       title: t('usersAdmin.status'),
       dataIndex: 'status',
       key: 'status',
+      width: 145,
       render: (_: any, record: any) => {
         const status = statusMap[record.id] || record.status || 'inactive'
         return (
-          <Space>
-            <Tag color={getStatusColor(status)}>
+          <Space size={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0, overflow: 'hidden' }}>
+            <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
               {getStatusText(status)}
             </Tag>
             <Switch
@@ -383,7 +390,8 @@ const AdminUsers: React.FC = () => {
     {
       title: t('usersAdmin.aiUsage'),
       key: 'aiUsageStats',
-      width: 120,
+      width: 100,
+      responsive: ['xl'] as any,
       render: (_: any, record: any) => {
         const scanCount = record.aiUsageStats?.cigarScanCount || 0;
         const lastScanAt = record.aiUsageStats?.lastCigarScanAt;
@@ -426,6 +434,8 @@ const AdminUsers: React.FC = () => {
     {
       title: t('usersAdmin.actions'),
       key: 'action',
+      width: 88,
+      fixed: 'right' as const,
       render: (_: any, record: any) => (
         <Space size="small" style={{ justifyContent: 'center', width: '100%' }}>
           <Button type="link" icon={<EyeOutlined />} size="small" onClick={() => {
@@ -745,14 +755,14 @@ const AdminUsers: React.FC = () => {
             {/* 桌面端：筛选区 */}
             {!isMobile && (
               <div style={{
-                marginBottom: 10,
-                padding: '16px',
+                marginBottom: 8,
+                padding: 12,
                 background: 'rgba(255, 255, 255, 0.05)',
                 borderRadius: 12,
                 border: '1px solid rgba(244, 175, 37, 0.6)',
                 backdropFilter: 'blur(10px)'
               }}>
-                <Space size="middle" wrap>
+                <Space size="small" wrap>
                   <Search
                     placeholder={t('usersAdmin.searchByNameOrEmail')}
                     allowClear
@@ -761,6 +771,7 @@ const AdminUsers: React.FC = () => {
                     value={keyword}
                     onChange={(e) => setKeyword(e.target.value)}
                     className="points-config-form"
+                    size="small"
                   />
                   <Select
                     allowClear
@@ -771,6 +782,7 @@ const AdminUsers: React.FC = () => {
                       setRoleFilter(v)
                     }}
                     className="points-config-form"
+                    size="small"
                   >
                     <Option value="superAdmin">{t('auth.superAdmin')}</Option>
                     <Option value="admin">{t('auth.admin')}</Option>
@@ -789,6 +801,7 @@ const AdminUsers: React.FC = () => {
                       setLevelFilter(v)
                     }}
                     className="points-config-form"
+                    size="small"
                   >
                     <Option value="bronze">{t('usersAdmin.bronzeMember')}</Option>
                     <Option value="silver">{t('usersAdmin.silverMember')}</Option>
@@ -804,11 +817,13 @@ const AdminUsers: React.FC = () => {
                       setStatusFilter(v)
                     }}
                     className="points-config-form"
+                    size="small"
                   >
                     <Option value="active">{t('usersAdmin.active')}</Option>
                     <Option value="inactive">{t('usersAdmin.inactive')}</Option>
                   </Select>
                   <Button
+                    size="small"
                     onClick={() => {
                       setKeyword('')
                       setRoleFilter(undefined)
@@ -840,6 +855,7 @@ const AdminUsers: React.FC = () => {
                   </button>
                   {currentUser?.role === 'developer' && (
                     <Button
+                      size="small"
                       icon={<UploadOutlined />}
                       onClick={() => setBulkImportOpen(true)}
                       style={{ background: 'rgba(244, 175, 37, 0.14)', border: '1px solid #C48D3A', color: '#FDE08D' }}
@@ -876,18 +892,22 @@ const AdminUsers: React.FC = () => {
 
             {/* 桌面：表格 */}
             {!isMobile && (
-              <div className="points-config-form">
+              <div className="points-config-form user-management-table">
                   <Table
                     columns={columns}
                     dataSource={filteredUsers}
                     rowKey="id"
                     loading={usersLoading}
                     virtual
+                    size="small"
                     rowSelection={{
+                      columnWidth: 42,
+                      fixed: true,
                       selectedRowKeys,
                       onChange: setSelectedRowKeys,
                     }}
                     scroll={tableScroll}
+                    tableLayout="fixed"
                     pagination={{
                       pageSize: isMobile ? 10 : 20,
                       total: filteredUsers.length,

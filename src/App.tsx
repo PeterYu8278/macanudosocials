@@ -60,11 +60,9 @@ const { Content } = Layout
 const AppContent: React.FC = () => {
   const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
   const location = useLocation()
-  const [isDesktop, setIsDesktop] = useState(() => {
-    if (typeof window === 'undefined') return true
-    if (typeof window.matchMedia !== 'function') return true
-    return window.matchMedia('(min-width: 992px)').matches
-  })
+  const [layoutWidth, setLayoutWidth] = useState(() => typeof window === 'undefined' ? 1200 : window.innerWidth)
+  const isDesktop = layoutWidth >= 992
+  const isTablet = layoutWidth >= 769 && layoutWidth < 992
   const [siderCollapsed, setSiderCollapsed] = useState(false)
   const [viewportHeight, setViewportHeight] = useState('100vh')
   const [guestPageVisible, setGuestPageVisible] = useState<boolean | null>(null)
@@ -94,31 +92,12 @@ const AppContent: React.FC = () => {
     }
   }, [authLoading, location.pathname, user])
 
-  // 响应式更新 isDesktop（监听窗口大小变化）
+  // Keep the app shell and sider on one shared set of breakpoints.
   useEffect(() => {
-    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return
-
-    const mediaQuery = window.matchMedia('(min-width: 992px)')
-    const handleChange = (e: MediaQueryListEvent | MediaQueryList) => {
-      setIsDesktop(e.matches)
-    }
-
-    // 初始化
-    handleChange(mediaQuery)
-
-    // 监听变化
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange)
-      return () => {
-        mediaQuery.removeEventListener('change', handleChange)
-      }
-    } else {
-      // 兼容旧版浏览器
-      mediaQuery.addListener(handleChange)
-      return () => {
-        mediaQuery.removeListener(handleChange)
-      }
-    }
+    const updateLayoutWidth = () => setLayoutWidth(window.innerWidth)
+    updateLayoutWidth()
+    window.addEventListener('resize', updateLayoutWidth)
+    return () => window.removeEventListener('resize', updateLayoutWidth)
   }, [])
 
   // 无需 padding 的页面（基础认证页面 + 商城页面 + 未登录首页 Landing）
@@ -132,9 +111,9 @@ const AppContent: React.FC = () => {
   const isLandingPage = !authLoading && !user && location.pathname === '/'
   const isClippedLayout = !isLandingPage && !isAuthPage
 
-  // 侧边栏显示逻辑：手机端商城页面隐藏，电脑端商城页面显示
-  // 逻辑：已登录 AND (是电脑端 OR 不是商城页面)
-  const showSider = !!(user && (isDesktop || location.pathname !== '/shop'))
+  const showSider = !!(user && (isDesktop || isTablet))
+  const effectiveSiderCollapsed = isTablet || siderCollapsed
+  const siderWidth = showSider ? (effectiveSiderCollapsed ? 64 : 240) : 0
 
   // 设置实际视口高度（适配移动设备地址栏）
   useEffect(() => {
@@ -297,11 +276,13 @@ const AppContent: React.FC = () => {
         flex: 1,
         overflow: isLandingPage ? 'visible' : 'hidden'
       }}>
-        {showSider && <AppSider onCollapseChange={setSiderCollapsed} />}
+        {showSider && <AppSider forceCollapsed={isTablet} onCollapseChange={setSiderCollapsed} />}
         <Layout style={{
           background: 'transparent',
-          marginLeft: showSider && isDesktop ? (siderCollapsed ? 64 : 240) : 0,
+          marginLeft: siderWidth,
           flex: 1,
+          minWidth: 0,
+          maxWidth: `calc(100vw - ${siderWidth}px)`,
           display: 'flex',
           flexDirection: 'column',
           overflow: isLandingPage ? 'visible' : 'hidden'
@@ -319,6 +300,8 @@ const AppContent: React.FC = () => {
               boxShadow: isLandingPage ? 'none' : '0 8px 32px rgba(0, 0, 0, 0.3)',
               backdropFilter: isLandingPage ? 'none' : 'blur(10px)',
               position: 'relative',
+              minWidth: 0,
+              maxWidth: '100%',
               overflow: isLandingPage ? 'visible' : (needsPadding ? 'auto' : 'hidden'),
               display: shouldCenter ? 'flex' : 'block',
               alignItems: shouldCenter ? 'center' : undefined,
@@ -336,7 +319,7 @@ const AppContent: React.FC = () => {
               pointerEvents: 'none'
             }} />
 
-            <div style={{ position: 'relative', zIndex: 1 }}>
+            <div style={{ position: 'relative', zIndex: 1, width: '100%', minWidth: 0 }}>
               <Suspense fallback={<PageLoading />}>
                 <Routes>
                   {/* 认证路由 */}

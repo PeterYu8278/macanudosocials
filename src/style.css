@@ -982,6 +982,58 @@ a:hover {
   color: rgba(255, 255, 255, 0.6) !important;
 }
 
+/* Compact operational table used by user management. */
+.user-management-table .ant-table-thead > tr > th,
+.user-management-table .ant-table-thead .ant-table-cell {
+  padding: 9px 10px !important;
+  line-height: 20px !important;
+  white-space: nowrap;
+}
+
+.user-management-table .ant-table-tbody > tr > td,
+.user-management-table .ant-table-row .ant-table-cell {
+  padding: 7px 10px !important;
+  line-height: 18px !important;
+}
+
+.user-management-table .ant-btn-sm {
+  width: 24px;
+  height: 24px;
+  padding-inline: 4px;
+}
+
+.user-management-table .ant-table-selection-column {
+  width: 42px !important;
+  min-width: 42px !important;
+  max-width: 42px !important;
+  padding-inline: 8px !important;
+}
+
+.user-management-table .ant-table-cell-fix-left,
+.user-management-table .ant-table-cell-fix-right {
+  background: #1d1912 !important;
+}
+
+.user-management-table .ant-table-cell-fix-right {
+  z-index: 4;
+  box-shadow: -8px 0 12px -10px rgba(0, 0, 0, 0.9);
+}
+
+.user-management-table .ant-table-thead .ant-table-cell-fix-left,
+.user-management-table .ant-table-thead .ant-table-cell-fix-right {
+  background: #332d22 !important;
+}
+
+.user-management-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
+.user-management-table .ant-table-row:hover .ant-table-cell-fix-right {
+  background: #292318 !important;
+}
+
+.user-management-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right,
+.user-management-table .ant-table-row-selected .ant-table-cell-fix-right {
+  background: #332914 !important;
+}
+
 .points-config-form .ant-select-selector {
   background: rgba(255, 255, 255, 0.1) !important;
   border-color: rgba(244, 175, 37, 0.6) !important;
