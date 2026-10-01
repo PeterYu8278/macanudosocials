@@ -1,7 +1,7 @@
 // 用户管理页面
 import React, { useEffect, useMemo, useState } from 'react'
 import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber } from 'antd'
-import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined } from '@ant-design/icons'
+import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
 import { ReferralTreeView } from '../../../components/admin/ReferralTreeView'
@@ -33,7 +33,7 @@ import { getModalThemeStyles, getModalWidth, getResponsiveModalConfig, modalButt
 import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
 import { collection, query, where, getDocs, limit, doc, setDoc } from 'firebase/firestore'
 import { UserSkeletonList } from '../../../components/features/admin/UserSkeleton'
-import { db } from '../../../config/firebase'
+import { auth, db } from '../../../config/firebase'
 import { generateMemberId } from '../../../utils/memberId'
 
 // CSS样式对象
@@ -53,6 +53,54 @@ const glassmorphismInputStyle = {
   backgroundSize: '100% 2px',
   backgroundRepeat: 'no-repeat',
   backgroundPosition: 'bottom'
+}
+
+type BulkImportRow = {
+  name: string
+  email: string
+  phone?: string
+  activationDate?: string
+  invitedCount: number
+  totalVisitHours: number
+  points: number
+  redeemedCigarCount: number
+}
+
+const parseDurationHours = (value: string) => {
+  const hours = Number(value.match(/(\d+(?:\.\d+)?)\s*Hours?/i)?.[1] || 0)
+  const minutes = Number(value.match(/(\d+)\s*Minutes?/i)?.[1] || 0)
+  return hours + minutes / 60
+}
+
+const parseBulkImport = (text: string): BulkImportRow[] => {
+  const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean)
+  if (!lines.length) return []
+  const delimiter = lines[0].includes('\t') ? '\t' : ','
+  const first = lines[0].split(delimiter).map(value => value.trim().toUpperCase())
+  const hasHeader = first.includes('NAME') && first.includes('EMAIL')
+  const headers = hasHeader ? first : ['NAME', 'EMAIL', 'PHONE NUMBER', 'DATE::TIME', 'FRIENDS INVITE', 'TOTAL SPEND', 'WALLET BALANCE', 'REDEEMED CIGAR']
+  const dataLines = hasHeader ? lines.slice(1) : lines
+  const indexOf = (names: string[]) => names.map(name => headers.indexOf(name)).find(index => index >= 0) ?? -1
+  const index = {
+    name: indexOf(['NAME']),
+    email: indexOf(['EMAIL']),
+    phone: indexOf(['PHONE NUMBER', 'PHONE']),
+    activationDate: indexOf(['DATE::TIME', 'ACTIVATION DATE']),
+    invited: indexOf(['FRIENDS INVITE', 'INVITED COUNT']),
+    duration: indexOf(['TOTAL SPEND', 'TOTAL VISIT HOURS']),
+    points: indexOf(['WALLET BALANCE', 'POINTS']),
+    redeemed: indexOf(['REDEEMED CIGAR', 'REDEEMED CIGARS']),
+  }
+  return dataLines.map(line => line.split(delimiter).map(value => value.trim())).map(values => ({
+    name: values[index.name] || '',
+    email: values[index.email] || '',
+    phone: values[index.phone] || undefined,
+    activationDate: values[index.activationDate] || undefined,
+    invitedCount: Number(values[index.invited] || 0) || 0,
+    totalVisitHours: parseDurationHours(values[index.duration] || ''),
+    points: Number(values[index.points] || 0) || 0,
+    redeemedCigarCount: Number(values[index.redeemed] || 0) || 0,
+  })).filter(row => row.name || row.email)
 }
 
 const AdminUsers: React.FC = () => {
@@ -81,6 +129,9 @@ const AdminUsers: React.FC = () => {
   const { item: resettingPassword, open: resettingPasswordOpen, openDrawer: openResettingPassword, closeDrawer: closeResettingPassword } = useDetailDrawer<User>()
   const [actionLoading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [bulkImportOpen, setBulkImportOpen] = useState(false)
+  const [bulkImportText, setBulkImportText] = useState('')
+  const [bulkImportLoading, setBulkImportLoading] = useState(false)
   const [deleting, setDeleting] = useState<null | User>(null)
   const [resettingPasswordLoading, setResettingPasswordLoading] = useState(false)
   const [form] = Form.useForm()
@@ -491,6 +542,42 @@ const AdminUsers: React.FC = () => {
     } catch { }
   }, [visibleCols])
 
+  const handleBulkImport = async () => {
+    const rows = parseBulkImport(bulkImportText)
+    if (!rows.length) {
+      message.warning(t('usersAdmin.bulkImportEmpty'))
+      return
+    }
+    const currentFirebaseUser = auth.currentUser
+    if (!currentFirebaseUser) {
+      message.error(t('usersAdmin.bulkImportFailed'))
+      return
+    }
+    setBulkImportLoading(true)
+    try {
+      const token = await currentFirebaseUser.getIdToken()
+      const response = await fetch('/.netlify/functions/bulk-create-users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ rows }),
+      })
+      const result = await response.json() as { createdCount?: number; failedCount?: number; error?: string }
+      if (!response.ok) throw new Error(result.error || t('usersAdmin.bulkImportFailed'))
+      if ((result.failedCount || 0) > 0) {
+        message.warning(t('usersAdmin.bulkImportPartial', { created: result.createdCount || 0, failed: result.failedCount || 0 }))
+      } else {
+        message.success(t('usersAdmin.bulkImportSuccess', { count: result.createdCount || 0 }))
+      }
+      await refreshUsers()
+      setBulkImportOpen(false)
+      setBulkImportText('')
+    } catch (error: any) {
+      message.error(error?.message || t('usersAdmin.bulkImportFailed'))
+    } finally {
+      setBulkImportLoading(false)
+    }
+  }
+
   return (
     <div style={{
       height: isMobile ? '90vh' : 'auto',
@@ -726,6 +813,15 @@ const AdminUsers: React.FC = () => {
                     <PlusOutlined />
                     {t('usersAdmin.addUser')}
                   </button>
+                  {currentUser?.role === 'developer' && (
+                    <Button
+                      icon={<UploadOutlined />}
+                      onClick={() => setBulkImportOpen(true)}
+                      style={{ background: 'rgba(244, 175, 37, 0.14)', border: '1px solid #C48D3A', color: '#FDE08D' }}
+                    >
+                      {t('usersAdmin.bulkImport')}
+                    </Button>
+                  )}
                 </Space>
               </div>
             )}
@@ -1555,6 +1651,32 @@ const AdminUsers: React.FC = () => {
             </Select>
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* Developer bulk import */}
+      <Modal
+        title={<span style={{ color: '#FFFFFF' }}>{t('usersAdmin.bulkImport')}</span>}
+        open={bulkImportOpen}
+        onCancel={() => { if (!bulkImportLoading) setBulkImportOpen(false) }}
+        onOk={handleBulkImport}
+        okText={t('usersAdmin.bulkImportCreate')}
+        confirmLoading={bulkImportLoading}
+        width={getModalWidth(isMobile, 760)}
+        styles={getModalThemeStyles(isMobile, true)}
+      >
+        <Typography.Paragraph style={{ color: 'rgba(255,255,255,0.72)', marginBottom: 12 }}>
+          {t('usersAdmin.bulkImportHint')}
+        </Typography.Paragraph>
+        <Input.TextArea
+          value={bulkImportText}
+          onChange={event => setBulkImportText(event.target.value)}
+          autoSize={{ minRows: 8, maxRows: 18 }}
+          placeholder={t('usersAdmin.bulkImportPlaceholder')}
+          disabled={bulkImportLoading}
+        />
+        <Typography.Text style={{ display: 'block', color: 'rgba(255,255,255,0.55)', marginTop: 8, fontSize: 12 }}>
+          {t('usersAdmin.bulkImportSecurity')}
+        </Typography.Text>
       </Modal>
 
       {/* 删除确认 */}
