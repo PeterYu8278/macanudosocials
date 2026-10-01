@@ -21,8 +21,11 @@ import {
   getAllInboundOrders,
   getAllOutboundOrders
 } from '../../../services/firebase/firestore'
-import { getAppConfig } from '../../../services/firebase/appConfig'
+import { getAllReloadRecords } from '../../../services/firebase/reload'
+import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
+import { getAllRedemptionRecords } from '../../../services/firebase/redemption'
 import { useAuthStore } from '../../../store/modules/auth'
+import { aggregateMemberReportMetrics } from '../../../utils/memberReport'
 import AuditLogTab from './AuditLogTab'
 
 const { Title, Text, Paragraph } = Typography
@@ -43,6 +46,16 @@ const AdminReports: React.FC = () => {
   const downloadExcel = async (data: any[], fileName: string, sheetName: string) => {
     const XLSX = await import('xlsx')
     const worksheet = XLSX.utils.json_to_sheet(data)
+    if (data.length > 0 && worksheet['!ref']) {
+      const headers = Object.keys(data[0])
+      worksheet['!autofilter'] = { ref: worksheet['!ref'] }
+      worksheet['!cols'] = headers.map(header => ({
+        wch: Math.min(36, Math.max(
+          header.length + 2,
+          ...data.map(row => String(row[header] ?? '').length + 2)
+        ))
+      }))
+    }
     const workbook = XLSX.utils.book_new()
     XLSX.utils.book_append_sheet(workbook, worksheet, sheetName)
     XLSX.writeFile(workbook, `${fileName}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`)
@@ -61,34 +74,43 @@ const AdminReports: React.FC = () => {
   const exportMembers = async () => {
     setExporting('members')
     try {
-      const [users, config] = await Promise.all([getUsers(), getAppConfig()])
-      
-      let exportUsers = users
-      const currentPlanId = config?.subscription?.planId || config?.subscription?.plan
-      const currentPlan = config?.subscription?.plans?.find(p => p.id === currentPlanId)
-      
-      if (currentPlan && currentPlan.maxMembers && users.length > currentPlan.maxMembers) {
-        // 按创建时间排序，保留最早的 maxMembers 个用户
-        exportUsers = [...users].sort((a, b) => {
-          const d1 = (a.createdAt as any)?.toDate?.() || a.createdAt
-          const d2 = (b.createdAt as any)?.toDate?.() || b.createdAt
-          return new Date(d1).getTime() - new Date(d2).getTime()
-        }).slice(0, currentPlan.maxMembers)
-        
-        message.info(t('reports.memberLimitInfo', { maxMembers: currentPlan.maxMembers, name: currentPlan.name }))
-      }
+      const [users, reloads, sessions, redemptions] = await Promise.all([
+        getUsers(),
+        getAllReloadRecords('completed'),
+        getAllVisitSessions(),
+        getAllRedemptionRecords(),
+      ])
 
-      const exportData = exportUsers.map(u => ({
-        'Member ID': u.memberId || '-',
-        'Name': u.displayName || '-',
-        'Email': u.email || '-',
-        'Phone': (u as any).phone || (u as any).profile?.phone || '-',
-        'Role': u.role || 'member',
-        'Level': u.membership?.level || 'bronze',
-        'Points': u.membership?.points || 0,
-        'Created At': u.createdAt ? dayjs((u.createdAt as any)?.toDate?.() || u.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'
-      }))
-      downloadExcel(exportData, 'Members_Report', 'Members')
+      const metricsByUser = aggregateMemberReportMetrics(users, reloads, sessions, redemptions)
+      const exportUsers = [...users].sort((a, b) => {
+        const firstCreatedAt = (a.createdAt as any)?.toDate?.() || a.createdAt
+        const secondCreatedAt = (b.createdAt as any)?.toDate?.() || b.createdAt
+        const dateDifference = new Date(firstCreatedAt || 0).getTime() - new Date(secondCreatedAt || 0).getTime()
+        if (dateDifference !== 0) return dateDifference
+        return String(a.memberId || a.displayName || a.id).localeCompare(String(b.memberId || b.displayName || b.id))
+      })
+
+      const exportData = exportUsers.map((u, index) => {
+        const metrics = metricsByUser.get(u.id)
+        return {
+          'No.': index + 1,
+          'Member ID': u.memberId || '-',
+          'Name': u.displayName || '-',
+          'Email': u.email || '-',
+          'Phone': (u as any).phone || (u as any).profile?.phone || '-',
+          'Role': u.role || 'member',
+          'Level': u.membership?.level || 'bronze',
+          'Current Points': u.membership?.points || 0,
+          'Total Reload (RM)': Number((metrics?.totalReloadAmount || 0).toFixed(2)),
+          'Total Reload Points': Number((metrics?.totalReloadPoints || 0).toFixed(2)),
+          'Visit Count': metrics?.visitCount || 0,
+          'Total Visit Hours': Number((metrics?.totalVisitHours || 0).toFixed(2)),
+          'Total Redeemed Cigars': metrics?.totalRedeemedCigars || 0,
+          'Total Referrals': metrics?.totalReferrals || 0,
+          'Created At': u.createdAt ? dayjs((u.createdAt as any)?.toDate?.() || u.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'
+        }
+      })
+      await downloadExcel(exportData, 'Members_Report', 'Members')
       message.success(t('messages.operationSuccess'))
     } catch (error) {
       console.error('Export members error:', error)
