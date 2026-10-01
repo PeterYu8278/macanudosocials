@@ -32,6 +32,8 @@ import { getAppConfig } from '../../../services/firebase/appConfig'
 import type { AppConfig } from '../../../types'
 import { CigarRatingBadge } from '../../../components/common/CigarRatingBadge'
 import { RoomBookingSection } from '../../../components/home/RoomBookingSection'
+import EventDetailsDrawer from '../../../components/common/EventDetailsDrawer'
+import { toDateOrNull } from '../../../utils/eventDisplay'
 import { hasPermission } from '../../../config/permissions'
 import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
 import { requestPushSubscription, syncPushSubscriptionToFirestore } from '../../../services/oneSignal'
@@ -88,6 +90,14 @@ const Home: React.FC = () => {
   )
   // Local copy of events to allow optimistic updates on registration
   const [events, setEvents] = useState<Event[]>([])
+  const [selectedEvent, setSelectedEvent] = useState<{ id: string; imageUrl: string } | null>(null)
+  const detailEvent = events.find(event => event.id === selectedEvent?.id) || null
+  const detailStart = toDateOrNull(detailEvent?.schedule?.startDate)
+  const detailEnd = toDateOrNull(detailEvent?.schedule?.endDate)
+  const detailStatus = detailEnd && new Date() > detailEnd
+    ? 'completed' : detailStart && new Date() >= detailStart ? 'ongoing' : 'upcoming'
+  const detailClosed = detailStatus === 'completed'
+    || !!detailEvent && ['completed', 'cancelled', 'draft'].includes(detailEvent.status)
   useEffect(() => { setEvents(fetchedEvents as Event[]) }, [fetchedEvents])
 
   const { data: cigars = [], loading: loadingCigars, error: cigarsError, refresh: refreshCigars } = useFirestoreQuery(
@@ -925,9 +935,24 @@ const Home: React.FC = () => {
                   const desc = (ev as any)?.description || ''
                   const img = (ev as any)?.coverImage || (ev as any)?.banner || 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMTYwIiBoZWlnaHQ9IjE2MCIgdmlld0JveD0iMCAwIDE2MCAxNjAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+CjxyZWN0IHdpZHRoPSIxNjAiIGhlaWdodD0iMTYwIiBmaWxsPSIjMzMzMzMzIi8+Cjx0ZXh0IHg9IjgwIiB5PSI4MCIgZm9udC1mYW1pbHk9IkFyaWFsLCBzYW5zLXNlcmlmIiBmb250LXNpemU9IjE0IiBmaWxsPSIjNjY2NjY2IiB0ZXh0LWFuY2hvcj0ibWlkZGxlIiBkeT0iLjNlbSI+RXZlbnQ8L3RleHQ+Cjwvc3ZnPgo='
                   return (
-                    <div key={ev.id} style={{ display: 'flex', gap: 16, alignItems: 'center', background: 'rgba(30,30,30,0.6)', padding: 16, borderRadius: 12, border: '1px solid rgba(255,215,0,0.2)' }}>
-                      <img src={ev.image || img} alt={name} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} />
-                      <div style={{ flex: 1 }}>
+                    <div
+                      key={ev.id}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setSelectedEvent({ id: ev.id, imageUrl: ev.image || img })}
+                      onKeyDown={event => {
+                        if (event.target !== event.currentTarget) return
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault()
+                          setSelectedEvent({ id: ev.id, imageUrl: ev.image || img })
+                        }
+                      }}
+                      style={{ display: 'flex', gap: 12, alignItems: 'center', background: 'rgba(30,30,30,0.6)', borderRadius: 12, border: '1px solid rgba(255,215,0,0.2)', overflow: 'hidden', cursor: 'pointer' }}
+                    >
+                      <div style={{ position: 'relative', width: '32%', maxWidth: 180, aspectRatio: '2/1', flexShrink: 0 }}>
+                        <img src={ev.image || img} alt={name} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0, padding: '12px 0', overflowWrap: 'anywhere' }}>
                         <div style={{ fontWeight: 600, color: '#f8f8f8' }}>{name}</div>
                         <div style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>{dateText}</div>
                         {desc && (
@@ -953,9 +978,14 @@ const Home: React.FC = () => {
                               color: '#0a0a0a',
                               fontWeight: 700,
                               minHeight: isMobile ? 44 : undefined,
+                              marginRight: 12,
+                              flexShrink: 0,
                               opacity: isPastDeadline ? 0.5 : 1
                             }}
-                            onClick={() => handleEventRegistration(ev.id, !!isRegistered)}
+                            onClick={event => {
+                              event.stopPropagation()
+                              handleEventRegistration(ev.id, !!isRegistered)
+                            }}
                           >
                             {isPastDeadline
                               ? t('events.registrationClosed')
@@ -976,6 +1006,17 @@ const Home: React.FC = () => {
 
 
 
+      <EventDetailsDrawer
+        event={detailEvent}
+        isMobile={isMobile}
+        imageUrl={selectedEvent?.imageUrl || ''}
+        statusText={t(`events.${detailStatus}`)}
+        closed={detailClosed}
+        closedText={t(detailStatus === 'completed' || detailEvent?.status === 'completed' ? 'events.completed' : 'events.registrationClosed')}
+        loading={detailEvent ? registeringEvents.has(detailEvent.id) : false}
+        onClose={() => setSelectedEvent(null)}
+        onRegister={event => handleEventRegistration(event.id, !!isUserRegistered(event))}
+      />
     </div>
   )
 }

@@ -14,6 +14,7 @@ import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { useAuthStore } from '../../store/modules/auth';
 import type { AuditLog, AuditLogModule, AuditLogAction } from '../../types';
+import { sanitizeForFirestore } from './core/sanitize';
 
 /**
  * 保存审计日志
@@ -42,7 +43,7 @@ export const saveAuditLog = async (params: {
       action: params.action,
       targetId: params.targetId,
       description: params.description,
-      details: params.details || null,
+      details: sanitizeForFirestore(params.details) ?? null,
       storeId: finalStoreId
     };
 

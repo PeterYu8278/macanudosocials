@@ -85,7 +85,8 @@ export const verifyReloadRecord = async (
   recordId: string,
   verifiedBy: string,
   verificationProof?: string,
-  adminNotes?: string
+  adminNotes?: string,
+  verifiedByName?: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     const recordDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
@@ -305,6 +306,7 @@ export const verifyReloadRecord = async (
       status: 'completed',
       verifiedAt: Timestamp.fromDate(now),
       verifiedBy,
+      ...(verifiedByName?.trim() && { verifiedByName: verifiedByName.trim() }),
       verificationProof: verificationProof || null,
       adminNotes: adminNotes || null,
       pointsRecordId: pointsRecord?.id || null,
@@ -357,7 +359,8 @@ export const cancelReloadRecord = async (
 export const rejectReloadRecord = async (
   recordId: string,
   rejectedBy: string,
-  adminNotes?: string
+  adminNotes?: string,
+  verifiedByName?: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     const recordDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
@@ -374,6 +377,7 @@ export const rejectReloadRecord = async (
     await updateDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId), {
       status: 'rejected',
       verifiedBy: rejectedBy,
+      ...(verifiedByName?.trim() && { verifiedByName: verifiedByName.trim() }),
       adminNotes: adminNotes || null,
       updatedAt: Timestamp.fromDate(now)
     });

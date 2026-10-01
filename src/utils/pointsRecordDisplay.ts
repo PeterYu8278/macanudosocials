@@ -1,4 +1,28 @@
 import type { PointsRecord } from '../types'
+import type { TFunction } from 'i18next'
+
+export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction): string => {
+  const description = record.description || ''
+  const reload = record.source === 'reload'
+    ? description.trim().match(/^充值\s+([\d,.]+)\s*RM\s*\(([\d,.]+)\s*积分\)$/)
+    : null
+  if (reload) {
+    return t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
+  }
+  if (record.source === 'visit') {
+    const duration = description.trim().match(/^驻店计时扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)]$/)
+    if (duration) {
+      return t('pointsConfig.records.visitDurationDescription', { hours: duration[1], points: duration[2], defaultValue: 'Visit duration fee ({{hours}} h, {{points}} points)' })
+    }
+    if (description === '驻店计时扣费（本次驻店汇总）') {
+      return t('pointsConfig.records.visitSummaryDescription', { defaultValue: 'Visit duration fee (visit total)' })
+    }
+    if (description === '驻店计时扣费') {
+      return t('pointsConfig.records.sources.visit', { defaultValue: 'Visit duration fee' })
+    }
+  }
+  return description || '-'
+}
 
 const VISIT_SUMMARY_DESCRIPTION = '驻店计时扣费（本次驻店汇总）'
 const DAY_PASS_SUMMARY_DESCRIPTION = 'Day Pass 驻店消费合计'

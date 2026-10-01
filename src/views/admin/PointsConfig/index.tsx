@@ -17,6 +17,7 @@ import type { PointsConfig, PointsRecord } from '../../../types';
 import { ReloadVerification } from '../../../components/admin/ReloadVerification';
 import dayjs from 'dayjs';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
+import { formatPointsRecordDescription } from '../../../utils/pointsRecordDisplay';
 
 const { Title, Text } = Typography;
 
@@ -326,7 +327,8 @@ const PointsConfigPage: React.FC = () => {
       title: t('pointsConfig.records.description'),
       dataIndex: 'description',
       key: 'description',
-      ellipsis: true
+      ellipsis: true,
+      render: (_: string, record: PointsRecord) => formatPointsRecordDescription(record, t),
     },
     {
       title: t('pointsConfig.records.balance'),
@@ -832,7 +834,7 @@ const PointsConfigPage: React.FC = () => {
                               </span>
                             </div>
                             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
-                              {record.description || '-'}
+                              {formatPointsRecordDescription(record, t)}
                             </div>
                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
                               {getSourceText(record.source)}

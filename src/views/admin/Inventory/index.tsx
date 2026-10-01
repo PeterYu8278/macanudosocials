@@ -9,6 +9,7 @@ import type { UploadFile } from 'antd'
 import { getCigars, createDocument, updateDocument, deleteDocument, COLLECTIONS, getAllOrders, getUsers, getBrands, getBrandById, getAllTransactions, getAllInboundOrders, getAllOutboundOrders, getAllInventoryMovements, createInboundOrder, deleteInboundOrder, updateInboundOrder, getInboundOrdersByReferenceNo, createOutboundOrder, deleteOutboundOrder, getEvents } from '../../../services/firebase/firestore'
 import { getAllStores } from '../../../services/firebase/stores'
 import ImageUpload from '../../../components/common/ImageUpload'
+import { createInventoryProduct, updateInventoryProduct, saveInventoryBrand } from '../../../services/firebase/inventoryProduct'
 import { getModalTheme, getResponsiveModalConfig, getModalThemeStyles } from '../../../config/modalTheme'
 import { useCloudinary } from '../../../hooks/useCloudinary'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
@@ -4509,7 +4510,7 @@ const AdminInventory: React.FC = () => {
             };
 
             // 完全使用表单输入值（方案 B 放开编辑权）
-            const brand = values.brand || '';
+            const brand = (values.brand || '').trim();
             const finalSelectedBrand = brandList.find(b => b.name === brand) || selectedBrand;
             const description = values.description || '';
             const origin = values.origin || finalSelectedBrand?.country || '';
@@ -4569,10 +4570,20 @@ const AdminInventory: React.FC = () => {
               payload.tastingNotes = tastingNotes;
             }
             if (editing) {
-              const res = await updateDocument<Cigar>(COLLECTIONS.CIGARS, editing.id, payload)
-              if (res.success) message.success(t('common.saved'))
+              const res = await updateInventoryProduct(editing.id, payload)
+              if (!res.success) {
+                message.error(res.error.message || t('messages.operationFailed'))
+                return
+              }
+              refreshBrandList()
+              message.success(t('common.saved'))
             } else {
-              await createDocument<Cigar>(COLLECTIONS.CIGARS, { ...payload, createdAt: new Date() } as any)
+              const result = await createInventoryProduct(payload)
+              if (!result.success) {
+                message.error(result.error.message || t('messages.operationFailed'))
+                return
+              }
+              refreshBrandList()
               message.success(t('common.created'))
             }
             refreshItems()
@@ -5731,29 +5742,25 @@ const AdminInventory: React.FC = () => {
                 country: values.country,
                 foundedYear: values.foundedYear ? parseInt(values.foundedYear) : undefined,
                 status: values.status || 'active',
-                metadata: {
-                  totalProducts: 0,
-                  totalSales: 0,
-                  rating: 0,
-                  tags: [],
-                },
               }
 
               if (editingBrand) {
-                const result = await updateDocument(COLLECTIONS.BRANDS, editingBrand.id, brandData)
+                const result = await saveInventoryBrand(brandData as Partial<Brand>, editingBrand.id)
                 if (result.success) {
                   message.success(t('inventory.brandUpdated'))
                   refreshBrandList()
+                  refreshItems()
                   setEditingBrand(null)
                   brandForm.resetFields()
                 } else {
                   message.error(t('inventory.brandUpdateFailed'))
                 }
               } else {
-                const result = await createDocument(COLLECTIONS.BRANDS, brandData)
+                const result = await saveInventoryBrand(brandData as Partial<Brand>)
                 if (result.success) {
                   message.success(t('inventory.brandCreated'))
                   refreshBrandList()
+                  refreshItems()
                   setCreatingBrand(false)
                   brandForm.resetFields()
                 } else {

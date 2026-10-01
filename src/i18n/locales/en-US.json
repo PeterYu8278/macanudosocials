@@ -592,6 +592,7 @@
     "to": "to"
   },
   "visitSessions": {
+    "unknownUser": "Unknown User",
     "title": "Visit Sessions",
     "subtitle": "Manage users' in-store consumption and activity records",
     "refresh": "Refresh",
@@ -2021,6 +2022,9 @@
       "amount": "Points",
       "source": "Source",
       "description": "Description",
+      "reloadDescription": "Reload RM {{amount}} ({{points}} points)",
+      "visitDurationDescription": "Visit duration fee ({{hours}} h, {{points}} points)",
+      "visitSummaryDescription": "Visit duration fee (visit total)",
       "balance": "Balance",
       "earn": "Earn",
       "spend": "Spend",
@@ -2141,6 +2145,8 @@
       "userPlaceholder": "Search user (name, email, phone)"
     },
     "reloadVerification": {
+      "reviewer": "Reviewed By",
+      "reviewerNotRecorded": "Not recorded",
       "title": "Reload Verification",
       "noPendingRecords": "No pending reload records",
       "noRecords": "No reload records",

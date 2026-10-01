@@ -592,6 +592,7 @@
     "to": "至"
   },
   "visitSessions": {
+    "unknownUser": "未知用户",
     "title": "驻店记录",
     "subtitle": "管理用户的店内消费和活动记录",
     "refresh": "刷新",
@@ -2021,6 +2022,9 @@
       "amount": "积分",
       "source": "来源",
       "description": "描述",
+      "reloadDescription": "充值 {{amount}} RM ({{points}} 积分)",
+      "visitDurationDescription": "驻店计时扣费 ({{hours}}小时，共{{points}}积分)",
+      "visitSummaryDescription": "驻店计时扣费（本次驻店汇总）",
       "balance": "余额",
       "earn": "获得",
       "spend": "消费",
@@ -2141,6 +2145,8 @@
       "userPlaceholder": "搜索用户（姓名、邮箱、手机号）"
     },
     "reloadVerification": {
+      "reviewer": "审核人",
+      "reviewerNotRecorded": "未记录",
       "title": "充值验证",
       "noPendingRecords": "暂无待验证的充值记录",
       "noRecords": "暂无充值记录",

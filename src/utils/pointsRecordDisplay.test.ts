@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { PointsRecord } from '../types'
-import { consolidateVisitPointsRecords } from './pointsRecordDisplay'
+import { consolidateVisitPointsRecords, formatPointsRecordDescription } from './pointsRecordDisplay'
+import { createInstance } from 'i18next'
+import en from '../i18n/locales/en-US.json'
+import zh from '../i18n/locales/zh-CN.json'
 
 const record = (overrides: Partial<PointsRecord>): PointsRecord => ({
   id: 'record-1',
@@ -11,6 +14,49 @@ const record = (overrides: Partial<PointsRecord>): PointsRecord => ({
   description: '驻店计时扣费',
   createdAt: new Date('2026-09-22T10:00:00Z'),
   ...overrides
+})
+
+describe('formatPointsRecordDescription', () => {
+  it('localizes visit duration details and consolidated totals in both languages', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en-US', resources: { 'en-US': { translation: en }, 'zh-CN': { translation: zh } } })
+    const visit = record({ description: '驻店计时扣费 (1小时，共25积分)' })
+    expect(formatPointsRecordDescription(visit, i18n.t)).toBe('Visit duration fee (1 h, 25 points)')
+    expect(formatPointsRecordDescription(record({ description: '驻店计时扣费（1.5小时，共37.5积分）' }), i18n.t)).toBe('Visit duration fee (1.5 h, 37.5 points)')
+    expect(formatPointsRecordDescription(record({ description: '驻店计时扣费（本次驻店汇总）' }), i18n.t)).toBe('Visit duration fee (visit total)')
+    await i18n.changeLanguage('zh-CN')
+    expect(formatPointsRecordDescription(visit, i18n.t)).toBe('驻店计时扣费 (1小时，共25积分)')
+  })
+
+  it('does not expose translation keys when a stale resource lacks the new keys', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en-US', resources: { 'en-US': { translation: {} } } })
+    expect(formatPointsRecordDescription(record({ source: 'reload', description: '充值 100 RM (100 积分)' }), i18n.t)).toBe('Reload RM 100 (100 points)')
+    expect(formatPointsRecordDescription(record({ description: '驻店计时扣费 (1小时，共25积分)' }), i18n.t)).toBe('Visit duration fee (1 h, 25 points)')
+  })
+
+  it('localizes legacy reload descriptions when the language changes', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en }, zh: { translation: zh } } })
+    const reload = record({ source: 'reload', description: '充值 100 RM (100 积分)' })
+    expect(formatPointsRecordDescription(reload, i18n.t)).toBe('Reload RM 100 (100 points)')
+    await i18n.changeLanguage('zh')
+    expect(formatPointsRecordDescription(reload, i18n.t)).toBe('充值 100 RM (100 积分)')
+    expect(reload.description).toBe('充值 100 RM (100 积分)')
+  })
+
+  it('preserves distinct money and points amounts', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en } } })
+    expect(formatPointsRecordDescription(record({ source: 'reload', amount: 120, description: '充值 100.50 RM (120 积分)' }), i18n.t))
+      .toBe('Reload RM 100.50 (120 points)')
+  })
+
+  it('preserves custom descriptions rather than replacing them with generic text', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en } } })
+    expect(formatPointsRecordDescription(record({ source: 'purchase', description: 'Manual correction' }), i18n.t)).toBe('Manual correction')
+  })
 })
 
 describe('consolidateVisitPointsRecords', () => {

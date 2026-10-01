@@ -4,6 +4,7 @@
 
 import { apiCall, ApiConfig } from './base'
 import * as firestoreService from '../firebase/firestore'
+import { saveInventoryBrand } from '../firebase/inventoryProduct'
 import type { Brand } from '../../types'
 
 /**
@@ -31,7 +32,7 @@ export const getBrandById = (brandId: string, config?: ApiConfig) => {
  */
 export const createBrand = (brandData: Omit<Brand, 'id'>, config?: ApiConfig) => {
   return apiCall(
-    () => firestoreService.createDocument<Brand>(firestoreService.COLLECTIONS.BRANDS, brandData),
+    () => saveInventoryBrand(brandData),
     {
       showSuccess: true,
       successMessage: '品牌创建成功',
@@ -45,7 +46,11 @@ export const createBrand = (brandData: Omit<Brand, 'id'>, config?: ApiConfig) =>
  */
 export const updateBrand = (brandId: string, brandData: Partial<Brand>, config?: ApiConfig) => {
   return apiCall(
-    () => firestoreService.updateDocument<Brand>(firestoreService.COLLECTIONS.BRANDS, brandId, brandData),
+    async () => {
+      const current = await firestoreService.getBrandById(brandId)
+      if (!current) return { success: false, error: new Error('Brand no longer exists') }
+      return saveInventoryBrand({ ...brandData, name: brandData.name ?? current.name }, brandId)
+    },
     {
       showSuccess: true,
       successMessage: '品牌更新成功',

@@ -800,6 +800,7 @@ export interface ReloadRecord {
   // 管理员验证
   verifiedAt?: Date;
   verifiedBy?: string;
+  verifiedByName?: string;
   verificationProof?: string; // 凭证URL（管理员上传）
   adminNotes?: string;
   

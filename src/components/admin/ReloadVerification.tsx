@@ -8,7 +8,8 @@ import { processPendingMembershipFees } from '../../services/firebase/scheduledJ
 import dayjs from 'dayjs';
 import { uploadFile } from '../../services/cloudinary/create';
 import { getAllStores } from '../../services/firebase/stores';
-import { getAllUsers } from '../../services/firebase/firestore';
+import { getAllUsers, getDocument } from '../../services/firebase/firestore';
+import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { useAuthStore } from '../../store/modules';
 import type { ReloadRecord, Store, User } from '../../types';
 import StoreSelect from '../common/StoreSelect';
@@ -34,8 +35,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   const [proofUrl, setProofUrl] = useState<string>('');
   const [stores, setStores] = useState<Store[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [reviewerNames, setReviewerNames] = useState<Record<string, string>>({});
   const { t, i18n } = useTranslation();
-  const { isSuperAdmin, user: currentUser } = useAuthStore();
+  const { isSuperAdmin } = useAuthStore();
+  const reviewer = useAuthStore(state => state.actualUser || state.user);
   const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
 
   useEffect(() => {
@@ -43,6 +46,24 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
     loadStores();
     if (isSuperAdmin) loadUsers();
   }, [statusFilter]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = [...new Set(records.filter(record => !record.verifiedByName && record.verifiedBy && record.verifiedBy !== 'admin').map(record => record.verifiedBy!))];
+    Promise.all(ids.map(async id => {
+      const user = await getDocument<User>(GLOBAL_COLLECTIONS.USERS, id);
+      return [id, user?.displayName || ''] as const;
+    })).then(entries => {
+      if (!cancelled) setReviewerNames(Object.fromEntries(entries));
+    });
+    return () => { cancelled = true; };
+  }, [records]);
+
+  const reviewerName = (record: ReloadRecord) => {
+    if (record.status === 'pending') return '-';
+    return record.verifiedByName || reviewerNames[record.verifiedBy || '']
+      || (record.verifiedBy && record.verifiedBy !== 'admin' ? record.verifiedBy : t('pointsConfig.reloadVerification.reviewerNotRecorded', { defaultValue: 'Not recorded' }));
+  };
 
   const loadStores = async () => {
     try {
@@ -90,7 +111,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   };
 
   const onVerifySubmit = async (values: any) => {
-    if (!currentRecord) return;
+    if (!currentRecord || !reviewer?.id) return;
 
     setUploading(true);
     try {
@@ -112,9 +133,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
 
       const result = await verifyReloadRecord(
         currentRecord.id,
-        'admin', // TODO: 使用实际的管理员ID
+        reviewer.id,
         finalProofUrl || undefined,
-        values.notes
+        values.notes,
+        reviewer.displayName
       );
 
       if (result.success) {
@@ -146,13 +168,14 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   };
 
   const onRejectSubmit = async (values: any) => {
-    if (!currentRecord) return;
+    if (!currentRecord || !reviewer?.id) return;
 
     try {
       const result = await rejectReloadRecord(
         currentRecord.id,
-        'admin', // TODO: 使用实际的管理员ID
-        values.notes
+        reviewer.id,
+        values.notes,
+        reviewer.displayName
       );
 
       if (result.success) {
@@ -170,6 +193,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   };
 
   const onManualCreateSubmit = async (values: any) => {
+    if (!reviewer?.id) return;
     setManualSubmitting(true);
     try {
       const selectedUser = users.find(u => u.id === values.userId);
@@ -189,9 +213,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       if (values.autoVerify) {
         const verifyResult = await verifyReloadRecord(
           result.recordId,
-          currentUser?.id || 'admin',
+          reviewer.id,
           undefined,
-          values.notes || `手动充值 by ${currentUser?.displayName || 'admin'}`
+          values.notes || `手动充值 by ${reviewer.displayName || reviewer.id}`,
+          reviewer.displayName
         );
         if (!verifyResult.success) {
           message.warning('已创建充值记录，但自动验证失败：' + verifyResult.error);
@@ -266,6 +291,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         const statusInfo = statusMap[status] || { color: 'default', text: status };
         return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
       }
+    },
+    {
+      title: t('pointsConfig.reloadVerification.reviewer', { defaultValue: 'Reviewed By' }),
+      key: 'reviewer',
+      width: 160,
+      render: (_: unknown, record: ReloadRecord) => reviewerName(record)
     },
     {
       title: t('pointsConfig.reloadVerification.adminNotes'),
@@ -420,6 +451,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         dataSource={records}
         rowKey="id"
         loading={loading}
+        scroll={{ x: 1300 }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true
@@ -479,6 +511,11 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                       <div style={{ fontSize: 12, color: '#f4af25', marginTop: 4 }}>
                         {t('pointsConfig.reloadVerification.store')}: {stores.find(s => s.id === record.storeId)?.name || '-'}
                       </div>
+                      {record.status !== 'pending' && (
+                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, overflowWrap: 'anywhere' }}>
+                          {t('pointsConfig.reloadVerification.reviewer', { defaultValue: 'Reviewed By' })}: {reviewerName(record)}
+                        </div>
+                      )}
                       {record.adminNotes && (
                         <div style={{ 
                           fontSize: 12, 

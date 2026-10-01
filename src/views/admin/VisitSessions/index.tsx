@@ -13,6 +13,7 @@ import {
 } from '../../../services/firebase/visitSessions';
 // 不再使用服务端分页，改为加载所有数据并使用客户端分页
 import { getCigars } from '../../../services/firebase/firestore';
+import { getUserDisplayNames } from '../../../services/firebase/userDisplayNames';
 import { getAllStores } from '../../../services/firebase/stores';
 import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession, getAllRedemptionRecords } from '../../../services/firebase/redemption';
 import { useAuthStore } from '../../../store/modules/auth';
@@ -92,6 +93,7 @@ const VisitSessionsPage: React.FC = () => {
   const [addingRedemption, setAddingRedemption] = useState(false);
   const [redemptionRecords, setRedemptionRecords] = useState<Map<string, any[]>>(new Map());
   const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
+  const [operatorNames, setOperatorNames] = useState<Record<string, string>>({});
   const [redemptionRecordsLoading, setRedemptionRecordsLoading] = useState(false);
   const [redemptionSearch, setRedemptionSearch] = useState('');
   const [redemptionStatus, setRedemptionStatus] = useState<'all' | 'pending' | 'completed'>('all');
@@ -101,6 +103,18 @@ const VisitSessionsPage: React.FC = () => {
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
+  useEffect(() => {
+    let cancelled = false;
+    const records = [...allRedemptionRecords, ...Array.from(redemptionRecords.values()).flat()];
+    getUserDisplayNames(records.map(record => record.redeemedBy)).then(names => {
+      if (!cancelled) setOperatorNames(names);
+    });
+    return () => { cancelled = true; };
+  }, [allRedemptionRecords, redemptionRecords]);
+
+  const operatorName = (id?: string) => id
+    ? operatorNames[id] || t('visitSessions.unknownUser', { defaultValue: 'Unknown User' })
+    : '-';
   const sessionDisplayRows = useMemo<VisitSessionDisplayRow[]>(() => sessions.flatMap(session => {
     const rows: VisitSessionDisplayRow[] = [{
       ...session,
@@ -777,7 +791,7 @@ const VisitSessionsPage: React.FC = () => {
                                             dataIndex: 'redeemedBy',
                                             key: 'redeemedBy',
                                             width: 150,
-                                            render: (userId: string) => userId || '-'
+                                            render: (userId: string) => operatorName(userId)
                                           },
                                           {
                                             title: t('visitSessions.actions'),
@@ -1067,7 +1081,7 @@ const VisitSessionsPage: React.FC = () => {
                                               )}
                                               {redemptionRecord.redeemedBy && (
                                                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-                                                  {t('visitSessions.operator')}: {redemptionRecord.redeemedBy}
+                                                  {t('visitSessions.operator')}: {operatorName(redemptionRecord.redeemedBy)}
                                                 </div>
                                               )}
                                             </div>
