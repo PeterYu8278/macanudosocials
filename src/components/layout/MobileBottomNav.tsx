@@ -23,7 +23,8 @@ import { getFeatureKeyByRoute } from '../../config/featureDefinitions'
 const MobileBottomNav: React.FC = () => {
   const navigate = useNavigate()
   const location = useLocation()
-  const { isAdmin, isDeveloper } = useAuthStore()
+  const { isAdmin, isDeveloper, user } = useAuthStore()
+  const isStoreAdmin = user?.role === 'storeAdmin'
   const quantities = useCartStore((state) => state.quantities)
   const { t } = useTranslation()
   const [scannerVisible, setScannerVisible] = useState(false)
@@ -117,6 +118,9 @@ const MobileBottomNav: React.FC = () => {
   }, [featuresVisibility, isDeveloper, t, cartItemCount])
 
   const adminNavItems = useMemo(() => {
+    if (isStoreAdmin) {
+      return adminNavItemsBase.filter(item => item.key === '/admin/points-config')
+    }
     if (isDeveloper) {
       return adminNavItemsBase
     }
@@ -124,7 +128,7 @@ const MobileBottomNav: React.FC = () => {
       const featureKey = getFeatureKeyByRoute(item.key)
       return featureKey ? (featuresVisibility[featureKey] ?? true) : true
     })
-  }, [featuresVisibility, isDeveloper, t])
+  }, [featuresVisibility, isDeveloper, isStoreAdmin, t])
 
   // 判断当前是否在管理后台
   const isInAdminPanel = location.pathname.startsWith('/admin')

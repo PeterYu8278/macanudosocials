@@ -31,7 +31,11 @@ describe('developer role simulation', () => {
       expect(state.isSuperAdmin).toBe(role === 'superAdmin')
       expect(state.isAdmin).toBe(['storeAdmin', 'admin', 'superAdmin'].includes(role))
       expect(state.hasPermission('canViewFinance')).toBe(role === 'superAdmin')
-      expect(canAccessRoute(state.user!.role, '/admin')).toBe(state.isAdmin)
+      expect(state.hasPermission('canManageUsers')).toBe(['admin', 'superAdmin'].includes(role))
+      expect(canAccessRoute(state.user!.role, '/admin')).toBe(['admin', 'superAdmin'].includes(role))
+      expect(canAccessRoute(state.user!.role, '/admin/points-config')).toBe(
+        ['storeAdmin', 'admin', 'superAdmin'].includes(role),
+      )
     },
   )
 

@@ -527,7 +527,7 @@ const Home: React.FC = () => {
                   {isAdmin ? (
                     <button
                       type="button"
-                      onClick={() => navigate('/admin')}
+                      onClick={() => navigate(user?.role === 'storeAdmin' ? '/admin/points-config' : '/admin')}
                       disabled={!appConfigLoaded}
                       aria-label={t('navigation.admin')}
                       title={t('navigation.admin')}

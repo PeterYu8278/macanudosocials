@@ -10,6 +10,16 @@ const { Title, Text } = Typography
 const { Search } = Input
 const { Option } = Select
 
+const ROLE_RANK: Record<string, number> = {
+  developer: 5,
+  superAdmin: 4,
+  admin: 3,
+  storeAdmin: 2,
+  vip: 1,
+  member: 1,
+  guest: 0,
+}
+
 import { getUsers, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
@@ -57,11 +67,11 @@ const AdminUsers: React.FC = () => {
       { value: 'developer', label: t('auth.developer') },
       { value: 'superAdmin', label: t('auth.superAdmin') },
       { value: 'admin', label: t('auth.admin') },
+      { value: 'storeAdmin', label: t('auth.storeAdmin') },
       { value: 'vip', label: t('auth.vip') },
       { value: 'member', label: t('auth.member') },
       { value: 'guest', label: t('auth.guest') },
     ]
-    const ROLE_RANK: Record<string, number> = { developer: 4, superAdmin: 3, admin: 2, vip: 1, member: 1, guest: 0 }
     const myRank = ROLE_RANK[currentUser?.role ?? ''] ?? 0
     return all.filter(r => ROLE_RANK[r.value] < myRank)
   })()
@@ -141,6 +151,7 @@ const AdminUsers: React.FC = () => {
       case 'developer': return 'red'
       case 'superAdmin': return 'red'
       case 'admin': return 'volcano'
+      case 'storeAdmin': return 'orange'
       case 'member': return 'blue'
       case 'vip': return 'gold'  // VIP 使用自定义渐变样式，此颜色不会被使用
       case 'guest': return 'default'
@@ -153,6 +164,7 @@ const AdminUsers: React.FC = () => {
       case 'developer': return t('auth.developer')
       case 'superAdmin': return t('auth.superAdmin')
       case 'admin': return t('auth.admin')
+      case 'storeAdmin': return t('auth.storeAdmin')
       case 'member': return t('auth.member')
       case 'vip': return t('auth.vip')
       case 'guest': return t('auth.guest')
@@ -650,6 +662,7 @@ const AdminUsers: React.FC = () => {
                   >
                     <Option value="superAdmin">{t('auth.superAdmin')}</Option>
                     <Option value="admin">{t('auth.admin')}</Option>
+                    <Option value="storeAdmin">{t('auth.storeAdmin')}</Option>
                     <Option value="vip">{t('auth.vip')}</Option>
                     <Option value="member">{t('auth.member')}</Option>
                     <Option value="guest">{t('auth.guest')}</Option>
@@ -798,6 +811,7 @@ const AdminUsers: React.FC = () => {
                           { key: 'all', label: t('common.all') },
                           { key: 'superAdmin', label: t('auth.superAdmin') },
                           { key: 'admin', label: t('auth.admin') },
+                          { key: 'storeAdmin', label: t('auth.storeAdmin') },
                           { key: 'vip', label: t('auth.vip') },
                           { key: 'member', label: t('auth.member') },
                           { key: 'guest', label: t('auth.guest') },
@@ -1517,7 +1531,6 @@ const AdminUsers: React.FC = () => {
             initialValue="member"
           >
             <Select disabled={(() => {
-              const ROLE_RANK: Record<string, number> = { developer: 4, superAdmin: 3, admin: 2, vip: 1, member: 1, guest: 0 }
               const myRank = ROLE_RANK[currentUser?.role ?? ''] ?? 0
               const targetRank = ROLE_RANK[(editing as any)?.role ?? ''] ?? 0
               return editing?.id === currentUser?.id || targetRank >= myRank

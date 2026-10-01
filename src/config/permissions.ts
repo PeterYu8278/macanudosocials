@@ -44,10 +44,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission> = {
     canRegisterEvent: true,
     canPurchase: true,
     canViewProfile: true,
-    canCreateEvent: true,
-    canManageInventory: true,
-    canManageUsers: true,
-    canManageOrders: true,
+    canCreateEvent: false,
+    canManageInventory: false,
+    canManageUsers: false,
+    canManageOrders: false,
     canViewFinance: false,
     canSwitchToAdmin: true,
     canManageFeatures: false,
@@ -61,7 +61,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission> = {
     canManageInventory: true,
     canManageUsers: true,
     canManageOrders: true,
-    canViewFinance: false, // 门店管理员禁止查看财务
+    canViewFinance: false, // 一般管理员禁止查看财务
     canSwitchToAdmin: true,
     canManageFeatures: false,
   },
@@ -102,12 +102,13 @@ export const ROUTE_PERMISSIONS = {
   '/ai-cigar-history': ['member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'], // AI识茄历史记录页面权限
   '/reload': ['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'], // 充值页面权限
   '/brand': ['member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'], // brand list
-  '/admin': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
-  '/admin/users': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
-  '/admin/inventory': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
-  '/admin/events': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
-  '/admin/orders': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
-  '/admin/visit-sessions': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
+  '/admin': ['admin', 'superAdmin', 'developer'],
+  '/admin/users': ['admin', 'superAdmin', 'developer'],
+  '/admin/inventory': ['admin', 'superAdmin', 'developer'],
+  '/admin/events': ['admin', 'superAdmin', 'developer'],
+  '/admin/orders': ['admin', 'superAdmin', 'developer'],
+  '/admin/reports': ['admin', 'superAdmin', 'developer'],
+  '/admin/visit-sessions': ['admin', 'superAdmin', 'developer'],
   '/admin/finance': ['superAdmin', 'developer'], // 财务仅限超级管理员和开发者
   '/admin/points-config': ['storeAdmin', 'admin', 'superAdmin', 'developer'], // 积分配置支持管理员验证充值
   '/admin/notifications': ['developer'],
@@ -140,7 +141,7 @@ export const canAccessRoute = (userRole: UserRole, path: string): boolean => {
   
   // 动态路由匹配
   if (path.startsWith('/brand/')) {
-    return ['member', 'vip', 'admin', 'superAdmin', 'developer'].includes(userRole);
+    return ['member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'].includes(userRole);
   }
   
   if (path.startsWith('/admin/')) {

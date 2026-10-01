@@ -355,15 +355,15 @@ const AppContent: React.FC = () => {
                   <Route path="/brand/:brandId" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><BrandDetail /></ProtectedRoute>} />
 
                   {/* 管理后台路由 */}
-                  <Route path="/admin" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminDashboard /></ProtectedRoute>} />
-                  <Route path="/admin/users" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminUsers /></ProtectedRoute>} />
-                  <Route path="/admin/inventory" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminInventory /></ProtectedRoute>} />
-                  <Route path="/admin/events" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminEvents /></ProtectedRoute>} />
-                  <Route path="/admin/orders" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminOrders /></ProtectedRoute>} />
-                  <Route path="/admin/reports" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminReports /></ProtectedRoute>} />
+                  <Route path="/admin" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminDashboard /></ProtectedRoute>} />
+                  <Route path="/admin/users" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminUsers /></ProtectedRoute>} />
+                  <Route path="/admin/inventory" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminInventory /></ProtectedRoute>} />
+                  <Route path="/admin/events" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminEvents /></ProtectedRoute>} />
+                  <Route path="/admin/orders" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminOrders /></ProtectedRoute>} />
+                  <Route path="/admin/reports" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminReports /></ProtectedRoute>} />
                   <Route path="/admin/finance" element={<ProtectedRoute roles={['superAdmin', 'developer']}><AdminFinance /></ProtectedRoute>} />
                   <Route path="/admin/points-config" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><PointsConfigPage /></ProtectedRoute>} />
-                  <Route path="/admin/visit-sessions" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><VisitSessionsPage /></ProtectedRoute>} />
+                  <Route path="/admin/visit-sessions" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><VisitSessionsPage /></ProtectedRoute>} />
                   <Route path="/admin/stores" element={<ProtectedRoute roles={['superAdmin', 'developer']}><StoreManagement /></ProtectedRoute>} />
                   <Route path="/admin/system-config" element={<ProtectedRoute roles={['superAdmin', 'developer']}><SystemConfig /></ProtectedRoute>} />
                   <Route path="/admin/notifications" element={<ProtectedRoute roles={['developer']}><Navigate to="/developer/feature-management?tab=notifications" replace /></ProtectedRoute>} />
