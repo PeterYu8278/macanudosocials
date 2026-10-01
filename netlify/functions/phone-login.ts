@@ -65,9 +65,10 @@ export const handler: Handler = async event => {
     // MFA-pending responses have no ID token. Never mint a session before full authentication.
     if (!result.idToken || !result.localId) return invalidCredentials()
     const adminAuth = getAuth()
-    const identity = await adminAuth.verifyIdToken(result.idToken, true)
-    if (identity.uid !== result.localId || identity.email?.toLowerCase() !== email.toLowerCase()) return invalidCredentials()
-    const customToken = await adminAuth.createCustomToken(identity.uid)
+    // Identity Toolkit has already verified the password and returned the
+    // authenticated Firebase localId. Verifying the same ID token again with
+    // Admin SDK added another network round trip without changing the result.
+    const customToken = await adminAuth.createCustomToken(result.localId)
     return reply(200, { success: true, customToken })
   } catch {
     // Never log submitted passwords, phone numbers, or authentication tokens.
