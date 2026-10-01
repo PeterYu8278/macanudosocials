@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 'antd';
 import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
-import { getPendingVisitSession, processSessionRealtimeDeduction } from '../../services/firebase/visitSessions';
+import { getPendingVisitSession, processSessionRealtimeDeduction, subscribeToVisitSession } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
 import { getUserMembershipPeriod } from '../../services/firebase/membershipFee';
 import { activateMembership } from '../../services/membershipActivation';
@@ -15,6 +15,7 @@ import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
+import { shouldShowCheckoutReload } from '../../utils/visitCheckout';
 
 const { Title, Text } = Typography;
 
@@ -141,6 +142,17 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
     return () => clearInterval(interval);
   }, [user]);
+
+  // Check-out 余额不足时，监听会话状态以即时同步 Reload 状态。
+  useEffect(() => {
+    if (!currentSession?.id) return;
+
+    return subscribeToVisitSession(
+      currentSession.id,
+      session => setCurrentSession(session),
+      error => console.warn('[VisitTimerRedemption] 会话实时监听失败', error)
+    );
+  }, [currentSession?.id]);
 
   // 计算实时时长
   useEffect(() => {
@@ -584,7 +596,13 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
               // 如果是活跃会员或已购买 Day Pass，显示正常逻辑
               const currentPoints = user?.membership?.points || 0;
-              const isLowPoints = currentPoints < 50;
+              const checkoutPending = currentSession?.checkoutPending?.status === 'awaiting_reload';
+              const checkoutPointsDue = Number(currentSession?.checkoutPending?.pointsDueNow || 0);
+              const shouldReloadForCheckout = shouldShowCheckoutReload(
+                currentPoints,
+                checkoutPending,
+                checkoutPointsDue
+              );
 
               // 判断按钮状态和显示文本
               let buttonText = t('visitTimer.redeem');
@@ -611,7 +629,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 buttonIcon = <ShoppingCartOutlined />;
               }
               // 如果积分少于50，显示Reload按钮
-              else if (isLowPoints) {
+              else if (shouldReloadForCheckout) {
                 buttonText = t('visitTimer.reload');
                 buttonIcon = <ReloadOutlined />;
                 buttonOnClick = () => {

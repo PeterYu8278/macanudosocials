@@ -13,7 +13,9 @@ import {
   Timestamp,
   arrayUnion,
   runTransaction,
-  type Query
+  type Query,
+  onSnapshot,
+  type Unsubscribe
 } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
@@ -1150,6 +1152,28 @@ export const getPendingVisitSession = async (userId: string): Promise<VisitSessi
     }
     return null;
   }
+};
+
+/**
+ * 实时监听用户当前待处理的驻店记录。
+ * Check-out 余额不足时，管理员会把 checkoutPending 写回会话；用户端
+ * 需要立即看到 Reload 状态，而不是等待下一次轮询。
+ */
+export const subscribeToVisitSession = (
+  sessionId: string,
+  onChange: (session: VisitSession | null) => void,
+  onError?: (error: Error) => void
+): Unsubscribe => {
+  return onSnapshot(
+    doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId),
+    snapshot => {
+      onChange(snapshot.exists() ? processVisitSessionData(snapshot.data(), snapshot.id) : null);
+    },
+    error => {
+      console.warn('[subscribeToVisitSession] 实时监听失败:', error);
+      onError?.(error);
+    }
+  );
 };
 
 /**

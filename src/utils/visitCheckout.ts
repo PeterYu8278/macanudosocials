@@ -20,3 +20,13 @@ export const calculateCheckoutAffordability = (
     shortfall: Math.max(0, -balanceAfterCharge)
   }
 }
+
+export const shouldShowCheckoutReload = (
+  currentPoints: number,
+  checkoutPending: boolean,
+  pointsDueNow: number
+): boolean => {
+  const safePoints = Number.isFinite(currentPoints) ? currentPoints : 0
+  const safeDue = Number.isFinite(pointsDueNow) ? pointsDueNow : 0
+  return (checkoutPending && safePoints < safeDue) || safePoints < 50
+}
