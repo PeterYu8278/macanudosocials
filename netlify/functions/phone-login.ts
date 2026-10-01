@@ -69,7 +69,7 @@ export const handler: Handler = async event => {
     // authenticated Firebase localId. Verifying the same ID token again with
     // Admin SDK added another network round trip without changing the result.
     const customToken = await adminAuth.createCustomToken(result.localId)
-    return reply(200, { success: true, customToken })
+    return reply(200, { success: true, customToken, firestoreUserId: users.docs[0].id })
   } catch {
     // Never log submitted passwords, phone numbers, or authentication tokens.
     return reply(503, { success: false, code: 'auth/service-unavailable' })

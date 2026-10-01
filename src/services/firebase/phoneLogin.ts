@@ -9,7 +9,12 @@ export const loginPhoneWithPassword = async (phone: string, password: string) =>
       body: JSON.stringify({ phone, password }),
       signal: AbortSignal.timeout(20000),
     })
-    const result = await response.json() as { success?: boolean; customToken?: string; code?: string }
+    const result = await response.json() as {
+      success?: boolean
+      customToken?: string
+      firestoreUserId?: string
+      code?: string
+    }
     if (!response.ok || !result.success || !result.customToken) {
       const code = result.code || 'auth/service-unavailable'
       const key = code === 'auth/too-many-requests' ? 'phoneLoginTooManyAttempts'
@@ -20,6 +25,12 @@ export const loginPhoneWithPassword = async (phone: string, password: string) =>
         phoneLoginUnavailable: 'Phone login is temporarily unavailable. Please try again later.',
       }
       return { success: false as const, error: new Error(i18n.t(`auth.${key}`, { defaultValue: defaults[key] })), code }
+    }
+    // The Auth state listener runs as soon as signInWithCustomToken resolves.
+    // Seed the exact Firestore document ID first so it does not probe the Auth
+    // UID and wait through the legacy-user fallback path.
+    if (result.firestoreUserId && typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('firestoreUserId', result.firestoreUserId)
     }
     const credential = await signInWithCustomToken(auth, result.customToken)
     return { success: true as const, user: credential.user }
