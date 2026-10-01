@@ -2,6 +2,7 @@
 import { Handler } from '@netlify/functions';
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from 'firebase-admin/firestore';
 
 // 初始化 Firebase Admin（如果尚未初始化）
 if (!getApps().length) {
@@ -25,7 +26,8 @@ export const handler: Handler = async (event, context) => {
   const corsHeaders = {
     'Content-Type': 'application/json',
     'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Cache-Control': 'no-store',
     'Access-Control-Allow-Methods': 'POST, OPTIONS'
   };
 
@@ -48,6 +50,16 @@ export const handler: Handler = async (event, context) => {
   }
 
   try {
+    const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/)?.[1];
+    if (!token) return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Authentication required' }) };
+    let identity;
+    try { identity = await getAuth().verifyIdToken(token, true); } catch {
+      return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Authentication required' }) };
+    }
+    const operator = (await getFirestore().collection('users').doc(identity.uid).get()).data();
+    if (!['admin', 'superAdmin', 'developer'].includes(operator?.role)) {
+      return { statusCode: 403, headers: corsHeaders, body: JSON.stringify({ error: 'Administrator access required' }) };
+    }
     const { uid, email, phoneNumber, newPassword } = JSON.parse(event.body || '{}');
 
     // 验证必需字段

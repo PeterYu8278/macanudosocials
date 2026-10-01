@@ -334,7 +334,7 @@ const Login: React.FC = () => {
           message.error(result.error?.message || t('auth.sendResetEmailFailed'))
         }
       } else if (type === 'phone') {
-        // 手机号重置：生成临时密码并通过 whapi 发送
+        // 手机号恢复：由后端发送验证链接，不查询受保护的会员资料
         const result = await resetPasswordByPhone(identifier)
         if (result.success) {
           const sendTime = Date.now()

@@ -970,6 +970,9 @@ export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Pro
 export const sendPasswordResetEmailFor = async (email: string) => {
   try {
     await sendPasswordResetEmail(auth, email)
+
+    // Anonymous recovery must not query protected member records.
+    if (!auth.currentUser) return { success: true }
     
     // 尝试通过 WhatsApp 发送重置密码消息（异步，不阻塞主流程）
     try {
@@ -1053,6 +1056,7 @@ const resetPasswordByPhoneCore = async (phone: string): Promise<ResetPasswordByP
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${await auth.currentUser?.getIdToken() || ''}`,
         },
         body: JSON.stringify(requestBody),
       });
@@ -1091,33 +1095,11 @@ const resetPasswordByPhoneCore = async (phone: string): Promise<ResetPasswordByP
 };
 
 /**
- * 通过手机号重置密码并通过 whapi 发送临时密码
+ * 通过后端向绑定手机号发送 WhatsApp 重置链接，不立即修改密码
  */
 export const resetPasswordByPhone = async (phone: string) => {
-  const coreResult = await resetPasswordByPhoneCore(phone);
-
-  if (!coreResult.success) {
-    return { success: false, error: coreResult.error || '重置密码失败' };
-  }
-
-  try {
-    const { sendPasswordReset } = await import('../whapi');
-    const result = await sendPasswordReset(
-      coreResult.normalizedPhone!,
-      coreResult.userDisplayName || '用户',
-      coreResult.tempPassword!,
-      coreResult.userId,
-      coreResult.message
-    );
-
-    if (!result.success) {
-      return { success: false, error: result.error || '发送临时密码失败' };
-    }
-
-    return { success: true };
-  } catch (whapiError: any) {
-    return { success: false, error: `密码已重置，但发送临时密码失败: ${whapiError.message || '未知错误'}` };
-  }
+  const { requestPhonePasswordReset } = await import('./phonePasswordReset');
+  return requestPhonePasswordReset(phone);
 };
 
 /**
