@@ -566,12 +566,19 @@ const AdminUsers: React.FC = () => {
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
         body: JSON.stringify({ rows }),
       })
-      const result = await response.json() as { createdCount?: number; failedCount?: number; error?: string }
+      const result = await response.json() as { createdCount?: number; updatedCount?: number; failedCount?: number; error?: string }
       if (!response.ok) throw new Error(result.error || t('usersAdmin.bulkImportFailed'))
       if ((result.failedCount || 0) > 0) {
-        message.warning(t('usersAdmin.bulkImportPartial', { created: result.createdCount || 0, failed: result.failedCount || 0 }))
+        message.warning(t('usersAdmin.bulkImportPartial', {
+          created: result.createdCount || 0,
+          updated: result.updatedCount || 0,
+          failed: result.failedCount || 0,
+        }))
       } else {
-        message.success(t('usersAdmin.bulkImportSuccess', { count: result.createdCount || 0 }))
+        message.success(t('usersAdmin.bulkImportSuccess', {
+          created: result.createdCount || 0,
+          updated: result.updatedCount || 0,
+        }))
       }
       await refreshUsers()
       setBulkImportOpen(false)

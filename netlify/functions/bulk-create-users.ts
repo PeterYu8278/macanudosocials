@@ -58,12 +58,52 @@ const addOneYear = (date: Date) => {
   return result
 }
 
+const membershipStateFor = (activationDate: Date | null, now = new Date()) => {
+  if (!activationDate) {
+    return {
+      role: 'guest' as const,
+      status: 'inactive' as const,
+      activeFrom: null,
+      activeUntil: null,
+    }
+  }
+
+  const activeUntil = addOneYear(activationDate)
+  const isActive = now >= activationDate && now < activeUntil
+  return {
+    role: 'member' as const,
+    status: isActive ? 'active' as const : 'inactive' as const,
+    activeFrom: Timestamp.fromDate(activationDate),
+    activeUntil: Timestamp.fromDate(activeUntil),
+  }
+}
+
 const initAdmin = () => {
   if (getApps().length) return
   const credentials = process.env.FIREBASE_SERVICE_ACCOUNT
   if (!credentials) throw new Error('FIREBASE_SERVICE_ACCOUNT is not configured')
   initializeApp({ credential: cert(JSON.parse(credentials)) })
 }
+
+const getUserByEmailOrNull = async (email: string) => {
+  try {
+    return await getAuth().getUserByEmail(email)
+  } catch (error: any) {
+    if (error?.code === 'auth/user-not-found') return null
+    throw error
+  }
+}
+
+const getUserByPhoneOrNull = async (phone: string) => {
+  try {
+    return await getAuth().getUserByPhoneNumber(phone)
+  } catch (error: any) {
+    if (error?.code === 'auth/user-not-found') return null
+    throw error
+  }
+}
+
+const PROTECTED_ROLES = new Set(['developer', 'superAdmin', 'admin', 'storeAdmin'])
 
 export const handler: Handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
@@ -86,7 +126,10 @@ export const handler: Handler = async event => {
     if (!rows.length || rows.length > 100) return json(400, { error: 'Import between 1 and 100 rows' })
 
     const created: Array<{ email: string; uid: string; memberId: string }> = []
+    const updated: Array<{ email: string; uid: string; memberId: string }> = []
     const failed: Array<{ row: number; email?: string; error: string }> = []
+    const seenEmails = new Set<string>()
+    const seenPhones = new Set<string>()
 
     for (const [index, row] of rows.entries()) {
       const name = typeof row.name === 'string' ? row.name.trim() : ''
@@ -101,30 +144,87 @@ export const handler: Handler = async event => {
         continue
       }
 
+      if (seenEmails.has(email) || (phone && seenPhones.has(phone))) {
+        failed.push({ row: index + 1, email, error: 'Duplicate email or phone number in this import' })
+        continue
+      }
+      seenEmails.add(email)
+      if (phone) seenPhones.add(phone)
+
       let firebaseUser: Awaited<ReturnType<typeof adminAuth.createUser>> | null = null
+      let createdAuthUser = false
+      let existingUser: Record<string, any> | undefined
       try {
-        firebaseUser = await adminAuth.createUser({
-          email,
-          password,
-          displayName: name,
-          ...(phone ? { phoneNumber: phone } : {}),
-        })
-        const activationDate = parseDate(row.activationDate) || new Date()
+        const [emailUser, phoneUser, emailMatches, phoneMatches] = await Promise.all([
+          getUserByEmailOrNull(email),
+          phone ? getUserByPhoneOrNull(phone) : Promise.resolve(null),
+          db.collection('users').where('email', '==', email).limit(2).get(),
+          phone
+            ? db.collection('users').where('profile.phone', '==', phone).limit(2).get()
+            : Promise.resolve(null),
+        ])
+        if (emailUser && phoneUser && emailUser.uid !== phoneUser.uid) {
+          throw new Error('IMPORT_IDENTITY_CONFLICT')
+        }
+        if (emailMatches.size > 1 || (phoneMatches && phoneMatches.size > 1)) {
+          throw new Error('IMPORT_IDENTITY_CONFLICT')
+        }
+
+        const emailDoc = emailMatches.docs[0]
+        const phoneDoc = phoneMatches?.docs[0]
+        if (emailDoc && phoneDoc && emailDoc.id !== phoneDoc.id) {
+          throw new Error('IMPORT_IDENTITY_CONFLICT')
+        }
+        const authUid = (emailUser || phoneUser)?.uid
+        const firestoreUid = (emailDoc || phoneDoc)?.id
+        if (authUid && firestoreUid && authUid !== firestoreUid) {
+          throw new Error('IMPORT_IDENTITY_CONFLICT')
+        }
+        const matchedExistingIdentity = Boolean(authUid || firestoreUid)
+
+        firebaseUser = emailUser || phoneUser
+        if (firebaseUser) {
+          existingUser = (await db.collection('users').doc(firebaseUser.uid).get()).data()
+          if (existingUser?.role && PROTECTED_ROLES.has(existingUser.role)) {
+            throw new Error('IMPORT_PROTECTED_ROLE')
+          }
+          firebaseUser = await adminAuth.updateUser(firebaseUser.uid, {
+            email,
+            displayName: name,
+            ...(phone ? { phoneNumber: phone } : {}),
+          })
+        } else {
+          existingUser = (emailDoc || phoneDoc)?.data()
+          if (existingUser?.role && PROTECTED_ROLES.has(existingUser.role)) {
+            throw new Error('IMPORT_PROTECTED_ROLE')
+          }
+          firebaseUser = await adminAuth.createUser({
+            ...(firestoreUid ? { uid: firestoreUid } : {}),
+            email,
+            password,
+            displayName: name,
+            ...(phone ? { phoneNumber: phone } : {}),
+          })
+          createdAuthUser = true
+        }
+
+        const activationDate = parseDate(row.activationDate)
+        const membershipState = membershipStateFor(activationDate)
         const now = Timestamp.now()
-        const memberId = memberIdFor(firebaseUser.uid)
         const userRef = db.collection('users').doc(firebaseUser.uid)
-        await userRef.set({
+        const memberId = existingUser?.memberId || memberIdFor(firebaseUser.uid)
+        const userData: Record<string, unknown> = {
           displayName: name,
           email,
           memberId,
-          role: 'member',
-          status: 'active',
+          role: membershipState.role,
+          status: membershipState.status,
           profile: { phone: phone || null },
           membership: {
             level: 'bronze',
-            joinDate: Timestamp.fromDate(activationDate),
-            activeFrom: Timestamp.fromDate(activationDate),
-            activeUntil: Timestamp.fromDate(addOneYear(activationDate)),
+            joinDate: membershipState.activeFrom,
+            activeFrom: membershipState.activeFrom,
+            activeUntil: membershipState.activeUntil,
             points: numberOr(row.points),
             totalVisitHours: numberOr(row.totalVisitHours),
           },
@@ -135,42 +235,65 @@ export const handler: Handler = async event => {
             legacyFriendsInviteCount: numberOr(row.invitedCount),
             legacyRedeemedCigarCount: numberOr(row.redeemedCigarCount),
           },
-          preferences: { locale: 'zh-CN', notifications: true },
-          createdAt: now,
           updatedAt: now,
-        })
+        }
+        if (!existingUser) {
+          userData.referral = { referrals: [], totalReferred: 0, activeReferrals: 0 }
+          userData.preferences = { locale: 'zh-CN', notifications: true }
+          userData.createdAt = now
+        }
+        await userRef.set(userData, { merge: true })
 
         const invitedCount = Math.max(0, Math.floor(numberOr(row.invitedCount)))
         const redeemedCigarCount = Math.max(0, Math.floor(numberOr(row.redeemedCigarCount)))
         const placeholderWrites = []
         for (let placeholderIndex = 0; placeholderIndex < invitedCount; placeholderIndex += 1) {
-          placeholderWrites.push(userRef.collection('migrationReferralPlaceholders').doc().set({
+          const placeholderId = `legacy-referral-${String(placeholderIndex + 1).padStart(4, '0')}`
+          placeholderWrites.push(userRef.collection('migrationReferralPlaceholders').doc(placeholderId).set({
             referredUserId: null, referredUserName: null, referredUserMemberId: null,
             source: 'bulk_paste_import', status: 'placeholder', createdAt: now, updatedAt: now,
-          }))
+          }, { merge: true }))
         }
         if (redeemedCigarCount > 0) {
-          placeholderWrites.push(userRef.collection('migrationRedemptionPlaceholders').doc().set({
+          placeholderWrites.push(userRef.collection('migrationRedemptionPlaceholders').doc('legacy-total').set({
             cigarId: null, cigarName: null, quantity: redeemedCigarCount,
             source: 'bulk_paste_import', status: 'placeholder',
-            redeemedAt: Timestamp.fromDate(activationDate), createdAt: now, updatedAt: now,
-          }))
+            redeemedAt: membershipState.activeFrom || now, createdAt: now, updatedAt: now,
+          }, { merge: true }))
         }
         await Promise.all(placeholderWrites)
-        created.push({ email, uid: firebaseUser.uid, memberId })
+        const result = { email, uid: firebaseUser.uid, memberId }
+        if (matchedExistingIdentity) updated.push(result)
+        else created.push(result)
       } catch (error: any) {
-        if (firebaseUser) {
+        if (firebaseUser && createdAuthUser) {
           try { await adminAuth.deleteUser(firebaseUser.uid) } catch { /* keep row atomic */ }
         }
         failed.push({
           row: index + 1,
           email,
-          error: error?.code === 'auth/email-already-exists' ? 'Email already exists' : error?.code === 'auth/phone-number-already-exists' ? 'Phone already exists' : 'Creation failed',
+          error: error?.message === 'IMPORT_IDENTITY_CONFLICT'
+            ? 'Email and phone belong to different accounts'
+            : error?.message === 'IMPORT_PROTECTED_ROLE'
+              ? 'Existing privileged account cannot be changed by member import'
+              : error?.code === 'auth/email-already-exists'
+                ? 'Email already exists on another account'
+                : error?.code === 'auth/phone-number-already-exists'
+                  ? 'Phone already exists on another account'
+                  : 'Import failed',
         })
       }
     }
 
-    return json(200, { success: true, created, failed, createdCount: created.length, failedCount: failed.length })
+    return json(200, {
+      success: true,
+      created,
+      updated,
+      failed,
+      createdCount: created.length,
+      updatedCount: updated.length,
+      failedCount: failed.length,
+    })
   } catch (error: any) {
     return json(error?.code === 'auth/id-token-revoked' ? 401 : 500, { error: error?.message || 'Bulk import failed' })
   }
