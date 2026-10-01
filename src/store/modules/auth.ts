@@ -8,6 +8,9 @@ import { db } from '../../config/firebase'
 
 interface AuthState {
   user: User | null
+  actualUser: User | null
+  simulatedRole: UserRole | null
+  setSimulatedRole: (role: UserRole | null) => void
   firebaseUser: any | null
   loading: boolean
   error: string | null
@@ -22,7 +25,7 @@ interface AuthState {
   cacheValidDuration: number // 缓存有效期（毫秒），默认5分钟
   
   // Actions
-  setUser: (user: User | null) => void
+  setUser: (user: User | null, fromServer?: boolean) => void
   setFirebaseUser: (user: any | null) => void
   setLoading: (loading: boolean) => void
   setError: (error: string | null) => void
@@ -109,6 +112,8 @@ const isMemoryCacheValid = (cachedUser: User | null, cacheTimestamp: number, fir
 
 export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
+  actualUser: null,
+  simulatedRole: null,
   firebaseUser: null,
   loading: true,
   error: null,
@@ -122,8 +127,24 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   cacheTimestamp: 0,
   cacheValidDuration: CACHE_VALID_DURATION,
 
-  setUser: (user) => {
-    set({ user });
+  setUser: (user, fromServer = false) => {
+    const current = get()
+    // Optimistic profile edits may spread the simulated user into setUser.
+    if (!fromServer && user && current.simulatedRole && current.actualUser?.role === 'developer'
+      && current.actualUser.id === user.id && user.role === current.simulatedRole) {
+      user = { ...user, role: current.actualUser.role }
+    }
+    const simulatedRole = user?.role === 'developer' && current.actualUser?.id === user.id
+      ? current.simulatedRole : null
+    const effectiveUser = user && simulatedRole ? { ...user, role: simulatedRole } : user
+    set({
+      actualUser: user,
+      simulatedRole,
+      user: effectiveUser,
+      isAdmin: !!effectiveUser && ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(effectiveUser.role),
+      isSuperAdmin: !!effectiveUser && ['superAdmin', 'developer'].includes(effectiveUser.role),
+      isDeveloper: effectiveUser?.role === 'developer',
+    });
     // 策略1: 同时更新内存缓存
     if (user) {
       set({ 
@@ -141,6 +162,20 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       sessionStorage.removeItem(SESSION_STORAGE_KEYS.USER_DATA);
       sessionStorage.removeItem(SESSION_STORAGE_KEYS.CACHE_TIMESTAMP);
     }
+  },
+
+  setSimulatedRole: (role) => {
+    const { actualUser } = get()
+    if (actualUser?.role !== 'developer') return
+    const simulatedRole = role === 'developer' ? null : role
+    const user = { ...actualUser, role: simulatedRole || actualUser.role }
+    set({
+      simulatedRole,
+      user,
+      isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(user.role),
+      isSuperAdmin: ['superAdmin', 'developer'].includes(user.role),
+      isDeveloper: user.role === 'developer',
+    })
   },
   
   setFirebaseUser: (firebaseUser) => set({ firebaseUser }),
@@ -246,12 +281,12 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
 
           if (userData) {
-            setUser(userData)
+            setUser(userData, true)
             setFirebaseUser(firebaseUser)
             set({ 
-              isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(userData.role),
-              isSuperAdmin: ['superAdmin', 'developer'].includes(userData.role),
-              isDeveloper: userData.role === 'developer'
+              isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(get().user!.role),
+              isSuperAdmin: ['superAdmin', 'developer'].includes(get().user!.role),
+              isDeveloper: get().user?.role === 'developer'
             })
 
             // 策略3: 开始实时监听用户文档变化（自动更新用户状态和会员状态）
@@ -266,11 +301,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                     const rawData = userDocSnap.data();
                     const data = convertFirestoreTimestamps(rawData);
                     const updatedUser = { id: firestoreUserId, ...data } as User;
-                    setUser(updatedUser);
+                    setUser(updatedUser, true);
                     set({
-                      isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(updatedUser.role),
-                      isSuperAdmin: ['superAdmin', 'developer'].includes(updatedUser.role),
-                      isDeveloper: updatedUser.role === 'developer'
+                      isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(get().user!.role),
+                      isSuperAdmin: ['superAdmin', 'developer'].includes(get().user!.role),
+                      isDeveloper: get().user?.role === 'developer'
                     });
                   }
                 },
@@ -303,22 +338,22 @@ export const useAuthStore = create<AuthState>((set, get) => ({
             
             if (cachedUserData) {
               console.info('[Auth Store] ✅ 使用内存缓存作为降级方案');
-              setUser(cachedUserData);
+              setUser(cachedUserData, true);
               setFirebaseUser(firebaseUser);
               set({ 
-                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(cachedUserData.role),
-                isSuperAdmin: ['superAdmin', 'developer'].includes(cachedUserData.role),
-                isDeveloper: cachedUserData.role === 'developer',
+                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(get().user!.role),
+                isSuperAdmin: ['superAdmin', 'developer'].includes(get().user!.role),
+                isDeveloper: get().user?.role === 'developer',
                 error: '网络繁忙，使用缓存数据'
               });
             } else if (storageCache) {
               console.info('[Auth Store] ✅ 使用 sessionStorage 缓存作为降级方案');
-              setUser(storageCache.userData);
+              setUser(storageCache.userData, true);
               setFirebaseUser(firebaseUser);
               set({
-                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(storageCache.userData.role),
-                isSuperAdmin: ['superAdmin', 'developer'].includes(storageCache.userData.role),
-                isDeveloper: storageCache.userData.role === 'developer',
+                isAdmin: ['storeAdmin', 'superAdmin', 'admin', 'developer'].includes(get().user!.role),
+                isSuperAdmin: ['superAdmin', 'developer'].includes(get().user!.role),
+                isDeveloper: get().user?.role === 'developer',
                 error: '网络繁忙，使用缓存数据'
               });
             } else {
@@ -360,6 +395,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     }
     set({ 
       user: null, 
+      actualUser: null,
+      simulatedRole: null,
+      isSuperAdmin: false,
       firebaseUser: null, 
       isAdmin: false, 
       isDeveloper: false,

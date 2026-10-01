@@ -6,6 +6,7 @@ import AppSider from './components/layout/AppSider'
 import AppFooter from './components/layout/AppFooter'
 import MobileBottomNav from './components/layout/MobileBottomNav'
 import ProtectedRoute from './components/common/ProtectedRoute'
+import RoleSimulator from './components/common/RoleSimulator'
 import { useAuthStore } from './store/modules/auth'
 import { getAppConfig } from './services/firebase/appConfig'
 import { applyDynamicIcons } from './utils/dynamicManifest'
@@ -304,6 +305,7 @@ const AppContent: React.FC = () => {
           flexDirection: 'column',
           overflow: isLandingPage ? 'visible' : 'hidden'
         }}>
+          <RoleSimulator activeOnly />
           <Content
             style={{
               paddingTop: needsPadding ? 12 : 0,

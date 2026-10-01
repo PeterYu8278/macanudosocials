@@ -4,7 +4,8 @@ import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { Typography, Button, App, Spin, Modal, Form, Select, Input, Alert, Drawer } from 'antd'
 import { ReloadOutlined, PlusOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import RoleSimulator from '../../../components/common/RoleSimulator'
 import dayjs from 'dayjs'
 import {
   getUsers,
@@ -1336,8 +1337,10 @@ const AdminDashboard: React.FC = () => {
       `}</style>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, marginBottom: 12 }}>
         <h1 style={{ fontSize: 22, fontWeight: 800, backgroundImage: 'linear-gradient(to right,#FDE08D,#C48D3A)', WebkitBackgroundClip: 'text', color: 'transparent', margin: 0 }}>{t('dashboard.overview')}</h1>
-        <a
-          href="/"
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <RoleSimulator />
+        <Link
+          to="/"
           aria-label={t('navigation.home')}
           title={t('navigation.home')}
           style={{
@@ -1357,7 +1360,8 @@ const AdminDashboard: React.FC = () => {
           }}
         >
           <HomeOutlined />
-        </a>
+        </Link>
+        </div>
       </div>
 
       {/* Subscription Renewal Modal */}
