@@ -18,6 +18,13 @@ export interface PWAInstallState {
   isChecking: boolean;
 }
 
+export type PWAUpdateCheckResult =
+  | 'updated'
+  | 'available'
+  | 'up-to-date'
+  | 'unsupported'
+  | 'failed';
+
 // Global variables for PWA state
 let deferredPrompt: BeforeInstallPromptEvent | null = null;
 let installState: PWAInstallState = {
@@ -200,17 +207,54 @@ export const showUpdateNotification = (): void => {
   }
 };
 
-// Check for updates
-export const checkForUpdates = async (): Promise<void> => {
-  if ('serviceWorker' in navigator) {
-    try {
-      const registration = await navigator.serviceWorker.getRegistration();
-      if (registration) {
-        await registration.update();
-      }
-    } catch (error) {
-      // 静默处理错误
+// Check for updates and activate a waiting worker when one is available.
+export const checkForUpdates = async (): Promise<PWAUpdateCheckResult> => {
+  if (!('serviceWorker' in navigator)) return 'unsupported';
+
+  try {
+    const registration = await navigator.serviceWorker.getRegistration();
+    if (!registration) return 'unsupported';
+
+    if (registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+      return 'available';
     }
+
+    return await new Promise<PWAUpdateCheckResult>((resolve, reject) => {
+      let settled = false;
+      const timeout = window.setTimeout(() => finish('up-to-date'), 10000);
+
+      const finish = (result: PWAUpdateCheckResult) => {
+        if (settled) return;
+        settled = true;
+        window.clearTimeout(timeout);
+        registration.removeEventListener('updatefound', handleUpdateFound);
+        resolve(result);
+      };
+
+      const handleUpdateFound = () => {
+        const worker = registration.installing;
+        if (!worker) return;
+
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed') {
+            if (navigator.serviceWorker.controller && registration.waiting) {
+              registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+              finish('available');
+            } else {
+              finish('up-to-date');
+            }
+          } else if (worker.state === 'redundant') {
+            finish('up-to-date');
+          }
+        });
+      };
+
+      registration.addEventListener('updatefound', handleUpdateFound);
+      registration.update().catch(reject);
+    });
+  } catch {
+    return 'failed';
   }
 };
 

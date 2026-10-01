@@ -7,7 +7,8 @@ import {
 import {
   ArrowLeftOutlined, MailOutlined, PhoneOutlined, BellOutlined,
   CalendarOutlined, WalletOutlined, ShoppingOutlined, GiftOutlined,
-  SaveOutlined, LockOutlined, SettingOutlined, UserOutlined, LogoutOutlined
+  SaveOutlined, LockOutlined, SettingOutlined, UserOutlined, LogoutOutlined,
+  CloudDownloadOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -30,6 +31,7 @@ import {
   requestPushSubscription,
   syncPushSubscriptionToFirestore,
 } from '../../../services/oneSignal'
+import { usePWA } from '../../../utils/pwa'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -37,12 +39,14 @@ const Profile: React.FC = () => {
   const navigate = useNavigate()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState('basic')
   const pushStatus = usePushNotificationStore((state) => state.status)
   const pushBusy = usePushNotificationStore((state) => state.busy)
   const setPushBusy = usePushNotificationStore((state) => state.setBusy)
   const setPushSnapshot = usePushNotificationStore((state) => state.setSnapshot)
+  const { checkForUpdates } = usePWA()
 
   // Reactive isMobile — fixed from exact-width bug
   const [isMobile, setIsMobile] = useState(() =>
@@ -198,6 +202,26 @@ const Profile: React.FC = () => {
       }
     } catch (error: any) {
       message.error(error.message || t('auth.logoutFailed', { defaultValue: '登出失败' }))
+    }
+  }
+
+  const handleCheckForUpdates = async () => {
+    if (checkingForUpdate) return
+    setCheckingForUpdate(true)
+    try {
+      const result = await checkForUpdates()
+      if (result === 'available' || result === 'updated') {
+        message.success(t('profile.systemUpdate.updateReady'))
+        window.setTimeout(() => window.location.reload(), 800)
+      } else if (result === 'up-to-date') {
+        message.success(t('profile.systemUpdate.upToDate'))
+      } else if (result === 'unsupported') {
+        message.info(t('profile.systemUpdate.unavailable'))
+      } else {
+        message.error(t('profile.systemUpdate.failed'))
+      }
+    } finally {
+      setCheckingForUpdate(false)
     }
   }
 
@@ -478,6 +502,31 @@ const Profile: React.FC = () => {
           <LanguageSelect />
         </Form.Item>
       </Form>
+
+      <Divider style={{ margin: '16px 0', borderColor: 'rgba(255,255,255,0.1)' }} />
+
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: 12,
+        marginBottom: 12,
+      }}>
+        <Space size={8}>
+          <CloudDownloadOutlined style={{ color: '#F4AF25' }} />
+          <Typography.Text style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
+            {t('profile.systemUpdate.title')}
+          </Typography.Text>
+        </Space>
+        <Button
+          icon={<CloudDownloadOutlined />}
+          loading={checkingForUpdate}
+          onClick={handleCheckForUpdates}
+        >
+          {checkingForUpdate ? t('profile.systemUpdate.checking') : t('profile.systemUpdate.check')}
+        </Button>
+      </div>
 
       <Divider style={{ margin: '16px 0', borderColor: 'rgba(255,255,255,0.1)' }} />
 

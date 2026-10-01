@@ -1855,6 +1855,15 @@
     "editProfile": "编辑资料",
     "settings": "偏好设置",
     "language": "语言",
+    "systemUpdate": {
+      "title": "系统更新",
+      "check": "检查系统更新",
+      "checking": "检查中...",
+      "upToDate": "当前已是最新版本。",
+      "updateReady": "发现新版本，正在更新...",
+      "unavailable": "当前环境不支持在线更新。",
+      "failed": "检查更新失败，请稍后重试。"
+    },
     "cigarRecords": "购茄记录",
     "cigarRecordDetails": "雪茄记录详情",
     "pointsRecords": "积分记录",

@@ -228,16 +228,13 @@ export const loginWithEmailOrPhone = async (identifier: string, password: string
       return { success: false, error: new Error('请输入有效的邮箱或手机号') } as { success: false; error: Error }
     }
     
-    // 检查是否禁用了电邮登录（只禁止邮箱登录，不禁止手机号登录）
-    const appConfig = await getAppConfig()
-    
-    // 如果是邮箱登录且已禁用，则阻止
-    if (type === 'email' && appConfig?.auth?.disableEmailLogin) {
-      return { success: false, error: new Error('邮箱登录已被禁用，请使用手机号登录') } as { success: false; error: Error }
-    }
-    
     // 邮箱登录
     if (type === 'email') {
+      // 手机号登入不受电邮开关影响，因此不会额外等待配置请求。
+      const appConfig = await getAppConfig()
+      if (appConfig?.auth?.disableEmailLogin) {
+        return { success: false, error: new Error('邮箱登录已被禁用，请使用手机号登录') } as { success: false; error: Error }
+      }
       return await loginUser(identifier.trim(), password)
     }
     
