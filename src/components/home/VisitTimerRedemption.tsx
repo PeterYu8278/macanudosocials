@@ -603,6 +603,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 checkoutPending,
                 checkoutPointsDue
               );
+              const isLowPoints = shouldReloadForCheckout;
 
               // 判断按钮状态和显示文本
               let buttonText = t('visitTimer.redeem');

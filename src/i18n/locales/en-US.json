@@ -1139,6 +1139,8 @@
     "bulkImportHint": "Paste tab-separated member rows including NAME, EMAIL, PHONE NUMBER, DATE::TIME, FRIENDS INVITE, TOTAL SPEND, WALLET BALANCE and REDEEMED CIGAR. Up to 100 rows per import.",
     "bulkImportPlaceholder": "NAME\tEMAIL\tPHONE NUMBER\tDATE::TIME\tFRIENDS INVITE\tTOTAL SPEND\tWALLET BALANCE\tREDEEMED CIGAR",
     "bulkImportSecurity": "Only developer accounts can use this action. Accounts are created with the server-configured initial password.",
+    "bulkImportAddRow": "Add Row",
+    "bulkImportPasteHint": "Paste Excel rows into any table cell to fill the table.",
     "bulkImportEmpty": "Paste at least one member row",
     "bulkImportSuccess": "Created {{count}} users",
     "bulkImportPartial": "Created {{created}} users; {{failed}} rows failed",

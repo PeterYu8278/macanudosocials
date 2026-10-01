@@ -103,6 +103,11 @@ const parseBulkImport = (text: string): BulkImportRow[] => {
   })).filter(row => row.name || row.email)
 }
 
+const emptyBulkImportRow = (): BulkImportRow => ({
+  name: '', email: '', phone: '', activationDate: '', invitedCount: 0,
+  totalVisitHours: 0, points: 0, redeemedCigarCount: 0,
+})
+
 const AdminUsers: React.FC = () => {
   const tableScroll = useVirtualTableScroll()
   const { t, i18n } = useTranslation()
@@ -130,7 +135,7 @@ const AdminUsers: React.FC = () => {
   const [actionLoading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
-  const [bulkImportText, setBulkImportText] = useState('')
+  const [bulkImportRows, setBulkImportRows] = useState<BulkImportRow[]>([emptyBulkImportRow()])
   const [bulkImportLoading, setBulkImportLoading] = useState(false)
   const [deleting, setDeleting] = useState<null | User>(null)
   const [resettingPasswordLoading, setResettingPasswordLoading] = useState(false)
@@ -543,7 +548,7 @@ const AdminUsers: React.FC = () => {
   }, [visibleCols])
 
   const handleBulkImport = async () => {
-    const rows = parseBulkImport(bulkImportText)
+    const rows = bulkImportRows.filter(row => row.name.trim() || row.email.trim())
     if (!rows.length) {
       message.warning(t('usersAdmin.bulkImportEmpty'))
       return
@@ -570,12 +575,25 @@ const AdminUsers: React.FC = () => {
       }
       await refreshUsers()
       setBulkImportOpen(false)
-      setBulkImportText('')
+      setBulkImportRows([emptyBulkImportRow()])
     } catch (error: any) {
       message.error(error?.message || t('usersAdmin.bulkImportFailed'))
     } finally {
       setBulkImportLoading(false)
     }
+  }
+
+  const updateBulkImportRow = (rowIndex: number, field: keyof BulkImportRow, value: string | number) => {
+    setBulkImportRows(current => current.map((row, index) => index === rowIndex ? { ...row, [field]: value } : row))
+  }
+
+  const handleBulkTablePaste = (event: React.ClipboardEvent<HTMLDivElement>) => {
+    const text = event.clipboardData.getData('text/plain')
+    if (!text.includes('\t') && !text.includes('\n')) return
+    const parsed = parseBulkImport(text)
+    if (!parsed.length) return
+    event.preventDefault()
+    setBulkImportRows(parsed)
   }
 
   return (
@@ -1667,13 +1685,80 @@ const AdminUsers: React.FC = () => {
         <Typography.Paragraph style={{ color: 'rgba(255,255,255,0.72)', marginBottom: 12 }}>
           {t('usersAdmin.bulkImportHint')}
         </Typography.Paragraph>
-        <Input.TextArea
-          value={bulkImportText}
-          onChange={event => setBulkImportText(event.target.value)}
-          autoSize={{ minRows: 8, maxRows: 18 }}
-          placeholder={t('usersAdmin.bulkImportPlaceholder')}
-          disabled={bulkImportLoading}
-        />
+        <div onPaste={handleBulkTablePaste}>
+          <Table
+            size="small"
+            bordered
+            pagination={false}
+            scroll={{ x: 980, y: 320 }}
+            rowKey={(_, index) => String(index)}
+            dataSource={bulkImportRows}
+            columns={[
+              {
+                title: 'NAME', dataIndex: 'name', width: 150,
+                render: (value: string, _row: BulkImportRow, index: number) => (
+                  <Input size="small" value={value} disabled={bulkImportLoading} onChange={event => updateBulkImportRow(index, 'name', event.target.value)} />
+                ),
+              },
+              {
+                title: 'EMAIL', dataIndex: 'email', width: 210,
+                render: (value: string, _row: BulkImportRow, index: number) => (
+                  <Input size="small" value={value} disabled={bulkImportLoading} onChange={event => updateBulkImportRow(index, 'email', event.target.value)} />
+                ),
+              },
+              {
+                title: 'PHONE', dataIndex: 'phone', width: 150,
+                render: (value: string, _row: BulkImportRow, index: number) => (
+                  <Input size="small" value={value} disabled={bulkImportLoading} onChange={event => updateBulkImportRow(index, 'phone', event.target.value)} />
+                ),
+              },
+              {
+                title: 'ACTIVATION DATE', dataIndex: 'activationDate', width: 170,
+                render: (value: string, _row: BulkImportRow, index: number) => (
+                  <Input size="small" value={value} disabled={bulkImportLoading} onChange={event => updateBulkImportRow(index, 'activationDate', event.target.value)} />
+                ),
+              },
+              {
+                title: 'INVITED', dataIndex: 'invitedCount', width: 90,
+                render: (value: number, _row: BulkImportRow, index: number) => (
+                  <InputNumber size="small" min={0} value={value} disabled={bulkImportLoading} onChange={value => updateBulkImportRow(index, 'invitedCount', value || 0)} />
+                ),
+              },
+              {
+                title: 'VISIT HOURS', dataIndex: 'totalVisitHours', width: 110,
+                render: (value: number, _row: BulkImportRow, index: number) => (
+                  <InputNumber size="small" min={0} step={0.01} value={value} disabled={bulkImportLoading} onChange={value => updateBulkImportRow(index, 'totalVisitHours', value || 0)} />
+                ),
+              },
+              {
+                title: 'POINTS', dataIndex: 'points', width: 90,
+                render: (value: number, _row: BulkImportRow, index: number) => (
+                  <InputNumber size="small" min={0} value={value} disabled={bulkImportLoading} onChange={value => updateBulkImportRow(index, 'points', value || 0)} />
+                ),
+              },
+              {
+                title: 'REDEEMED', dataIndex: 'redeemedCigarCount', width: 100,
+                render: (value: number, _row: BulkImportRow, index: number) => (
+                  <InputNumber size="small" min={0} value={value} disabled={bulkImportLoading} onChange={value => updateBulkImportRow(index, 'redeemedCigarCount', value || 0)} />
+                ),
+              },
+              {
+                title: '', key: 'remove', width: 48,
+                render: (_: unknown, _row: BulkImportRow, index: number) => (
+                  <Button type="text" danger icon={<DeleteOutlined />} disabled={bulkImportLoading || bulkImportRows.length === 1} onClick={() => setBulkImportRows(current => current.filter((_, rowIndex) => rowIndex !== index))} />
+                ),
+              },
+            ]}
+          />
+        </div>
+        <Space style={{ marginTop: 12 }}>
+          <Button icon={<PlusOutlined />} disabled={bulkImportLoading} onClick={() => setBulkImportRows(current => [...current, emptyBulkImportRow()])}>
+            {t('usersAdmin.bulkImportAddRow')}
+          </Button>
+          <Typography.Text style={{ color: 'rgba(255,255,255,0.55)', fontSize: 12 }}>
+            {t('usersAdmin.bulkImportPasteHint')}
+          </Typography.Text>
+        </Space>
         <Typography.Text style={{ display: 'block', color: 'rgba(255,255,255,0.55)', marginTop: 8, fontSize: 12 }}>
           {t('usersAdmin.bulkImportSecurity')}
         </Typography.Text>
