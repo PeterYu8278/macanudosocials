@@ -15,7 +15,7 @@ import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
-import { shouldShowCheckoutReload } from '../../utils/visitCheckout';
+import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
 
 const { Title, Text } = Typography;
 
@@ -155,10 +155,23 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   }, [currentSession?.id]);
 
   useEffect(() => {
-    if (currentSession?.checkoutPending?.status === 'awaiting_reload') {
+    const checkoutPending = currentSession?.checkoutPending;
+    const currentPoints = Number(user?.membership?.points || 0);
+    const pointsDueNow = Number(checkoutPending?.pointsDueNow || 0);
+
+    if (shouldRedirectToCheckoutReload(
+      currentPoints,
+      checkoutPending?.status === 'awaiting_reload',
+      pointsDueNow
+    )) {
       navigate('/reload');
     }
-  }, [currentSession?.checkoutPending?.status, navigate]);
+  }, [
+    currentSession?.checkoutPending?.status,
+    currentSession?.checkoutPending?.pointsDueNow,
+    user?.membership?.points,
+    navigate
+  ]);
 
   // 计算实时时长
   useEffect(() => {

@@ -10,6 +10,14 @@ export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction
     return t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
   }
   if (record.source === 'visit') {
+    const rebate = description.trim().match(/^驻店消费返点\s*([\d,.]+)%\s*[（(]\s*([\d,.]+)\s*积分\s*[）)]$/)
+    if (rebate) {
+      return t('pointsConfig.records.visitRebateDescription', {
+        rate: rebate[1],
+        points: rebate[2],
+        defaultValue: 'Lounge spend rebate {{rate}}% ({{points}} points)'
+      })
+    }
     if (description === 'Historical visit fee import') {
       return t('pointsConfig.records.historicalVisitFeeDescription', {
         points: record.amount,

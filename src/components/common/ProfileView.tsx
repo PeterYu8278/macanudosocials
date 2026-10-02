@@ -20,14 +20,15 @@ import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
 import { getUserVisitSessions } from '../../services/firebase/visitSessions'
-import type { User, Event, Order, Cigar, PointsRecord, VisitSession } from '../../types'
+import { getTotalRedemptions } from '../../services/firebase/redemption'
+import type { User, Event, Order, Cigar, PointsRecord, RedemptionRecord, VisitSession } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { MemberProfileCard } from './MemberProfileCard'
 import { isFeatureVisible } from '../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../store/modules/auth'
 import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/text-transform'
-import { isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
+import { formatPointsRecordDescription, isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
 
 interface ProfileViewProps {
   user?: User | null          // Direct user object
@@ -62,6 +63,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [loadingVisitSessions, setLoadingVisitSessions] = useState(false)
   const [userOrders, setUserOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
+  const [userRedemptions, setUserRedemptions] = useState<RedemptionRecord[]>([])
+  const [loadingRedemptions, setLoadingRedemptions] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [cigarRecordDrawerOpen, setCigarRecordDrawerOpen] = useState(false)
   const [referredUsers, setReferredUsers] = useState<User[]>([])
@@ -148,6 +151,27 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }
     }
     loadUserEvents()
+  }, [user?.id])
+
+  // Redemption records are the canonical source for cigars savoured, including legacy imports.
+  useEffect(() => {
+    const loadUserRedemptions = async () => {
+      if (!user?.id) {
+        setUserRedemptions([])
+        return
+      }
+      setLoadingRedemptions(true)
+      try {
+        const records = await getTotalRedemptions(user.id)
+        setUserRedemptions(records.sort((a, b) => b.redeemedAt.getTime() - a.redeemedAt.getTime()))
+      } catch (error) {
+        console.error('[ProfileView] Failed to load redemption records:', error)
+        setUserRedemptions([])
+      } finally {
+        setLoadingRedemptions(false)
+      }
+    }
+    loadUserRedemptions()
   }, [user?.id])
 
   // Load lounge visits for the Activity Records tab.
@@ -313,13 +337,15 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     });
   }
 
-  // Total cigars purchased calculation
-  const totalCigarsPurchased = useMemo(() => {
-    return userOrders.reduce((total, order) => {
-      const orderTotal = order.items.reduce((sum, item) => sum + item.quantity, 0)
-      return total + orderTotal
-    }, 0)
-  }, [userOrders])
+  const totalCigarsSavoured = useMemo(() => (
+    userRedemptions
+      .filter(record => record.status === 'completed')
+      .reduce((total, record) => total + Number(record.quantity || 0), 0)
+  ), [userRedemptions])
+
+  const purchaseOrders = useMemo(() => userOrders.filter(order => (
+    !order.source?.note?.startsWith('驻店兑换订单 (Session:')
+  )), [userOrders])
 
   const formatHoursMinutes = (hoursValue: unknown, minutesValue?: unknown) => {
     const explicitMinutes = Number(minutesValue)
@@ -342,7 +368,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     { title: t('profile.eventsJoined'), value: userEvents.length, icon: <CalendarOutlined /> },
     {
       title: t('profile.cigarsSavoured', { defaultValue: isChinese ? '品鉴雪茄' : 'Cigars Savoured' }),
-      value: totalCigarsPurchased,
+      value: totalCigarsSavoured,
       icon: <ShoppingOutlined />,
     },
     { title: t('profile.communityPoints'), value: (user?.membership as any)?.points || 0, icon: <TrophyOutlined /> },
@@ -431,11 +457,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }
 
   const getPointsRecordDescription = (record: PointsRecord, session?: VisitSession): string => {
-    if (!isVisitDurationRecord(record)) return record.description
-    if (session?.durationHours != null) {
-      return t('profile.visitDurationFeeDetail', {
-        hours: session.durationHours,
-        points: record.amount
+    if (!isVisitDurationRecord(record)) return formatPointsRecordDescription(record, t)
+    if (session?.durationMinutes != null || session?.durationHours != null) {
+      return t('profile.visitDurationFeeWithDuration', {
+        duration: formatHoursMinutes(session.durationHours, session.durationMinutes),
+        defaultValue: 'Visit duration fee ({{duration}})'
       })
     }
     return t('profile.visitDurationFee')
@@ -897,7 +923,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         {/* Records List */}
         <div style={{ paddingBottom: '24px' }}>
           {activeTab === 'cigar' && (
-            loadingOrders ? (
+            loadingOrders || loadingRedemptions ? (
               <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <div style={{
                   fontSize: '36px',
@@ -913,7 +939,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {t('common.loading')}
                 </Text>
               </div>
-            ) : userOrders.length === 0 ? (
+            ) : userRedemptions.length === 0 && purchaseOrders.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <div style={{
                   fontSize: '48px',
@@ -933,7 +959,53 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
                 gap: isMobile ? 12 : 16
               }}>
-                {userOrders.map((order) => {
+                {userRedemptions.map((record) => {
+                  const redeemedAt = record.redeemedAt instanceof Date
+                    ? record.redeemedAt
+                    : new Date(record.redeemedAt)
+                  const isCompleted = record.status === 'completed'
+
+                  return (
+                    <div
+                      key={`redemption-${record.visitSessionId}-${record.id}`}
+                      style={{
+                        background: 'rgba(255,255,255,0.04)',
+                        borderRadius: 8,
+                        border: '1px solid rgba(244,175,37,0.18)',
+                        borderLeft: `3px solid ${isCompleted ? '#52c41a' : '#F4AF25'}`,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: 8,
+                        padding: isMobile ? '11px 12px' : '12px 14px',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflowWrap: 'anywhere' }}>
+                            {record.cigarName || t('profile.unknownCigar', { defaultValue: 'Unknown cigar' })}
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4 }}>
+                            {formatDate(redeemedAt)}
+                          </div>
+                        </div>
+                        <Tag color={isCompleted ? 'green' : 'gold'} style={{ margin: 0, flexShrink: 0 }}>
+                          {isCompleted
+                            ? t('profile.redeemed', { defaultValue: 'Redeemed' })
+                            : t('profile.pendingRedemption', { defaultValue: 'Pending' })}
+                        </Tag>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
+                        <span>
+                          {record.type === 'referral_reward'
+                            ? t('profile.referralReward', { defaultValue: 'Referral reward' })
+                            : t('profile.cigarRedemption', { defaultValue: 'Cigar redemption' })}
+                        </span>
+                        <span style={{ color: '#FDE08D', fontWeight: 700 }}>x{record.quantity}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+                {purchaseOrders.map((order) => {
                   const orderDate = order.createdAt instanceof Date
                     ? order.createdAt
                     : (order.createdAt as any)?.toDate

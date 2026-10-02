@@ -30,3 +30,13 @@ export const shouldShowCheckoutReload = (
   const safeDue = Number.isFinite(pointsDueNow) ? pointsDueNow : 0
   return (checkoutPending && safePoints < safeDue) || safePoints < 50
 }
+
+export const shouldRedirectToCheckoutReload = (
+  currentPoints: number,
+  checkoutPending: boolean,
+  pointsDueNow: number
+): boolean => {
+  const safePoints = Number.isFinite(currentPoints) ? currentPoints : 0
+  const safeDue = Number.isFinite(pointsDueNow) ? pointsDueNow : 0
+  return checkoutPending && safePoints < safeDue
+}

@@ -61,6 +61,15 @@ describe('formatPointsRecordDescription', () => {
       .toBe('Reload RM 100.50 (120 points)')
   })
 
+  it('localizes lounge spend rebate descriptions', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en }, zh: { translation: zh } } })
+    const rebate = record({ type: 'earn', amount: 11, description: '驻店消费返点 1% (11积分)' })
+    expect(formatPointsRecordDescription(rebate, i18n.t)).toBe('Lounge spend rebate 1% (11 points)')
+    await i18n.changeLanguage('zh')
+    expect(formatPointsRecordDescription(rebate, i18n.t)).toBe('驻店消费返点 1% (11积分)')
+  })
+
   it('preserves custom descriptions rather than replacing them with generic text', async () => {
     const i18n = createInstance()
     await i18n.init({ lng: 'en', resources: { en: { translation: en } } })

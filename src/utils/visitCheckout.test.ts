@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { calculateCheckoutAffordability, MINIMUM_RELOAD_AMOUNT_RM, shouldShowCheckoutReload } from './visitCheckout'
+import {
+  calculateCheckoutAffordability,
+  MINIMUM_RELOAD_AMOUNT_RM,
+  shouldRedirectToCheckoutReload,
+  shouldShowCheckoutReload
+} from './visitCheckout'
 
 describe('visit checkout affordability', () => {
   it('blocks checkout when the charge would create a negative balance', () => {
@@ -34,5 +39,19 @@ describe('shouldShowCheckoutReload', () => {
 
   it('keeps the existing low-balance Reload behavior', () => {
     expect(shouldShowCheckoutReload(49, false, 0)).toBe(true)
+  })
+})
+
+describe('shouldRedirectToCheckoutReload', () => {
+  it('redirects while a pending checkout still has a points shortfall', () => {
+    expect(shouldRedirectToCheckoutReload(20, true, 28)).toBe(true)
+  })
+
+  it('stops redirecting after the balance covers the pending checkout', () => {
+    expect(shouldRedirectToCheckoutReload(234.5, true, 28)).toBe(false)
+  })
+
+  it('does not force low-balance users to Reload without a pending checkout', () => {
+    expect(shouldRedirectToCheckoutReload(20, false, 0)).toBe(false)
   })
 })
