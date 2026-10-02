@@ -1,13 +1,30 @@
 import type { PointsRecord } from '../types'
 import type { TFunction } from 'i18next'
 
+export const isHistoricalPointsRecord = (record: PointsRecord): boolean => (
+  record.createdBy === 'legacy_migration'
+  || record.description === 'Historical reload import'
+  || record.description === 'Historical visit fee import'
+  || /\(H\)\s*$/.test(record.description || '')
+)
+
 export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction): string => {
   const description = record.description || ''
+  const historical = isHistoricalPointsRecord(record)
+  if (record.source === 'reload' && description === 'Historical reload import') {
+    const amount = Number(record.amount || 0)
+    return `${t('pointsConfig.records.reloadDescription', {
+      amount,
+      points: amount,
+      defaultValue: 'Reload RM {{amount}} ({{points}} points)'
+    })} (H)`
+  }
   const reload = record.source === 'reload'
-    ? description.trim().match(/^充值\s+([\d,.]+)\s*RM\s*\(([\d,.]+)\s*积分\)$/)
+    ? description.trim().match(/^充值\s+([\d,.]+)\s*RM\s*\(([\d,.]+)\s*积分\)(?:\s*\(H\))?$/)
     : null
   if (reload) {
-    return t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
+    const naturalDescription = t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
+    return historical ? `${naturalDescription} (H)` : naturalDescription
   }
   if (record.source === 'visit') {
     const rebate = description.trim().match(/^驻店消费返点\s*([\d,.]+)%\s*[（(]\s*([\d,.]+)\s*积分\s*[）)]$/)
@@ -19,14 +36,12 @@ export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction
       })
     }
     if (description === 'Historical visit fee import') {
-      return t('pointsConfig.records.historicalVisitFeeDescription', {
-        points: record.amount,
-        defaultValue: 'Historical visit fee ({{points}} points)'
-      })
+      return `${t('profile.visitDurationFee', { defaultValue: 'Visit duration fee' })} (H)`
     }
-    const duration = description.trim().match(/^驻店(?:开始|计时)扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)]$/)
+    const duration = description.trim().match(/^驻店(?:开始|计时)扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)](?:\s*\(H\))?$/)
     if (duration) {
-      return t('pointsConfig.records.visitDurationDescription', { hours: duration[1], points: duration[2], defaultValue: 'Visit duration fee ({{hours}} h, {{points}} points)' })
+      const naturalDescription = t('pointsConfig.records.visitDurationDescription', { hours: duration[1], points: duration[2], defaultValue: 'Visit duration fee ({{hours}} h, {{points}} points)' })
+      return historical ? `${naturalDescription} (H)` : naturalDescription
     }
     if (description === '驻店计时扣费（本次驻店汇总）') {
       return t('pointsConfig.records.visitSummaryDescription', { defaultValue: 'Visit duration fee (visit total)' })
@@ -55,6 +70,7 @@ export const isVisitDurationRecord = (record: PointsRecord): boolean => {
     || record.description.startsWith('驻店计时扣费')
     || record.description.startsWith('驻店时长费用')
     || record.description.startsWith('Day Pass 超时费用')
+    || record.description === 'Historical visit fee import'
     || isDayPassPurchaseRecord(record)
 }
 

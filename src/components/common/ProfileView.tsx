@@ -28,7 +28,7 @@ import { MemberProfileCard } from './MemberProfileCard'
 import { isFeatureVisible } from '../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../store/modules/auth'
 import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/text-transform'
-import { formatPointsRecordDescription, isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
+import { formatPointsRecordDescription, isHistoricalPointsRecord, isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
 
 interface ProfileViewProps {
   user?: User | null          // Direct user object
@@ -235,6 +235,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       setLoadingReferrals(true)
       try {
         const referred = await getReferredUsers(user.id)
+        const referralsSnapshot = await getDocs(query(
+          collection(db, 'users', user.id, 'referrals'),
+          limit(200)
+        ))
+        const knownIds = new Set(referred.map(entry => entry.id))
+        const unknownReferrals = referralsSnapshot.docs
+          .filter(referralDoc => referralDoc.data().isPlaceholder === true && !knownIds.has(referralDoc.id))
+          .map((referralDoc, index) => {
+            const data = referralDoc.data()
+            const placeholderIndex = Number(data.placeholderIndex || index + 1)
+            const createdAt = data.createdAt?.toDate?.() || new Date(data.createdAt || Date.now())
+            return {
+              id: referralDoc.id,
+              displayName: String(data.referredUserName || '').trim()
+                || t('profile.unknownReferral', { index: placeholderIndex, defaultValue: `Unknown Person ${placeholderIndex}` }),
+              email: '',
+              role: 'guest',
+              status: 'active',
+              profile: {},
+              membership: { level: 'bronze' },
+              referral: { referrals: [], totalReferred: 0, activeReferrals: 0 },
+              createdAt,
+              updatedAt: data.updatedAt?.toDate?.() || createdAt,
+              isReferralPlaceholder: true,
+            } as unknown as User
+          })
+        referred.push(...unknownReferrals)
         // Sort by join date descending
         referred.sort((a, b) => {
           const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt)
@@ -272,7 +299,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }
     }
     loadReferralActivations()
-  }, [user?.id])
+  }, [user?.id, t])
 
   // Load points records
   useEffect(() => {
@@ -360,7 +387,11 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     })
   }
 
-  const totalLoungeHours = formatHoursMinutes(user?.membership?.totalVisitHours)
+  const totalVisitHours = Number(user?.membership?.totalVisitHours || 0)
+  const totalLoungeHours = t('profile.hoursOnly', {
+    hours: Math.max(0, Math.floor(Number.isFinite(totalVisitHours) ? totalVisitHours : 0)),
+    defaultValue: '{{hours}} H',
+  })
 
   // User stats data
   const isChinese = i18n.language.startsWith('zh')
@@ -459,12 +490,14 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const getPointsRecordDescription = (record: PointsRecord, session?: VisitSession): string => {
     if (!isVisitDurationRecord(record)) return formatPointsRecordDescription(record, t)
     if (session?.durationMinutes != null || session?.durationHours != null) {
-      return t('profile.visitDurationFeeWithDuration', {
+      const naturalDescription = t('profile.visitDurationFeeWithDuration', {
         duration: formatHoursMinutes(session.durationHours, session.durationMinutes),
         defaultValue: 'Visit duration fee ({{duration}})'
       })
+      return isHistoricalPointsRecord(record) ? `${naturalDescription} (H)` : naturalDescription
     }
-    return t('profile.visitDurationFee')
+    const naturalDescription = t('profile.visitDurationFee')
+    return isHistoricalPointsRecord(record) ? `${naturalDescription} (H)` : naturalDescription
   }
 
   const getOrderStatusConfig = (orderStatus: Order['status']) => {

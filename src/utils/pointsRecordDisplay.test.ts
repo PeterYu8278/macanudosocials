@@ -49,9 +49,27 @@ describe('formatPointsRecordDescription', () => {
     const i18n = createInstance()
     await i18n.init({ lng: 'en', resources: { en: { translation: en }, zh: { translation: zh } } })
     const visitFee = record({ amount: 27, description: 'Historical visit fee import' })
-    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('Historical visit fee (27 points)')
+    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('Visit duration fee (H)')
     await i18n.changeLanguage('zh')
-    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('历史驻店扣费（27积分）')
+    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('驻店计时扣费 (H)')
+  })
+
+  it('formats historical reloads like natural reloads with an H marker', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en }, zh: { translation: zh } } })
+    const reload = record({ source: 'reload', type: 'earn', amount: 200, description: 'Historical reload import', createdBy: 'legacy_migration' })
+    expect(formatPointsRecordDescription(reload, i18n.t)).toBe('Reload RM 200 (200 points) (H)')
+    await i18n.changeLanguage('zh')
+    expect(formatPointsRecordDescription(reload, i18n.t)).toBe('充值 200 RM (200 积分) (H)')
+  })
+
+  it('preserves the H marker on newly imported natural descriptions', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en } } })
+    const reload = record({ source: 'reload', type: 'earn', amount: 200, description: '充值 200 RM (200 积分) (H)', createdBy: 'legacy_migration' })
+    expect(formatPointsRecordDescription(reload, i18n.t)).toBe('Reload RM 200 (200 points) (H)')
+    const visit = record({ amount: 27, description: '驻店计时扣费 (1.5小时，共27积分) (H)', createdBy: 'legacy_migration' })
+    expect(formatPointsRecordDescription(visit, i18n.t)).toBe('Visit duration fee (1.5 h, 27 points) (H)')
   })
 
   it('preserves distinct money and points amounts', async () => {
