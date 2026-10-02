@@ -45,6 +45,15 @@ describe('formatPointsRecordDescription', () => {
     expect(reload.description).toBe('充值 100 RM (100 积分)')
   })
 
+  it('localizes historical visit fee imports without changing their amount', async () => {
+    const i18n = createInstance()
+    await i18n.init({ lng: 'en', resources: { en: { translation: en }, zh: { translation: zh } } })
+    const visitFee = record({ amount: 27, description: 'Historical visit fee import' })
+    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('Historical visit fee (27 points)')
+    await i18n.changeLanguage('zh')
+    expect(formatPointsRecordDescription(visitFee, i18n.t)).toBe('历史驻店扣费（27积分）')
+  })
+
   it('preserves distinct money and points amounts', async () => {
     const i18n = createInstance()
     await i18n.init({ lng: 'en', resources: { en: { translation: en } } })

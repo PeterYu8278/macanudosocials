@@ -2096,6 +2096,7 @@
       "source": "来源",
       "description": "描述",
       "reloadDescription": "充值 {{amount}} RM ({{points}} 积分)",
+      "historicalVisitFeeDescription": "历史驻店扣费（{{points}}积分）",
       "visitDurationDescription": "驻店计时扣费 ({{hours}}小时，共{{points}}积分)",
       "visitSummaryDescription": "驻店计时扣费（本次驻店汇总）",
       "balance": "余额",

@@ -309,15 +309,43 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
       const ref = db.collection('visitSessions').doc(id)
       const existed = (await ref.get()).exists
       const minutes = Math.max(0, Math.floor(Number(row.durationMinutes || 0)))
+      const legacyFeePoints = Math.max(0, Number(row.legacyFeeRm || 0))
+      const pointsRecordId = legacyFeePoints > 0
+        ? `legacy_${stableId(batchId, 'visit-points', row.sourceRow, row.phone, row.occurredAt)}`
+        : undefined
       await ref.set({
         userId: user.id, userName: row.name || user.data.displayName, storeId: lounge.id, storeName: lounge.name,
         checkInAt: Timestamp.fromDate(start), checkInBy: 'legacy_migration',
         checkOutAt: Timestamp.fromDate(end), checkOutBy: 'legacy_migration',
         durationMinutes: minutes, durationHours: minutes / 60, calculatedAt: Timestamp.fromDate(end),
-        ...(Number(row.legacyFeeRm || 0) > 0 ? { legacyFeeRm: Number(row.legacyFeeRm) } : {}),
+        ...(legacyFeePoints > 0 ? {
+          legacyFeeRm: legacyFeePoints,
+          pointsDeducted: legacyFeePoints,
+          pointsRecordId,
+        } : {}),
         status: 'completed', checkInType: 'membership', createdAt: Timestamp.fromDate(start), updatedAt: Timestamp.now(),
         migration: { source: 'legacy_workbook', batchId, sourceRow: row.sourceRow, sideEffectsSkipped: true },
       }, { merge: true })
+      if (pointsRecordId) {
+        await db.collection('pointsRecords').doc(pointsRecordId).set({
+          userId: user.id,
+          userName: row.name || user.data.displayName,
+          type: 'spend',
+          amount: legacyFeePoints,
+          source: 'visit',
+          description: 'Historical visit fee import',
+          relatedId: id,
+          createdAt: Timestamp.fromDate(end),
+          createdBy: 'legacy_migration',
+          migration: {
+            source: 'legacy_workbook',
+            batchId,
+            sourceRow: row.sourceRow,
+            balanceNotApplied: true,
+            originalUnit: 'RM',
+          },
+        }, { merge: true })
+      }
       sessionsByPhone.set(row.phone, [...(sessionsByPhone.get(row.phone) || []), {
         id, start, end, lounge: lounge.id, userId: user.id, userName: row.name || user.data.displayName,
       }])

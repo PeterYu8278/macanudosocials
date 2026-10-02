@@ -10,6 +10,12 @@ export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction
     return t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
   }
   if (record.source === 'visit') {
+    if (description === 'Historical visit fee import') {
+      return t('pointsConfig.records.historicalVisitFeeDescription', {
+        points: record.amount,
+        defaultValue: 'Historical visit fee ({{points}} points)'
+      })
+    }
     const duration = description.trim().match(/^驻店(?:开始|计时)扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)]$/)
     if (duration) {
       return t('pointsConfig.records.visitDurationDescription', { hours: duration[1], points: duration[2], defaultValue: 'Visit duration fee ({{hours}} h, {{points}} points)' })

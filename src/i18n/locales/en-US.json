@@ -2096,6 +2096,7 @@
       "source": "Source",
       "description": "Description",
       "reloadDescription": "Reload RM {{amount}} ({{points}} points)",
+      "historicalVisitFeeDescription": "Historical visit fee ({{points}} points)",
       "visitDurationDescription": "Visit duration fee ({{hours}} h, {{points}} points)",
       "visitSummaryDescription": "Visit duration fee (visit total)",
       "balance": "Balance",
