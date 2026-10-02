@@ -478,12 +478,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
     const sameDay = checkIn.toDateString() === checkOut.toDateString()
     const locale = i18n.language === 'en-US' ? 'en-GB' : 'zh-CN'
-    const dateText = checkIn.toLocaleDateString(locale, { day: '2-digit', month: 'short' })
+    const dateText = checkIn.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
     const startTime = checkIn.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
     const endTime = checkOut.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
     const endDate = sameDay
       ? ''
-      : `${checkOut.toLocaleDateString(locale, { day: '2-digit', month: 'short' })} `
+      : `${checkOut.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })} `
     return `${dateText} ${startTime} - ${endDate}${endTime}`
   }
 
@@ -1373,6 +1373,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     ? '#52c41a'
                     : session.status === 'pending' ? '#F4AF25' : '#ff7875'
                   const period = formatVisitPeriod(session)
+                  const visitTypeLabel = session.checkInType === 'daypass'
+                    ? t('profile.dayPass')
+                    : t('profile.annualPass')
                   return (
                     <div
                       key={`visit-${session.id}`}
@@ -1398,6 +1401,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         </span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
+                        <span>{visitTypeLabel}</span>
+                        <span style={{ color: 'rgba(255,255,255,0.3)' }}>&middot;</span>
                         <ClockCircleOutlined />
                         <span>{formatHoursMinutes(session.durationHours, session.durationMinutes)}</span>
                       </div>

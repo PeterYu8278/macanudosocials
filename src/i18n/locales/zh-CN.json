@@ -1928,6 +1928,8 @@
     "visitDurationFeeWithDuration": "驻店计时扣费（{{duration}}）",
     "stayTime": "驻店时间",
     "activityRecords": "活动记录",
+    "annualPass": "Annual Pass",
+    "dayPass": "Day Pass",
     "referralRecords": "引荐记录",
     "unknownReferral": "未知人 {{index}}",
     "noCigarRecords": "暂无雪茄记录",

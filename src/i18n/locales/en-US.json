@@ -1928,6 +1928,8 @@
     "visitDurationFeeWithDuration": "Visit duration fee ({{duration}})",
     "stayTime": "Stay time",
     "activityRecords": "Activity Records",
+    "annualPass": "Annual Pass",
+    "dayPass": "Day Pass",
     "referralRecords": "Referral Records",
     "unknownReferral": "Unknown Person {{index}}",
     "noCigarRecords": "No cigar records found",
