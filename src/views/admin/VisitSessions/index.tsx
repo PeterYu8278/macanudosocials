@@ -35,6 +35,8 @@ type VisitSessionDisplayRow = VisitSession & {
   displayRowKind: 'deduction' | 'rebate';
 };
 
+const formatDurationHours = (hours: number): string => Number(hours).toFixed(2);
+
 const getDisplayedPointsDeducted = (session: VisitSession): number | undefined => {
   if (session.pointsDeducted === undefined || !session.dayPass?.isPurchased) {
     return session.pointsDeducted;
@@ -420,7 +422,7 @@ const VisitSessionsPage: React.FC = () => {
       render: (_: any, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate') return '-';
         if (record.durationHours !== undefined) {
-          return <span style={{ fontWeight: 500 }}>{record.durationHours} {t('visitSessions.hours')}</span>;
+          return <span style={{ fontWeight: 500 }}>{formatDurationHours(record.durationHours)} {t('visitSessions.hours')}</span>;
         }
         if (record.status === 'pending') {
           const now = new Date();
@@ -870,7 +872,7 @@ const VisitSessionsPage: React.FC = () => {
 
                           const calculateDuration = () => {
                             if (record.durationHours !== undefined) {
-                              return `${record.durationHours} ${t('visitSessions.hours')}`;
+                              return `${formatDurationHours(record.durationHours)} ${t('visitSessions.hours')}`;
                             }
                             if (record.status === 'pending') {
                               const now = new Date();

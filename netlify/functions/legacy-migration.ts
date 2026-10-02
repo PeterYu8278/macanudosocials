@@ -5,6 +5,7 @@ import { getAuth } from 'firebase-admin/auth'
 import { Timestamp, getFirestore } from 'firebase-admin/firestore'
 import { mergeLegacyRedemptionEntries } from '../../src/utils/legacyRedemptionArtifacts'
 import { addUnknownReferralEntries } from '../../src/utils/legacyReferralPlaceholders'
+import { getRedemptionOrderMonth, resolveRedemptionOrderId } from '../../src/utils/redemptionOrderId'
 
 type Stage = 'users' | 'reload' | 'membership' | 'visits'
 type AnyRow = Record<string, any> & { sourceRow?: number; phone?: string }
@@ -418,103 +419,120 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
         redeemedAt: Timestamp.fromDate(occurredAt), redeemedBy: 'legacy_migration', createdAt: Timestamp.fromDate(occurredAt),
       }
       const ref = db.collection('redemptionRecords').doc(sessionId)
-      const snapshot = await ref.get()
-      const existing = snapshot.data()?.redemptions || []
-      const { redemptions, totals } = mergeLegacyRedemptionEntries(existing, item)
+      const existed = await db.runTransaction(async batch => {
+        const snapshot = await batch.get(ref)
+        const sessionSnapshot = await batch.get(db.collection('visitSessions').doc(sessionId))
+        const existing = snapshot.data()?.redemptions || []
+        const { redemptions, totals } = mergeLegacyRedemptionEntries(existing, item)
 
-      const orderId = `REDEMPTION-${sessionId}`
-      const outboundOrderId = `REDEMPTION-${sessionId}`
-      const orderAt = matching?.end || occurredAt
-      const orderItems = totals.map(total => ({
-        cigarId: total.cigarId,
-        name: total.cigarName,
-        quantity: total.quantity,
-        price: 0,
-      }))
-      const outboundItems = totals.map(total => ({
-        cigarId: total.cigarId,
-        cigarName: total.cigarName,
-        itemType: 'cigar',
-        quantity: total.quantity,
-        unitPrice: 0,
-        subtotal: 0,
-      }))
-      const now = Timestamp.now()
-      const batch = db.batch()
-
-      batch.set(ref, {
-        visitSessionId: sessionId, userId: user.id, userName: row.name || user.data.displayName,
-        redemptions, createdAt: snapshot.data()?.createdAt || Timestamp.fromDate(occurredAt), updatedAt: now,
-        migration: { source: 'legacy_workbook', batchId },
-      }, { merge: true })
-
-      batch.set(db.collection('orders').doc(orderId), {
-        userId: user.id,
-        items: orderItems,
-        total: 0,
-        status: 'completed',
-        source: { type: 'direct', note: `驻店兑换订单 (Session: ${sessionId}) (H)` },
-        payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(orderAt) },
-        shipping: { address: '会所兑换' },
-        storeId: lounge.id,
-        createdAt: Timestamp.fromDate(orderAt),
-        updatedAt: now,
-        migration: { source: 'legacy_workbook', batchId, balanceNotApplied: true },
-      }, { merge: true })
-
-      batch.set(db.collection('outbound_orders').doc(outboundOrderId), {
-        referenceNo: orderId,
-        type: 'sale',
-        reason: `驻店兑换出库 (Session: ${sessionId}) (H)`,
-        items: outboundItems,
-        totalQuantity: outboundItems.reduce((sum, entry) => sum + entry.quantity, 0),
-        totalValue: 0,
-        orderId,
-        userId: user.id,
-        userName: row.name || user.data.displayName,
-        storeId: lounge.id,
-        status: 'completed',
-        operatorId: 'legacy_migration',
-        createdAt: Timestamp.fromDate(orderAt),
-        updatedAt: now,
-        migration: { source: 'legacy_workbook', batchId },
-      }, { merge: true })
-
-      outboundItems.forEach(entry => {
-        const movementId = `${outboundOrderId}-${stableId(entry.cigarId)}`
-        batch.set(db.collection('inventory_movements').doc(movementId), {
-          cigarId: entry.cigarId,
-          cigarName: entry.cigarName,
+        const orderAt = matching?.end || occurredAt
+        const legacyOrderId = `REDEMPTION-${sessionId}`
+        const linkedOrderId = sessionSnapshot.data()?.orderId || snapshot.data()?.orderId
+        const legacyOrder = linkedOrderId ? null : await batch.get(db.collection('orders').doc(legacyOrderId))
+        const orderId = await resolveRedemptionOrderId({
+          date: orderAt,
+          existingId: linkedOrderId || (legacyOrder?.exists ? legacyOrderId : undefined),
+          getMonthlyCount: async () => {
+            const { start, end } = getRedemptionOrderMonth(orderAt)
+            const monthlyOrders = await batch.get(db.collection('orders')
+              .where('createdAt', '>=', Timestamp.fromDate(start))
+              .where('createdAt', '<=', Timestamp.fromDate(end)))
+            return monthlyOrders.size
+          },
+          exists: async id => (await batch.get(db.collection('orders').doc(id))).exists,
+        })
+        const outboundOrderId = sessionSnapshot.data()?.outboundOrderId || legacyOrderId
+        const orderItems = totals.map(total => ({
+          cigarId: total.cigarId,
+          name: total.cigarName,
+          quantity: total.quantity,
+          price: 0,
+        }))
+        const outboundItems = totals.map(total => ({
+          cigarId: total.cigarId,
+          cigarName: total.cigarName,
           itemType: 'cigar',
-          type: 'out',
-          quantity: entry.quantity,
-          referenceNo: orderId,
-          orderType: 'outbound',
-          outboundOrderId,
-          reason: `驻店兑换出库 (Session: ${sessionId}) (H)`,
+          quantity: total.quantity,
           unitPrice: 0,
+          subtotal: 0,
+        }))
+        const now = Timestamp.now()
+
+        batch.set(ref, {
+          visitSessionId: sessionId, userId: user.id, userName: row.name || user.data.displayName,
+          redemptions, createdAt: snapshot.data()?.createdAt || Timestamp.fromDate(occurredAt), updatedAt: now,
+          migration: { source: 'legacy_workbook', batchId },
+          orderId,
+        }, { merge: true })
+
+        batch.set(db.collection('orders').doc(orderId), {
+          userId: user.id,
+          items: orderItems,
+          total: 0,
+          status: 'completed',
+          source: { type: 'direct', note: `驻店兑换订单 (Session: ${sessionId}) (H)` },
+          payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(orderAt) },
+          shipping: { address: '会所兑换' },
           storeId: lounge.id,
           createdAt: Timestamp.fromDate(orderAt),
+          updatedAt: now,
+          migration: { source: 'legacy_workbook', batchId, balanceNotApplied: true },
+        }, { merge: true })
+
+        batch.set(db.collection('outbound_orders').doc(outboundOrderId), {
+          referenceNo: orderId,
+          type: 'sale',
+          reason: `驻店兑换出库 (Session: ${sessionId}) (H)`,
+          items: outboundItems,
+          totalQuantity: outboundItems.reduce((sum, entry) => sum + entry.quantity, 0),
+          totalValue: 0,
+          orderId,
+          userId: user.id,
+          userName: row.name || user.data.displayName,
+          storeId: lounge.id,
+          status: 'completed',
+          operatorId: 'legacy_migration',
+          createdAt: Timestamp.fromDate(orderAt),
+          updatedAt: now,
           migration: { source: 'legacy_workbook', batchId },
         }, { merge: true })
+
+        outboundItems.forEach(entry => {
+          const movementId = `${outboundOrderId}-${stableId(entry.cigarId)}`
+          batch.set(db.collection('inventory_movements').doc(movementId), {
+            cigarId: entry.cigarId,
+            cigarName: entry.cigarName,
+            itemType: 'cigar',
+            type: 'out',
+            quantity: entry.quantity,
+            referenceNo: orderId,
+            orderType: 'outbound',
+            outboundOrderId,
+            reason: `驻店兑换出库 (Session: ${sessionId}) (H)`,
+            unitPrice: 0,
+            storeId: lounge.id,
+            createdAt: Timestamp.fromDate(orderAt),
+            migration: { source: 'legacy_workbook', batchId },
+          }, { merge: true })
+        })
+
+        batch.set(db.collection('visitSessions').doc(sessionId), {
+          redemptions: redemptions.map((entry: AnyRow) => ({
+            recordId: entry.id,
+            cigarId: entry.cigarId,
+            cigarName: entry.cigarName,
+            quantity: entry.quantity,
+            redeemedAt: entry.redeemedAt,
+            redeemedBy: entry.redeemedBy,
+          })),
+          orderId,
+          outboundOrderId,
+          updatedAt: now,
+        }, { merge: true })
+
+        return snapshot.exists
       })
-
-      batch.set(db.collection('visitSessions').doc(sessionId), {
-        redemptions: redemptions.map((entry: AnyRow) => ({
-          recordId: entry.id,
-          cigarId: entry.cigarId,
-          cigarName: entry.cigarName,
-          quantity: entry.quantity,
-          redeemedAt: entry.redeemedAt,
-          redeemedBy: entry.redeemedBy,
-        })),
-        orderId,
-        outboundOrderId,
-        updatedAt: now,
-      }, { merge: true })
-
-      await batch.commit()
-      if (snapshot.exists) result.updated += 1
+      if (existed) result.updated += 1
       else result.created += 1
     } catch (error: any) { result.failed.push({ row: row.sourceRow, error: error?.message || 'Redemption import failed' }) }
   }

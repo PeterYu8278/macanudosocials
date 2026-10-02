@@ -115,6 +115,14 @@ const AppContent: React.FC = () => {
   const effectiveSiderCollapsed = isTablet || siderCollapsed
   const siderWidth = showSider ? (effectiveSiderCollapsed ? 64 : 240) : 0
 
+  // Portaled overlays need the same content offset as the app shell.
+  useEffect(() => {
+    document.documentElement.style.setProperty('--app-content-offset', `${siderWidth}px`)
+    return () => {
+      document.documentElement.style.removeProperty('--app-content-offset')
+    }
+  }, [siderWidth])
+
   // 设置实际视口高度（适配移动设备地址栏）
   useEffect(() => {
     const setVH = () => {

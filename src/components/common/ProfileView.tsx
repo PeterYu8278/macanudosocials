@@ -25,12 +25,15 @@ import type { User, Event, Order, Cigar, PointsRecord, RedemptionRecord, VisitSe
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { MemberProfileCard } from './MemberProfileCard'
+import { CigarRedemptionDrawer } from './CigarRedemptionDrawer'
+import { groupCigarRedemptions, type CigarRedemptionGroup } from '../../utils/cigarRedemptionGroups'
 import { isFeatureVisible } from '../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../store/modules/auth'
 import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/text-transform'
 import { formatPointsRecordDescription, isHistoricalPointsRecord, isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
 
 interface ProfileViewProps {
+  detailDrawerWidth?: number
   user?: User | null          // Direct user object
   userId?: string              // Or User ID (loaded internally)
   readOnly?: boolean           // Read-only mode
@@ -39,7 +42,24 @@ interface ProfileViewProps {
   onLogout?: () => void        // Logout callback
 }
 
+const summarizeVisitRedemptions = (session: VisitSession | null) => {
+  const totals = new Map<string, { cigarId: string; cigarName: string; quantity: number }>()
+
+  for (const redemption of session?.redemptions || []) {
+    const key = redemption.cigarId || redemption.cigarName
+    const existing = totals.get(key)
+    totals.set(key, {
+      cigarId: redemption.cigarId,
+      cigarName: redemption.cigarName,
+      quantity: (existing?.quantity || 0) + Number(redemption.quantity || 0),
+    })
+  }
+
+  return [...totals.values()]
+}
+
 export const ProfileView: React.FC<ProfileViewProps> = ({
+  detailDrawerWidth,
   user: propUser,
   userId: propUserId,
   readOnly = false,
@@ -64,6 +84,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [userOrders, setUserOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [userRedemptions, setUserRedemptions] = useState<RedemptionRecord[]>([])
+  const [selectedCigarGroup, setSelectedCigarGroup] = useState<CigarRedemptionGroup | null>(null)
   const [loadingRedemptions, setLoadingRedemptions] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
   const [cigarRecordDrawerOpen, setCigarRecordDrawerOpen] = useState(false)
@@ -71,6 +92,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [loadingReferrals, setLoadingReferrals] = useState(false)
   const [pointsRecords, setPointsRecords] = useState<PointsRecord[]>([])
   const [selectedPointsRecord, setSelectedPointsRecord] = useState<PointsRecord | null>(null)
+  const [pointsRecordReviewer, setPointsRecordReviewer] = useState<{ id?: string; name?: string }>({})
   const [selectedVisitSession, setSelectedVisitSession] = useState<VisitSession | null>(null)
   const [pointsRecordDrawerOpen, setPointsRecordDrawerOpen] = useState(false)
   const [loadingPointsRecordDetails, setLoadingPointsRecordDetails] = useState(false)
@@ -81,6 +103,38 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [isMobile, setIsMobile] = useState(() =>
     typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false
   )
+  useEffect(() => {
+    let active = true
+    setPointsRecordReviewer({})
+    if (!selectedPointsRecord || !pointsRecordDrawerOpen) return
+
+    const loadReviewer = async () => {
+      let reviewerId = selectedPointsRecord.createdBy
+      let reviewerName: string | undefined
+      if (selectedPointsRecord.source === 'reload' && selectedPointsRecord.relatedId) {
+        try {
+          const reload = await getDocument('reloadRecords', selectedPointsRecord.relatedId) as {
+            verifiedBy?: string; verifiedByName?: string
+          } | null
+          reviewerId = reload?.verifiedBy || reviewerId
+          reviewerName = reload?.verifiedByName?.trim() || undefined
+        } catch (error) {
+          console.error('[ProfileView] Failed to load reload reviewer:', error)
+        }
+      }
+      if (reviewerId && reviewerId !== 'system' && !reviewerName) {
+        try {
+          const reviewer = await getDocument('users', reviewerId) as User | null
+          reviewerName = reviewer?.displayName
+        } catch (error) {
+          console.error('[ProfileView] Failed to load points record reviewer:', error)
+        }
+      }
+      if (active) setPointsRecordReviewer({ id: reviewerId, name: reviewerName })
+    }
+    void loadReviewer()
+    return () => { active = false }
+  }, [selectedPointsRecord, pointsRecordDrawerOpen])
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 768px)')
     const handler = (e: MediaQueryListEvent) => setIsMobile(e.matches)
@@ -373,6 +427,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const purchaseOrders = useMemo(() => userOrders.filter(order => (
     !order.source?.note?.startsWith('驻店兑换订单 (Session:')
   )), [userOrders])
+  const cigarGroups = useMemo(() => groupCigarRedemptions(userRedemptions), [userRedemptions])
 
   const formatHoursMinutes = (hoursValue: unknown, minutesValue?: unknown) => {
     const explicitMinutes = Number(minutesValue)
@@ -466,9 +521,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const formatDateTime = (value: any): string => {
     const date = toDateValue(value)
     if (!date) return '-'
-    return i18n.language === 'en-US'
-      ? `${date.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })} ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`
-      : date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+    return isChinese
+      ? date.toLocaleString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
+      : `${date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })} ${date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })}`
   }
 
   const formatVisitPeriod = (session?: VisitSession): string | null => {
@@ -477,14 +532,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     if (!checkIn || !checkOut) return null
 
     const sameDay = checkIn.toDateString() === checkOut.toDateString()
-    const locale = i18n.language === 'en-US' ? 'en-GB' : 'zh-CN'
-    const dateText = checkIn.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })
-    const startTime = checkIn.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
-    const endTime = checkOut.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hour12: false })
-    const endDate = sameDay
-      ? ''
-      : `${checkOut.toLocaleDateString(locale, { day: '2-digit', month: 'short', year: 'numeric' })} `
-    return `${dateText} ${startTime} - ${endDate}${endTime}`
+    const endText = sameDay
+      ? checkOut.toLocaleTimeString(isChinese ? 'zh-CN' : 'en-GB', { hour: '2-digit', minute: '2-digit', hour12: false })
+      : formatDateTime(checkOut)
+    return `${formatDateTime(checkIn)} - ${endText}`
   }
 
   const getPointsRecordDescription = (record: PointsRecord, session?: VisitSession): string => {
@@ -543,6 +594,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }
 
   const useCompactProfileHeader = isMobile && Boolean(onLogout) && !showMemberCard
+  const selectedVisitRedemptions = summarizeVisitRedemptions(selectedVisitSession)
+  const detailDrawerRootStyle: React.CSSProperties = detailDrawerWidth && !isMobile
+    ? {
+      left: `max(var(--app-content-offset, 0px), calc((100% - ${detailDrawerWidth}px) / 2))`,
+      right: `max(0px, calc((100% - ${detailDrawerWidth}px) / 2))`,
+    }
+    : { left: 'var(--app-content-offset, 0px)' }
 
   const profileActions = showEditButton && onEdit ? (
     <div style={{
@@ -594,9 +652,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
   return (
     <div style={{ color: '#FFFFFF' }}>
+      <CigarRedemptionDrawer
+        group={selectedCigarGroup}
+        onClose={() => setSelectedCigarGroup(null)}
+        rootStyle={detailDrawerRootStyle}
+        isMobile={isMobile}
+        formatDateTime={formatDateTime}
+        formatVisitPeriod={formatVisitPeriod}
+      />
       <Drawer
         title={t('profile.cigarRecordDetails')}
         placement="bottom"
+        rootStyle={detailDrawerRootStyle}
+        zIndex={2100}
         open={cigarRecordDrawerOpen}
         onClose={() => setCigarRecordDrawerOpen(false)}
         height={isMobile ? '56vh' : 420}
@@ -660,13 +728,19 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       <Drawer
         title={t('profile.pointsRecords')}
         placement="bottom"
+        rootStyle={detailDrawerRootStyle}
+        zIndex={2100}
         open={pointsRecordDrawerOpen}
         onClose={() => setPointsRecordDrawerOpen(false)}
-        height={isMobile ? '62vh' : 420}
+        height="auto"
         styles={{
-          content: { background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)' },
-          header: { borderBottom: '1px solid rgba(244,175,37,0.25)' },
-          body: { padding: isMobile ? 16 : 24 }
+          wrapper: { maxHeight: 'calc(100dvh - 24px)' },
+          content: {
+            background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)',
+            maxHeight: 'calc(100dvh - 24px)'
+          },
+          header: { borderBottom: '1px solid rgba(244,175,37,0.25)', flexShrink: 0 },
+          body: { padding: isMobile ? 16 : 24, minHeight: 0, overflowY: 'auto' }
         }}
       >
         {selectedPointsRecord && (
@@ -689,7 +763,13 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
               {[
                 [t('pointsConfig.records.source'), t(`pointsConfig.records.sources.${selectedPointsRecord.source}`) || selectedPointsRecord.source],
-                [t('pointsConfig.records.balance'), selectedPointsRecord.balance ?? '-']
+                [t('pointsConfig.records.balance'), selectedPointsRecord.balance ?? '-'],
+                [
+                  t(selectedPointsRecord.source === 'reload' ? 'profile.approvedBy' : 'profile.processedBy'),
+                  pointsRecordReviewer.id === 'system'
+                    ? t('profile.systemOperator')
+                    : pointsRecordReviewer.name || pointsRecordReviewer.id || '-'
+                ]
               ].map(([label, value]) => (
                 <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
                   <span style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{label}</span>
@@ -709,7 +789,12 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {[
                     [t('visitSessions.checkIn'), formatDateTime(selectedVisitSession.checkInAt)],
                     [t('visitSessions.checkOut'), formatDateTime(selectedVisitSession.checkOutAt)],
-                    [t('visitSessions.duration'), selectedVisitSession.durationHours != null ? `${selectedVisitSession.durationHours} ${t('visitSessions.hours')}` : '-'],
+                    [
+                      t('visitSessions.duration'),
+                      selectedVisitSession.durationHours != null || selectedVisitSession.durationMinutes != null
+                        ? formatHoursMinutes(selectedVisitSession.durationHours, selectedVisitSession.durationMinutes)
+                        : '-'
+                    ],
                     [t('visitSessions.status'), t(`visitSessions.status${selectedVisitSession.status.charAt(0).toUpperCase()}${selectedVisitSession.status.slice(1)}`)]
                   ].map(([label, value]) => (
                     <div key={String(label)} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
@@ -718,6 +803,25 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     </div>
                   ))}
                 </div>
+                {selectedVisitRedemptions.length > 0 && (
+                  <div style={{ marginTop: 14 }}>
+                    <div style={{ color: '#f4cf72', fontSize: 13, fontWeight: 700, marginBottom: 8 }}>
+                      {t('profile.cigarRecords')}
+                    </div>
+                    <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
+                      {selectedVisitRedemptions.map(redemption => (
+                        <div key={redemption.cigarId || redemption.cigarName} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
+                          <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600, overflowWrap: 'anywhere' }}>
+                            {redemption.cigarName || t('profile.unknownCigar')}
+                          </span>
+                          <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            x{redemption.quantity}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -989,19 +1093,24 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             ) : (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                gridTemplateColumns: '1fr',
                 gap: isMobile ? 12 : 16
               }}>
-                {userRedemptions.map((record) => {
-                  const redeemedAt = record.redeemedAt instanceof Date
-                    ? record.redeemedAt
-                    : new Date(record.redeemedAt)
-                  const isCompleted = record.status === 'completed'
+                {cigarGroups.map((group) => {
+                  const isCompleted = group.pendingQuantity === 0
 
                   return (
-                    <div
-                      key={`redemption-${record.visitSessionId}-${record.id}`}
+                    <button
+                      type="button"
+                      key={group.key}
+                      aria-label={`${t('profile.cigarRecordDetails')}: ${group.cigarName || t('profile.unknownCigar')}`}
+                      onClick={() => setSelectedCigarGroup(group)}
                       style={{
+                        width: '100%',
+                        textAlign: 'left',
+                        font: 'inherit',
+                        color: 'inherit',
+                        cursor: 'pointer',
                         background: 'rgba(255,255,255,0.04)',
                         borderRadius: 8,
                         border: '1px solid rgba(244,175,37,0.18)',
@@ -1015,10 +1124,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }}>
                         <div style={{ minWidth: 0 }}>
                           <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflowWrap: 'anywhere' }}>
-                            {record.cigarName || t('profile.unknownCigar', { defaultValue: 'Unknown cigar' })}
+                            {group.cigarName || t('profile.unknownCigar')}
                           </div>
                           <div style={{ color: 'rgba(255,255,255,0.45)', fontSize: 11, marginTop: 4 }}>
-                            {formatDate(redeemedAt)}
+                            {formatDateTime(group.records[0].redeemedAt)}
                           </div>
                         </div>
                         <Tag color={isCompleted ? 'green' : 'gold'} style={{ margin: 0, flexShrink: 0 }}>
@@ -1029,13 +1138,17 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                       </div>
                       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: 'rgba(255,255,255,0.65)', fontSize: 12 }}>
                         <span>
-                          {record.type === 'referral_reward'
-                            ? t('profile.referralReward', { defaultValue: 'Referral reward' })
-                            : t('profile.cigarRedemption', { defaultValue: 'Cigar redemption' })}
+                          {t('profile.redeemed')}
                         </span>
-                        <span style={{ color: '#FDE08D', fontWeight: 700 }}>x{record.quantity}</span>
+                        <span style={{ color: '#FDE08D', fontWeight: 700 }}>x{group.completedQuantity}</span>
                       </div>
-                    </div>
+                      {group.pendingQuantity > 0 && (
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, color: '#F4AF25', fontSize: 12 }}>
+                          <span>{t('profile.pendingRedemption')}</span>
+                          <span>x{group.pendingQuantity}</span>
+                        </div>
+                      )}
+                    </button>
                   )
                 })}
                 {purchaseOrders.map((order) => {
@@ -1235,12 +1348,6 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {pointsRecords.map((record) => {
-                  const recordDate = record.createdAt instanceof Date
-                    ? record.createdAt
-                    : (record.createdAt as any)?.toDate
-                      ? (record.createdAt as any).toDate()
-                      : new Date(record.createdAt)
-
                   const isEarn = record.type === 'earn'
                   const accentColor = isEarn ? '#52c41a' : '#ff4d4f'
                   const accentBg = isEarn ? 'rgba(82,196,26,0.06)' : 'rgba(255,77,79,0.06)'
@@ -1305,9 +1412,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                             fontSize: 11,
                             color: 'rgba(255,255,255,0.35)',
                           }}>
-                            {visitPeriod
-                              ? `${t('profile.stayTime')}: ${visitPeriod}`
-                              : formatDate(recordDate)}
+                            {visitPeriod || formatDateTime(record.createdAt)}
                           </span>
                         </div>
                       </div>
@@ -1364,7 +1469,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
             ) : (
               <div style={{
                 display: 'grid',
-                gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                gridTemplateColumns: '1fr',
                 gap: isMobile ? 12 : 16
               }}>
                 {userVisitSessions.map((session) => {
@@ -1623,7 +1728,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
               ) : (
                 <div style={{
                   display: 'grid',
-                  gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
+                  gridTemplateColumns: '1fr',
                   gap: isMobile ? 10 : 14
                 }}>
                   {referredUsers.map((referred) => {

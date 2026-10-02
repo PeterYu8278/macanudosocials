@@ -30,7 +30,7 @@ const { Search } = Input
 const { Option } = Select
 
 const AdminOrders: React.FC = () => {
-  const tableScroll = useVirtualTableScroll(1600)
+  const tableScroll = useVirtualTableScroll(1096, 390)
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const { isSuperAdmin, user: authUser } = useAuthStore()
@@ -369,6 +369,40 @@ const AdminOrders: React.FC = () => {
           flex: 1;
           overflow: hidden;
         }
+        .orders-management-table .ant-table-cell {
+          padding: 10px !important;
+          overflow-wrap: anywhere;
+        }
+        .orders-management-table .ant-table-selection-column {
+          width: 44px !important;
+          min-width: 44px !important;
+          max-width: 44px !important;
+        }
+        .points-config-form .orders-management-table .ant-table-cell-fix-right {
+          background: #1d1912 !important;
+          z-index: 4;
+          box-shadow: -8px 0 12px -10px rgba(0, 0, 0, 0.9);
+        }
+        .points-config-form .orders-management-table .ant-table-thead .ant-table-cell-fix-right {
+          background: #332d22 !important;
+        }
+        .points-config-form .orders-management-table .ant-table-tbody > tr:hover > td.ant-table-cell-fix-right,
+        .points-config-form .orders-management-table .ant-table-row:hover .ant-table-cell-fix-right {
+          background: #292318 !important;
+        }
+        .points-config-form .orders-management-table .ant-table-tbody > tr.ant-table-row-selected > td.ant-table-cell-fix-right,
+        .points-config-form .orders-management-table .ant-table-row-selected .ant-table-cell-fix-right {
+          background: #332914 !important;
+        }
+        .orders-management-table .ant-btn-sm {
+          width: 24px;
+          height: 24px;
+          padding-inline: 4px;
+        }
+        .orders-management-table .ant-table-pagination {
+          flex-wrap: wrap;
+          row-gap: 8px;
+        }
       `}</style>
 
 
@@ -410,11 +444,11 @@ const AdminOrders: React.FC = () => {
                         marginBottom: 10,
                         padding: '16px',
                         background: 'rgba(255, 255, 255, 0.05)',
-                        borderRadius: 12,
+                        borderRadius: 8,
                         border: '1px solid rgba(244, 175, 37, 0.6)',
                         backdropFilter: 'blur(10px)'
                       }}>
-                        <Space size={8}>
+                        <Space size={[8, 10]} wrap style={{ width: '100%' }}>
                           <Search
                             placeholder={t('ordersAdmin.searchPlaceholder')}
                             allowClear
@@ -426,7 +460,7 @@ const AdminOrders: React.FC = () => {
                           />
                           <Select
                             placeholder={t('ordersAdmin.selectStatus')}
-                            style={{ width: 110 }}
+                            style={{ width: 150 }}
                             allowClear
                             value={statusFilter}
                             onChange={setStatusFilter}
@@ -441,7 +475,7 @@ const AdminOrders: React.FC = () => {
                           </Select>
                           <Select
                             placeholder={t('ordersAdmin.payment.title')}
-                            style={{ width: 110 }}
+                            style={{ width: 160 }}
                             allowClear
                             value={paymentFilter}
                             onChange={setPaymentFilter}
@@ -454,7 +488,7 @@ const AdminOrders: React.FC = () => {
                           </Select>
                           <Select
                             placeholder={t('ordersAdmin.financialStatus')}
-                            style={{ width: 140 }}
+                            style={{ width: 180 }}
                             value={matchStatusTab}
                             onChange={setMatchStatusTab}
                             className="gold-select"
@@ -465,6 +499,7 @@ const AdminOrders: React.FC = () => {
                             <Option value="unmatched">{t('financeAdmin.partialMatched')} ({unmatchedCount})</Option>
                           </Select>
                           <DatePicker.RangePicker
+                            style={{ width: 260 }}
                             placeholder={[t('common.startDate'), t('common.endDate')]}
                             value={dateRange}
                             onChange={setDateRange}
@@ -602,11 +637,14 @@ const AdminOrders: React.FC = () => {
                         <OrderSkeleton isMobile={false} />
                       ) : (
                         <Table
+                          className="orders-management-table"
+                          size="small"
+                          tableLayout="fixed"
                           columns={columns}
                           dataSource={filteredSorted}
                           rowKey="id"
                           loading={loading || paginatedLoading}
-                          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
+                          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys, columnWidth: 44 }}
                           virtual={filteredSorted.length > 50}
                           scroll={tableScroll}
 

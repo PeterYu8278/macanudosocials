@@ -1100,6 +1100,9 @@ const AdminUsers: React.FC = () => {
                       pageSize: isMobile ? 10 : 20,
                       total: filteredUsers.length,
                       showSizeChanger: true,
+                      showTotal: (total, range) => t('common.paginationTotal', {
+                        start: range[0], end: range[1], total,
+                      }),
                     }}
                     style={{
                       background: 'transparent'
@@ -1524,6 +1527,7 @@ const AdminUsers: React.FC = () => {
             {/* ProfileView Component */}
             <div>
               <ProfileView
+                detailDrawerWidth={480}
                 user={editing}
                 readOnly={false}
                 showEditButton={true}

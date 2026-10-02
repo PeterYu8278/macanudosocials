@@ -1,5 +1,5 @@
 import React from 'react'
-import { Tag, Button } from 'antd'
+import { Tag, Button, Tooltip } from 'antd'
 import { CheckOutlined, ClockCircleOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
@@ -62,7 +62,8 @@ export const getOrderColumns = ({
       key: 'id',
       width: 160,
       render: (id: string, record: Order) => (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+          <Tooltip title={id}>
           <Button
             type="link"
             style={{
@@ -70,8 +71,11 @@ export const getOrderColumns = ({
               height: 'auto',
               fontFamily: 'monospace',
               fontSize: '12px',
-              wordBreak: 'break-all',
-              whiteSpace: 'normal',
+              width: '100%',
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
               color: '#FDE08D',
               fontWeight: 600,
               textAlign: 'left'
@@ -80,9 +84,7 @@ export const getOrderColumns = ({
           >
             {id}
           </Button>
-          <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.45)', marginTop: 2, wordBreak: 'break-all', whiteSpace: 'normal' }}>
-            {(record as any)?.shipping?.address || '-'}
-          </div>
+          </Tooltip>
         </div>
       ),
     },
@@ -90,6 +92,7 @@ export const getOrderColumns = ({
       title: t('ordersAdmin.user'),
       dataIndex: 'userId',
       key: 'userId',
+      width: 140,
       render: (userId: string) => (
         <div>
           <div style={{ fontWeight: 'bold', color: '#FFFFFF' }}>{getUserName(userId, users)}</div>
@@ -100,6 +103,7 @@ export const getOrderColumns = ({
     {
       title: t('ordersAdmin.items'),
       key: 'items',
+      width: 180,
       render: (_: any, record: Order) => (
         <div>
           {record.items.slice(0, 2).map((item, index) => (
@@ -119,6 +123,7 @@ export const getOrderColumns = ({
       title: t('ordersAdmin.totalAmount'),
       dataIndex: 'total',
       key: 'total',
+      width: 160,
       render: (_: number, record: Order) => {
         const matchStatus = getOrderMatchStatus(record.id)
         return (
@@ -149,12 +154,13 @@ export const getOrderColumns = ({
       title: t('ordersAdmin.address'),
       dataIndex: ['shipping', 'address'],
       key: 'shipping',
+      width: 130,
       render: (_: any, record: Order) => {
         const addr = (record as any)?.shipping?.address as string
         const display = addr ? (addr.length > 20 ? `${addr.substring(0, 20)}...` : addr) : '-'
         return (
           <div>
-            <div style={{ fontSize: '12px', color: '#FFFFFF' }}>{display}</div>
+            <Tooltip title={addr}><div style={{ fontSize: '12px', color: '#FFFFFF' }}>{display}</div></Tooltip>
             <div style={{ marginTop: 4 }}>
               <Tag color={getStatusColor(record.status)}>{getStatusText(record.status, t)}</Tag>
             </div>
@@ -166,6 +172,7 @@ export const getOrderColumns = ({
       title: t('ordersAdmin.createdAt'),
       dataIndex: 'createdAt',
       key: 'createdAt',
+      width: 110,
       render: (date: any) => {
         let d: any = date
         if (d && typeof d.toDate === 'function') {
@@ -178,6 +185,8 @@ export const getOrderColumns = ({
     {
       title: t('ordersAdmin.actions'),
       key: 'action',
+      width: 72,
+      fixed: 'right' as const,
       render: (_: any, record: Order) => (
         <ActionButtons
           itemId={record.id}

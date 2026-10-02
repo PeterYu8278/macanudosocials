@@ -22,6 +22,7 @@ import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { VisitSession, User, Order, OutboundOrder } from '../../types';
 import { COLLECTIONS, createOutboundOrder, getCigarById } from './firestore';
 import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement } from '../../utils/redemptionOrder';
+import { getRedemptionOrderMonth, resolveRedemptionOrderId } from '../../utils/redemptionOrderId';
 import { calculateRebateReward } from '../../utils/purchaseRewards';
 import { calculateCheckoutAffordability, MINIMUM_RELOAD_AMOUNT_RM } from '../../utils/visitCheckout';
 
@@ -870,29 +871,20 @@ export const completeVisitSession = async (
         // 3. 创建订单（金额为0）
         if (orderItems.length > 0) {
           // 生成订单ID
-          const year = now.getFullYear();
-          const month = String(now.getMonth() + 1).padStart(2, '0');
-          const prefix = `ORD-${year}-${month}-`;
+          const { start: startOfMonth, end: endOfMonth } = getRedemptionOrderMonth(now);
           
           // 查询当月订单数量
-          const startOfMonth = new Date(year, now.getMonth(), 1, 0, 0, 0, 0);
-          const endOfMonth = new Date(year, now.getMonth() + 1, 0, 23, 59, 59, 999);
           const qCount = query(
             collection(db, COLLECTIONS.ORDERS),
             where('createdAt', '>=', Timestamp.fromDate(startOfMonth)),
             where('createdAt', '<=', Timestamp.fromDate(endOfMonth))
           );
           const snap = await getDocs(qCount);
-          let seq = snap.size + 1;
-          let newOrderId = `${prefix}${String(seq).padStart(4, '0')}-R`; // R 表示兑换订单
-          
-          // 防止重复ID
-          while (true) {
-            const exists = await getDoc(doc(db, COLLECTIONS.ORDERS, newOrderId));
-            if (!exists.exists()) break;
-            seq += 1;
-            newOrderId = `${prefix}${String(seq).padStart(4, '0')}-R`;
-          }
+          const newOrderId = await resolveRedemptionOrderId({
+            date: now,
+            getMonthlyCount: async () => snap.size,
+            exists: async id => (await getDoc(doc(db, COLLECTIONS.ORDERS, id))).exists(),
+          });
 
           const orderData: Omit<Order, 'id'> = {
             userId: session.userId,
@@ -1053,23 +1045,18 @@ export const reconcileCompletedSessionRedemptions = async (
     }
 
     if (!orderId) {
-      const year = checkoutAt.getFullYear();
-      const month = String(checkoutAt.getMonth() + 1).padStart(2, '0');
-      const prefix = `ORD-${year}-${month}-`;
-      const startOfMonth = new Date(year, checkoutAt.getMonth(), 1, 0, 0, 0, 0);
-      const endOfMonth = new Date(year, checkoutAt.getMonth() + 1, 0, 23, 59, 59, 999);
+      const { start: startOfMonth, end: endOfMonth } = getRedemptionOrderMonth(checkoutAt);
       const monthlyOrders = await getDocs(query(
         collection(db, COLLECTIONS.ORDERS),
         where('createdAt', '>=', Timestamp.fromDate(startOfMonth)),
         where('createdAt', '<=', Timestamp.fromDate(endOfMonth))
       ));
 
-      let sequence = monthlyOrders.size + 1;
-      orderId = `${prefix}${String(sequence).padStart(4, '0')}-R`;
-      while ((await getDoc(doc(db, COLLECTIONS.ORDERS, orderId))).exists()) {
-        sequence += 1;
-        orderId = `${prefix}${String(sequence).padStart(4, '0')}-R`;
-      }
+      orderId = await resolveRedemptionOrderId({
+        date: checkoutAt,
+        getMonthlyCount: async () => monthlyOrders.size,
+        exists: async id => (await getDoc(doc(db, COLLECTIONS.ORDERS, id))).exists(),
+      });
     }
 
     const existingOutboundByOrderId = await getDocs(query(
