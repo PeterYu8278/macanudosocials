@@ -1187,6 +1187,7 @@
     "migrationStageComplete": "Migration stage completed",
     "migrationStagePartial": "Stage completed with {{failed}} failed rows",
     "migrationStageFailed": "Migration stage failed",
+    "migrationGatewayTimeout": "This import batch exceeded the server time limit. Retry this stage; completed rows will be updated without duplicates.",
     "migrationAuthenticationRequired": "Please sign in again before importing",
     "editUser": "Edit User",
     "deleteUser": "Delete User",

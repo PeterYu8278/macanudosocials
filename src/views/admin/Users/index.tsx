@@ -679,10 +679,10 @@ const AdminUsers: React.FC = () => {
       )
       const jobs: Array<{ rows: unknown[]; redemptions?: unknown[] }> = []
       if (stage !== 'visits') {
-        chunks(rows, stage === 'users' ? 20 : 50).forEach(chunk => jobs.push({ rows: chunk }))
+        chunks(rows, stage === 'users' ? 4 : 10).forEach(chunk => jobs.push({ rows: chunk }))
       } else {
         const remainingRedemptions = new Set(legacyMigrationPayload.redemptions)
-        chunks(legacyMigrationPayload.visits, 30).forEach(visitChunk => {
+        chunks(legacyMigrationPayload.visits, 10).forEach(visitChunk => {
           const matched = legacyMigrationPayload.redemptions.filter(redemption => {
             const redeemedAt = new Date(redemption.occurredAt).getTime()
             const match = visitChunk.some(visit => (
@@ -696,7 +696,7 @@ const AdminUsers: React.FC = () => {
           })
           jobs.push({ rows: visitChunk, redemptions: matched })
         })
-        chunks([...remainingRedemptions], 40).forEach(chunk => jobs.push({ rows: [], redemptions: chunk }))
+        chunks([...remainingRedemptions], 10).forEach(chunk => jobs.push({ rows: [], redemptions: chunk }))
       }
       if (!jobs.length) jobs.push({ rows: [], ...(stage === 'visits' ? { redemptions: [] } : {}) })
 
@@ -707,8 +707,19 @@ const AdminUsers: React.FC = () => {
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify({ stage, batchId: legacyMigrationBatchId, ...job }),
         })
-        const chunkResult = await response.json()
-        if (!response.ok || !chunkResult.success) throw new Error(chunkResult.error || t('usersAdmin.migrationStageFailed'))
+        const responseBody = await response.text()
+        let chunkResult: Record<string, any> = {}
+        try {
+          chunkResult = responseBody ? JSON.parse(responseBody) : {}
+        } catch {
+          // Netlify gateway errors may return HTML instead of the function's JSON response.
+        }
+        if (!response.ok || !chunkResult.success) {
+          const fallbackMessage = response.status === 504
+            ? t('usersAdmin.migrationGatewayTimeout')
+            : t('usersAdmin.migrationStageFailed')
+          throw new Error(chunkResult.error || fallbackMessage)
+        }
         result.created += Number(chunkResult.created || 0)
         result.updated += Number(chunkResult.updated || 0)
         result.skipped += Number(chunkResult.skipped || 0)

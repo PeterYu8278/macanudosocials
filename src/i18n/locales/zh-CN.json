@@ -1187,6 +1187,7 @@
     "migrationStageComplete": "迁移阶段已完成",
     "migrationStagePartial": "阶段已完成，但有 {{failed}} 行失败",
     "migrationStageFailed": "迁移阶段失败",
+    "migrationGatewayTimeout": "此批导入超过服务器时限。请重试当前阶段；已完成的资料只会更新，不会重复创建。",
     "migrationAuthenticationRequired": "请重新登录后再执行导入",
     "editUser": "编辑用户",
     "deleteUser": "删除用户",

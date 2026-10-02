@@ -71,6 +71,18 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
   if (!password || password.length < 6) throw new Error('BULK_IMPORT_DEFAULT_PASSWORD is not configured')
   const protectedRoles = new Set(['developer', 'superAdmin', 'admin', 'storeAdmin'])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
+  const usersSnapshot = await db.collection('users').get()
+  type ExistingUser = { id: string; data: FirebaseFirestore.DocumentData }
+  const usersByEmail = new Map<string, ExistingUser>()
+  const usersByPhone = new Map<string, ExistingUser>()
+  usersSnapshot.docs.forEach(document => {
+    const data = document.data()
+    const existingUser = { id: document.id, data }
+    const email = String(data.email || '').trim().toLowerCase()
+    const phone = String(data.profile?.phone || '').trim()
+    if (email) usersByEmail.set(email, existingUser)
+    if (phone) usersByPhone.set(phone, existingUser)
+  })
 
   for (const row of rows) {
     try {
@@ -83,13 +95,13 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
         : await Promise.all([getAuthUserByEmail(email), getAuthUserByPhone(phone)])
       if (emailUser && phoneUser && emailUser.uid !== phoneUser.uid) throw new Error('Email and phone belong to different accounts')
 
-      const emailMatch = await db.collection('users').where('email', '==', email).limit(2).get()
-      const phoneMatch = await db.collection('users').where('profile.phone', '==', phone).limit(2).get()
-      const existingDoc = emailMatch.docs[0] || phoneMatch.docs[0]
-      if (emailMatch.docs[0] && phoneMatch.docs[0] && emailMatch.docs[0].id !== phoneMatch.docs[0].id) {
+      const emailMatch = usersByEmail.get(email)
+      const phoneMatch = usersByPhone.get(phone)
+      const existingDoc = emailMatch || phoneMatch
+      if (emailMatch && phoneMatch && emailMatch.id !== phoneMatch.id) {
         throw new Error('Email and phone belong to different Firestore users')
       }
-      const existing = existingDoc?.data()
+      const existing = existingDoc?.data
       if (existing?.role && protectedRoles.has(existing.role)) {
         result.skipped += 1
         continue
@@ -161,12 +173,23 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
           createdAt: now,
         } : {}),
       }, { merge: true })
-      for (let index = 0; index < Number(row.referralCount || 0); index += 1) {
-        await userRef.collection('migrationReferralPlaceholders').doc(`legacy-${String(index + 1).padStart(4, '0')}`).set({
+      await Promise.all(Array.from({ length: Number(row.referralCount || 0) }, (_, index) => (
+        userRef.collection('migrationReferralPlaceholders').doc(`legacy-${String(index + 1).padStart(4, '0')}`).set({
           referredUserId: null, referredUserName: null, source: 'legacy_workbook', batchId,
           status: 'placeholder', createdAt: now, updatedAt: now,
         }, { merge: true })
+      )))
+      const cachedUser = {
+        id: uid!,
+        data: {
+          ...(existing || {}),
+          displayName: row.name,
+          email,
+          profile: { ...(existing?.profile || {}), phone },
+        },
       }
+      usersByEmail.set(email, cachedUser)
+      usersByPhone.set(phone, cachedUser)
       if (created) result.created += 1
       else result.updated += 1
     } catch (error: any) {
