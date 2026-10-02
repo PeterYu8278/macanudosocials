@@ -132,7 +132,9 @@ registerRoute(
 
 // 静态资源（Stale While Revalidate）
 registerRoute(
-  ({ request }) => ['script', 'style'].includes(request.destination),
+  ({ request, url }) =>
+    url.origin === self.location.origin &&
+    ['script', 'style'].includes(request.destination),
   new StaleWhileRevalidate({
     cacheName: 'static-resources',
   })
