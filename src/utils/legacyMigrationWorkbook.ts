@@ -75,6 +75,9 @@ export interface LegacyMigrationUserRow {
   resolvedVisitMinutes?: number
   visitCarryForwardMinutes?: number
   sourceLounge?: string
+  membershipActiveFrom?: string
+  membershipActiveUntil?: string
+  membershipIsActive?: boolean
 }
 
 export interface LegacyMigrationBusinessRow {
@@ -115,6 +118,14 @@ const durationMinutes = (value: unknown) => {
   const hours = Number(raw.match(/(\d+(?:\.\d+)?)\s*Hours?/i)?.[1] || 0)
   const minutes = Number(raw.match(/(\d+)\s*Minutes?/i)?.[1] || 0)
   return Math.floor(hours * 60 + minutes)
+}
+
+const formatDuration = (minutes: number) => `${Math.floor(minutes / 60)} hours ${minutes % 60} mins`
+
+const addOneYear = (date: Date) => {
+  const result = new Date(date)
+  result.setFullYear(result.getFullYear() + 1)
+  return result
 }
 
 export const normalizeLegacyPhone = (value: unknown): string | undefined => {
@@ -333,17 +344,6 @@ export const analyzeLegacyMigrationWorkbook = (
     }
     successfulVisitKeys.add(key)
     const minutes = Math.floor((end.getTime() - start.getTime()) / 60000)
-    if (minutes > 24 * 60) {
-      anomalousDurationRows += 1
-      issues.push({
-        severity: 'warning',
-        code: 'ANOMALOUS_VISIT_DURATION',
-        message: `Visit duration exceeds 24 hours for ${phone}`,
-        sheet: 'Check In',
-        row: row.__row,
-      })
-      return
-    }
     completedMinutes += minutes
     if (minutes <= 12 * 60 && lower(row.LOUNGE) !== 'demo branch') {
       cleanSessions.push({ phone, lounge: text(row.LOUNGE), start, end })
@@ -397,7 +397,7 @@ export const analyzeLegacyMigrationWorkbook = (
       const end = asDate(row['TIME END'])
       if (!phone || !start || !end || end < start) return
       const minutes = Math.floor((end.getTime() - start.getTime()) / 60000)
-      if (minutes < 0 || minutes > 24 * 60) return
+      if (minutes < 0) return
       visitMinutesByPhone.set(phone, (visitMinutesByPhone.get(phone) || 0) + minutes)
     })
     memberRows.forEach(row => {
@@ -409,7 +409,7 @@ export const analyzeLegacyMigrationWorkbook = (
       issues.push({
         severity: 'warning',
         code: 'VISIT_TOTAL_MISMATCH',
-        message: `${phone} has ${declared} declared visit minutes and ${detailed} detailed minutes`,
+        message: `${phone} has ${formatDuration(declared)} declared and ${formatDuration(detailed)} detailed`,
         sheet: 'member',
         row: row.__row,
       })
@@ -514,7 +514,7 @@ export const prepareLegacyMigrationWorkbook = (
     const end = asDate(row['TIME END'])
     if (!phone || !start || !end || end < start) return
     const minutes = Math.floor((end.getTime() - start.getTime()) / 60000)
-    if (minutes < 0 || minutes > 24 * 60) return
+    if (minutes < 0) return
     visitMinutesByPhone.set(phone, (visitMinutesByPhone.get(phone) || 0) + minutes)
   })
   userRows.forEach(row => {
@@ -530,6 +530,9 @@ export const prepareLegacyMigrationWorkbook = (
     const declaredVisitMinutes = member ? durationMinutes(member['TOTAL SPEND']) : 0
     const detailedVisitMinutes = visitMinutesByPhone.get(phone) || 0
     const resolvedVisitMinutes = Math.max(declaredVisitMinutes, detailedVisitMinutes)
+    const activationDate = member ? asDate(member['ACTIVATION DATE']) : undefined
+    const activeUntil = activationDate ? addOneYear(activationDate) : undefined
+    const now = new Date()
     users.push({
       sourceRow: row.__row,
       name: text(row.NAME) || email.split('@')[0],
@@ -544,6 +547,11 @@ export const prepareLegacyMigrationWorkbook = (
         resolvedVisitMinutes,
         visitCarryForwardMinutes: Math.max(0, declaredVisitMinutes - detailedVisitMinutes),
         sourceLounge: text(member.LOUNGE),
+        ...(activationDate && activeUntil ? {
+          membershipActiveFrom: activationDate.toISOString(),
+          membershipActiveUntil: activeUntil.toISOString(),
+          membershipIsActive: now >= activationDate && now < activeUntil,
+        } : {}),
       } : {}),
     })
   })
@@ -583,7 +591,7 @@ export const prepareLegacyMigrationWorkbook = (
     if (!base || !endedAt) return []
     const minutes = Math.floor((endedAt.getTime() - new Date(base.occurredAt).getTime()) / 60000)
     const key = `${base.phone}|${base.occurredAt}|${lower(base.lounge)}`
-    if (minutes < 0 || minutes > 24 * 60 || seenVisits.has(key) || lower(base.lounge) === 'demo branch') return []
+    if (minutes < 0 || seenVisits.has(key) || lower(base.lounge) === 'demo branch') return []
     seenVisits.add(key)
     const legacyFeeRm = numberValue(row['FEE (RM)'])
     return [{

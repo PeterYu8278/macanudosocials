@@ -97,17 +97,22 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
 
       let uid = (emailUser || phoneUser)?.uid || existingDoc?.id
       let created = false
+      const membershipActiveFrom = validDate(row.membershipActiveFrom)
+      const membershipActiveUntil = validDate(row.membershipActiveUntil)
+      const membershipIsActive = row.membershipIsActive === true
+      const accountEnabled = row.sourceStatus === 'available'
+        && (row.membershipIsActive === undefined || membershipIsActive)
       if (deleted) {
         uid ||= `legacy_archived_${stableId(email, phone).slice(0, 20)}`
       } else if (emailUser || phoneUser) {
         await auth.updateUser(uid!, {
           email, phoneNumber: phone, displayName: row.name,
-          disabled: row.sourceStatus !== 'available',
+          disabled: !accountEnabled,
         })
       } else {
         const account = await auth.createUser({
           ...(uid ? { uid } : {}), email, phoneNumber: phone, displayName: row.name, password,
-          disabled: row.sourceStatus !== 'available',
+          disabled: !accountEnabled,
         })
         uid = account.uid
         created = true
@@ -115,18 +120,26 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
 
       const now = Timestamp.now()
       const userRef = db.collection('users').doc(uid!)
+      const migratedRole = membershipActiveFrom
+        ? (existing?.role === 'vip' ? 'vip' : 'member')
+        : (existing?.role || 'guest')
       await userRef.set({
         displayName: row.name,
         email,
         memberId: existing?.memberId || memberIdFor(uid!),
-        role: existing?.role || 'guest',
-        status: row.sourceStatus === 'available' ? 'active' : 'inactive',
+        role: protectedRoles.has(existing?.role) ? existing.role : migratedRole,
+        status: accountEnabled ? 'active' : 'inactive',
         profile: { ...(existing?.profile || {}), phone },
         membership: {
           ...(existing?.membership || {}),
           level: existing?.membership?.level || 'bronze',
           points: Number(row.walletBalance || 0),
           totalVisitHours: Number(row.resolvedVisitMinutes ?? row.legacyVisitMinutes ?? 0) / 60,
+          ...(membershipActiveFrom && membershipActiveUntil ? {
+            activeFrom: Timestamp.fromDate(membershipActiveFrom),
+            activeUntil: Timestamp.fromDate(membershipActiveUntil),
+            joinDate: existing?.membership?.joinDate || Timestamp.fromDate(membershipActiveFrom),
+          } : {}),
         },
         migration: {
           ...(existing?.migration || {}),

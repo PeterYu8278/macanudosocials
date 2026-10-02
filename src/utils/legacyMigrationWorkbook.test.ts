@@ -62,6 +62,7 @@ const v2WorkbookBuffer = () => {
   add('Check In', [
     ['#', null, 'PHONENUMBER', 'TIME START', 'TIME END', 'Duration', 'Duration', 'STATUS', 'Fee (RM)'],
     [1, 'Member One', 60123456789, new Date('2026-01-01T10:00:00Z'), new Date('2026-01-01T11:00:59Z'), '01:00', 'Main Lounge', 'Successful', 18],
+    [2, 'Member One', 60123456789, new Date('2026-01-02T10:00:00Z'), new Date('2026-01-04T10:00:00Z'), '2 days', 'Main Lounge', 'Successful', 864],
   ])
   add('Redemption', [
     ['#', 'NAME', 'PHONE NUMBER', 'TIME REQUEST', 'CIGAR', 'LOUNGE', 'STATUS'],
@@ -119,12 +120,16 @@ describe('legacyMigrationWorkbook', () => {
       phone: '+60123456789',
       referralCount: 2,
       legacyVisitMinutes: 120,
-      resolvedVisitMinutes: 120,
-      visitCarryForwardMinutes: 60,
+      resolvedVisitMinutes: 2940,
+      visitCarryForwardMinutes: 0,
       sourceLounge: 'Main Lounge',
+      membershipIsActive: true,
     })
     expect(prepared.payload.reloads[0].occurredAt).toBeTruthy()
     expect(prepared.payload.memberships[0]).toMatchObject({ amount: 199, sourceStatus: 'successful' })
+    expect(prepared.payload.visits).toHaveLength(2)
     expect(prepared.payload.visits[0]).toMatchObject({ lounge: 'Main Lounge', durationMinutes: 60, legacyFeeRm: 18 })
+    expect(prepared.payload.visits[1].durationMinutes).toBe(2880)
+    expect(prepared.report.visits.anomalousDurationRows).toBe(0)
   })
 })
