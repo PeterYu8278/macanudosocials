@@ -211,7 +211,6 @@ const AdminUsers: React.FC = () => {
       } catch { }
     }
     return {
-      id_combined: true,
       displayName: true,
       email: true,
       role: true,
@@ -312,19 +311,20 @@ const AdminUsers: React.FC = () => {
     }
   }
 
+  const formatMembershipExpiry = (value: unknown) => {
+    if (!value) return '-'
+    try {
+      const date = typeof (value as any)?.toDate === 'function'
+        ? (value as any).toDate()
+        : new Date(value as any)
+      if (Number.isNaN(date.getTime())) return '-'
+      return dayjs(date).format(i18n.language === 'en-US' ? 'D MMM YYYY' : 'YYYY-MM-DD')
+    } catch {
+      return '-'
+    }
+  }
+
   const allColumns = [
-    {
-      title: 'ID',
-      key: 'id_combined',
-      width: 100,
-      render: (_: any, record: User) => (
-        <Tooltip title={currentUser?.role === 'developer' ? `UID: ${record.id}` : record.memberId}>
-          <div style={{ fontWeight: 700, color: '#FDE08D', whiteSpace: 'nowrap' }}>
-            {record.memberId || '-'}
-          </div>
-        </Tooltip>
-      ),
-    },
     {
       title: t('usersAdmin.name'),
       dataIndex: 'displayName',
@@ -333,7 +333,11 @@ const AdminUsers: React.FC = () => {
       render: (_: any, record: any) => (
         <div>
           <div style={{ fontWeight: 600, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{record.displayName || '-'}</div>
-          <div style={{ fontSize: 11, color: '#CCCCCC', whiteSpace: 'nowrap' }}>{(record as any)?.profile?.phone || ''}</div>
+          <Tooltip title={currentUser?.role === 'developer' ? `UID: ${record.id}` : record.memberId}>
+            <div style={{ fontSize: 11, color: '#FDE08D', fontWeight: 600, whiteSpace: 'nowrap' }}>
+              {record.memberId || '-'}
+            </div>
+          </Tooltip>
         </div>
       ),
     },
@@ -343,10 +347,13 @@ const AdminUsers: React.FC = () => {
       key: 'email',
       width: 210,
       ellipsis: true,
-      render: (val: string) => (
-        <Tooltip title={val}>
-          <span style={{ color: '#FFFFFF' }}>{val || '-'}</span>
-        </Tooltip>
+      render: (val: string, record: User) => (
+        <div style={{ minWidth: 0 }}>
+          <Tooltip title={val}>
+            <div style={{ color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{val || '-'}</div>
+          </Tooltip>
+          <div style={{ fontSize: 11, color: '#CCCCCC', whiteSpace: 'nowrap' }}>{record.profile?.phone || record.phone || '-'}</div>
+        </div>
       )
     },
     ...(canManageDiscount ? [{
@@ -399,38 +406,43 @@ const AdminUsers: React.FC = () => {
       title: t('usersAdmin.status'),
       dataIndex: 'status',
       key: 'status',
-      width: 145,
+      width: 175,
       render: (_: any, record: any) => {
         const status = statusMap[record.id] || record.status || 'inactive'
         return (
-          <Space size={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', minWidth: 0, overflow: 'hidden' }}>
-            <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
-              {getStatusText(status)}
-            </Tag>
-            <Switch
-              checked={status === 'active'}
-              onChange={async (checked) => {
-                const next = checked ? 'active' : 'inactive'
-                setStatusMap((m) => ({ ...m, [record.id]: next }))
+          <div style={{ width: '100%', minWidth: 0, overflow: 'hidden' }}>
+            <Space size={4} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+              <Tag color={getStatusColor(status)} style={{ marginInlineEnd: 0 }}>
+                {getStatusText(status)}
+              </Tag>
+              <Switch
+                checked={status === 'active'}
+                onChange={async (checked) => {
+                  const next = checked ? 'active' : 'inactive'
+                  setStatusMap((m) => ({ ...m, [record.id]: next }))
 
-                // 会员状态只联动会员角色，管理员和开发者角色始终保持不变。
-                const updateData: Partial<User> = { status: next }
-                if (checked && (record.role === 'guest' || record.role === 'member')) {
-                  updateData.role = 'vip'
-                } else if (!checked && record.role === 'vip') {
-                  updateData.role = 'member'
-                }
+                  // 会员状态只联动会员角色，管理员和开发者角色始终保持不变。
+                  const updateData: Partial<User> = { status: next }
+                  if (checked && (record.role === 'guest' || record.role === 'member')) {
+                    updateData.role = 'vip'
+                  } else if (!checked && record.role === 'vip') {
+                    updateData.role = 'member'
+                  }
 
-                const res = await updateDocument<User>(COLLECTIONS.USERS, record.id, updateData as any)
-                if (res.success) {
-                  message.success(t('usersAdmin.statusUpdated'))
-                  // 刷新用户列表以显示角色变化
-                  await refreshUsers()
-                }
-              }}
-              size="small"
-            />
-          </Space>
+                  const res = await updateDocument<User>(COLLECTIONS.USERS, record.id, updateData as any)
+                  if (res.success) {
+                    message.success(t('usersAdmin.statusUpdated'))
+                    // 刷新用户列表以显示角色变化
+                    await refreshUsers()
+                  }
+                }}
+                size="small"
+              />
+            </Space>
+            <div style={{ marginTop: 3, fontSize: 11, color: '#CCCCCC', whiteSpace: 'nowrap' }}>
+              {t('usersAdmin.expiryDate')}: {formatMembershipExpiry(record.membership?.activeUntil)}
+            </div>
+          </div>
         )
       },
     },
@@ -1248,12 +1260,14 @@ const AdminUsers: React.FC = () => {
                             return (
                               <div key={u.id} style={{ borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', padding: 12, marginBottom: 8, backdropFilter: 'blur(6px)' }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
-                                  <div style={{ flex: 1 }}>
-                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                      <div style={{ fontWeight: 700, color: '#FFFFFF' }}>{u.displayName || '-'}</div>
-                                      <Tag color={getRoleColor(role)} style={{ margin: 0 }}>
+                                  <div style={{ flex: 1, minWidth: 0 }}>
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                                      <Tag color={getRoleColor(role)} style={{ margin: 0, width: 108, flexShrink: 0, paddingInline: 4, textAlign: 'center', whiteSpace: 'nowrap' }}>
                                         {getRoleText(role)}
                                       </Tag>
+                                      <div style={{ flex: 1, minWidth: 0, fontWeight: 700, color: '#FFFFFF', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                        {u.displayName || '-'}
+                                      </div>
                                     </div>
                                     <div style={{ marginTop: 4, fontSize: 12, color: '#CCCCCC' }}>
                                       {u.memberId && <span style={{ marginRight: 8, fontFamily: 'monospace', color: '#FDE08D', fontWeight: 500 }}>{t('usersAdmin.memberId')}: {u.memberId}</span>}
@@ -1262,9 +1276,14 @@ const AdminUsers: React.FC = () => {
                                         <span style={{ marginLeft: 8, color: '#FDE08D', fontWeight: 600 }}>{t('usersAdmin.discount')} {u.discount.rate}%</span>
                                       )}
                                     </div>
-                                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
-                                      <span style={{ width: 8, height: 8, borderRadius: 999, background: status === 'active' ? '#52c41a' : '#ff4d4f', display: 'inline-block' }} />
-                                      <span style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 500 }}>{getStatusText(status)}</span>
+                                    <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                                        <span style={{ width: 8, height: 8, borderRadius: 999, background: status === 'active' ? '#52c41a' : '#ff4d4f', display: 'inline-block' }} />
+                                        <span style={{ fontSize: 12, color: '#FFFFFF', fontWeight: 500 }}>{getStatusText(status)}</span>
+                                      </span>
+                                      <span style={{ fontSize: 11, color: '#CCCCCC', whiteSpace: 'nowrap' }}>
+                                        {t('usersAdmin.expiryDate')}: {formatMembershipExpiry(u.membership?.activeUntil)}
+                                      </span>
                                     </div>
                                   </div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'flex-end' }}>

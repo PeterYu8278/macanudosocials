@@ -19,6 +19,7 @@ import { getEventsByUser, getOrdersByUser, getCigarById, getReferredUsers, getDo
 import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
+import { getUserVisitSessions } from '../../services/firebase/visitSessions'
 import type { User, Event, Order, Cigar, PointsRecord, VisitSession } from '../../types'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
@@ -57,6 +58,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [aiCigarHistoryVisible, setAiCigarHistoryVisible] = useState<boolean>(true)
   const [userEvents, setUserEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
+  const [userVisitSessions, setUserVisitSessions] = useState<VisitSession[]>([])
+  const [loadingVisitSessions, setLoadingVisitSessions] = useState(false)
   const [userOrders, setUserOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
@@ -145,6 +148,26 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       }
     }
     loadUserEvents()
+  }, [user?.id])
+
+  // Load lounge visits for the Activity Records tab.
+  useEffect(() => {
+    const loadUserVisitSessions = async () => {
+      if (!user?.id) {
+        setUserVisitSessions([])
+        return
+      }
+      setLoadingVisitSessions(true)
+      try {
+        setUserVisitSessions(await getUserVisitSessions(user.id, 200))
+      } catch (error) {
+        console.error('[ProfileView] Failed to load visit sessions:', error)
+        setUserVisitSessions([])
+      } finally {
+        setLoadingVisitSessions(false)
+      }
+    }
+    loadUserVisitSessions()
   }, [user?.id])
 
   // Load orders and fill cigar names
@@ -298,12 +321,48 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
     }, 0)
   }, [userOrders])
 
+  const formatHoursMinutes = (hoursValue: unknown, minutesValue?: unknown) => {
+    const explicitMinutes = Number(minutesValue)
+    const hours = Number(hoursValue)
+    const totalMinutes = Number.isFinite(explicitMinutes) && minutesValue !== undefined
+      ? Math.max(0, Math.floor(explicitMinutes))
+      : Math.max(0, Math.floor((Number.isFinite(hours) ? hours : 0) * 60 + 0.000001))
+    return t('profile.hoursMinutes', {
+      hours: Math.floor(totalMinutes / 60),
+      minutes: totalMinutes % 60,
+      defaultValue: `${Math.floor(totalMinutes / 60)} H ${totalMinutes % 60}m`,
+    })
+  }
+
+  const totalLoungeHours = formatHoursMinutes(user?.membership?.totalVisitHours)
+
   // User stats data
+  const isChinese = i18n.language.startsWith('zh')
   const userStats = [
     { title: t('profile.eventsJoined'), value: userEvents.length, icon: <CalendarOutlined /> },
-    { title: t('profile.cigarsPurchased'), value: totalCigarsPurchased, icon: <ShoppingOutlined /> },
+    {
+      title: t('profile.cigarsSavoured', { defaultValue: isChinese ? '品鉴雪茄' : 'Cigars Savoured' }),
+      value: totalCigarsPurchased,
+      icon: <ShoppingOutlined />,
+    },
     { title: t('profile.communityPoints'), value: (user?.membership as any)?.points || 0, icon: <TrophyOutlined /> },
+    {
+      title: t('profile.loungeHours', { defaultValue: isChinese ? '驻店时长' : 'Lounge Hours' }),
+      value: totalLoungeHours,
+      icon: <ClockCircleOutlined />,
+    },
   ]
+
+  const getStatTitleLines = (title: string) => {
+    if (!isMobile) return [title]
+    const words = title.trim().split(/\s+/)
+    if (words.length > 1) {
+      const midpoint = Math.ceil(words.length / 2)
+      return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')]
+    }
+    const midpoint = Math.ceil(title.length / 2)
+    return [title.slice(0, midpoint), title.slice(midpoint)]
+  }
 
   const getMembershipColor = (level: string) => {
     switch (level) {
@@ -681,33 +740,33 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         background: 'rgba(255, 255, 255, 0.05)',
         borderRadius: '12px',
         border: '1px solid rgba(244, 175, 37, 0.6)',
-        padding: '16px 0',
-        display: 'flex',
-        alignItems: 'center'
+        overflow: 'hidden',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))'
       }}>
-        {userStats.map((stat, index) => (
-          <React.Fragment key={index}>
-            {index > 0 && (
-              <div style={{
-                width: '1px',
-                height: '36px',
-                background: 'rgba(244, 175, 37, 0.25)',
-                flexShrink: 0
-              }} />
-            )}
-            <div style={{
-              flex: 1,
-              textAlign: 'center'
+        {userStats.map((stat, index) => {
+          const titleLines = getStatTitleLines(stat.title)
+          return (
+            <div key={stat.title} style={{
+              minWidth: 0,
+              padding: isMobile ? '14px 4px' : '16px 8px',
+              textAlign: 'center',
+              borderRight: index < userStats.length - 1 ? '1px solid rgba(244, 175, 37, 0.25)' : 'none',
             }}>
-              <div style={{ fontSize: '20px', fontWeight: 'bold', color: '#FFFFFF', marginBottom: '4px' }}>
+              <div style={{ fontSize: isMobile ? '18px' : '20px', fontWeight: 'bold', color: '#FFFFFF', marginBottom: '4px' }}>
                 {stat.value}
               </div>
-              <div style={{ fontSize: '11px', color: 'rgba(255, 255, 255, 0.6)' }}>
-                {stat.title}
+              <div style={{ minHeight: isMobile ? 30 : 'auto', fontSize: isMobile ? '10px' : '11px', lineHeight: 1.35, color: 'rgba(255, 255, 255, 0.6)', overflowWrap: 'anywhere' }}>
+                {titleLines.map((line, lineIndex) => (
+                  <React.Fragment key={`${stat.title}-${lineIndex}`}>
+                    {lineIndex > 0 && <br />}
+                    {line}
+                  </React.Fragment>
+                ))}
               </div>
             </div>
-          </React.Fragment>
-        ))}
+          )
+        })}
       </div>
 
       {/* AI Recognition History Entry */}
@@ -1179,7 +1238,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
           )}
 
           {activeTab === 'activity' && (
-            loadingEvents ? (
+            (loadingEvents || loadingVisitSessions) ? (
               <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <div style={{ fontSize: 36, color: '#F4AF25', marginBottom: 12 }}>
                   <CalendarOutlined spin />
@@ -1188,7 +1247,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                   {t('common.loading')}
                 </Text>
               </div>
-            ) : userEvents.length === 0 ? (
+            ) : userEvents.length === 0 && userVisitSessions.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '60px 20px' }}>
                 <div style={{ fontSize: 48, marginBottom: 16, opacity: 0.25, color: '#F4AF25' }}>
                   <CalendarOutlined />
@@ -1203,6 +1262,43 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, 1fr)',
                 gap: isMobile ? 12 : 16
               }}>
+                {userVisitSessions.map((session) => {
+                  const statusKey = `visitSessions.status${session.status.charAt(0).toUpperCase()}${session.status.slice(1)}`
+                  const statusColor = session.status === 'completed'
+                    ? '#52c41a'
+                    : session.status === 'pending' ? '#F4AF25' : '#ff7875'
+                  const period = formatVisitPeriod(session)
+                  return (
+                    <div
+                      key={`visit-${session.id}`}
+                      style={{
+                        borderRadius: 12,
+                        border: '1px solid rgba(244,175,37,0.2)',
+                        background: 'rgba(255,255,255,0.04)',
+                        padding: isMobile ? '12px 14px' : '14px 16px',
+                        minWidth: 0,
+                      }}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {session.storeName || t('navigation.visitSessions')}
+                          </div>
+                          <div style={{ color: 'rgba(255,255,255,0.42)', fontSize: 11, marginTop: 4 }}>
+                            {period || formatDateTime(session.checkInAt)}
+                          </div>
+                        </div>
+                        <span style={{ color: statusColor, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                          {t(statusKey)}
+                        </span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
+                        <ClockCircleOutlined />
+                        <span>{formatHoursMinutes(session.durationHours, session.durationMinutes)}</span>
+                      </div>
+                    </div>
+                  )
+                })}
                 {userEvents.map((event) => {
                   const startDate = event.schedule.startDate instanceof Date
                     ? event.schedule.startDate

@@ -26,6 +26,56 @@ const getPendingVisitSessionIds = async (userId?: string): Promise<Set<string>> 
   }
 };
 
+const addPendingVisitSummaries = async (
+  userId: string,
+  records: PointsRecord[]
+): Promise<PointsRecord[]> => {
+  try {
+    const sessionsSnapshot = await getDocs(query(
+      collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+      where('userId', '==', userId),
+      where('status', '==', 'pending')
+    ));
+    const recordedSessionIds = new Set(
+      records
+        .filter(record => record.source === 'visit' && record.type === 'spend' && record.relatedId)
+        .map(record => record.relatedId as string)
+    );
+    const summaries = sessionsSnapshot.docs.flatMap(sessionDoc => {
+      if (recordedSessionIds.has(sessionDoc.id)) return [];
+
+      const data = sessionDoc.data();
+      const amount = Number(data.realtimePointsDeducted || 0);
+      if (amount <= 0) return [];
+
+      const deductionCount = Math.max(1, Number(data.deductionCount || 1));
+      const billedHours = 1 + Math.max(0, deductionCount - 1) * 0.5;
+      return [{
+        id: `pending-visit-${sessionDoc.id}`,
+        userId,
+        userName: data.userName,
+        type: 'spend' as const,
+        amount,
+        source: 'visit' as const,
+        description: `驻店计时扣费 (${billedHours}小时，共${amount}积分)`,
+        relatedId: sessionDoc.id,
+        balance: undefined,
+        createdAt: data.checkInAt?.toDate?.() || new Date(data.checkInAt),
+        createdBy: data.checkInBy || 'system'
+      } satisfies PointsRecord];
+    });
+
+    return [...records, ...summaries].sort((a, b) => {
+      const dateA = a.createdAt instanceof Date ? a.createdAt : new Date(a.createdAt);
+      const dateB = b.createdAt instanceof Date ? b.createdAt : new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+  } catch (error) {
+    console.warn('[getUserPointsRecords] Failed to add pending visit summaries:', error);
+    return records;
+  }
+};
+
 /**
  * 获取所有积分记录
  */
@@ -75,7 +125,8 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
     });
     
     const pendingSessionIds = await getPendingVisitSessionIds(userId);
-    return consolidateVisitPointsRecords(records, pendingSessionIds);
+    const consolidatedRecords = consolidateVisitPointsRecords(records, pendingSessionIds);
+    return addPendingVisitSummaries(userId, consolidatedRecords);
   } catch (error: any) {
     
     // 如果是索引错误，尝试降级查询（不使用 orderBy）
@@ -108,7 +159,8 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
         
         // 限制返回数量
         const pendingSessionIds = await getPendingVisitSessionIds(userId);
-        const limitedRecords = consolidateVisitPointsRecords(records, pendingSessionIds).slice(0, limitCount);
+        const consolidatedRecords = consolidateVisitPointsRecords(records, pendingSessionIds);
+        const limitedRecords = (await addPendingVisitSummaries(userId, consolidatedRecords)).slice(0, limitCount);
         return limitedRecords;
       } catch (fallbackError) {
         throw fallbackError;

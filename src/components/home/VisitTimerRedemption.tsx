@@ -154,6 +154,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     );
   }, [currentSession?.id]);
 
+  useEffect(() => {
+    if (currentSession?.checkoutPending?.status === 'awaiting_reload') {
+      navigate('/reload');
+    }
+  }, [currentSession?.checkoutPending?.status, navigate]);
+
   // 计算实时时长
   useEffect(() => {
     if (!currentSession?.checkInAt) {

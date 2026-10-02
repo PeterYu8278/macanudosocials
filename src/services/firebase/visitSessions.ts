@@ -174,6 +174,9 @@ export const createVisitSession = async (
 
     const docRef = doc(collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS));
     const userRef = doc(db, GLOBAL_COLLECTIONS.USERS, userId);
+    const initialPointsRecordRef = initialDeduction > 0
+      ? doc(collection(db, GLOBAL_COLLECTIONS.POINTS_RECORDS))
+      : null;
     await runTransaction(db, async transaction => {
       const latestUserDoc = await transaction.get(userRef);
       if (!latestUserDoc.exists()) throw new Error('签到失败：用户不存在');
@@ -203,6 +206,20 @@ export const createVisitSession = async (
         'membership.lastCheckInAt': Timestamp.fromDate(now),
         updatedAt: Timestamp.fromDate(now)
       });
+      if (initialPointsRecordRef) {
+        transaction.set(initialPointsRecordRef, {
+          userId,
+          userName: userName || latestUser.displayName,
+          type: 'spend',
+          amount: initialDeduction,
+          source: 'visit',
+          description: `驻店开始扣费 (1小时，共${initialDeduction}积分)`,
+          relatedId: docRef.id,
+          balance: latestAffordability.balanceAfterCharge,
+          createdAt: Timestamp.fromDate(now),
+          createdBy: checkInBy
+        });
+      }
     });
 
     return { success: true, sessionId: docRef.id };
@@ -235,6 +252,7 @@ export const processSessionRealtimeDeduction = async (
   const now = asOf;
   const sessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId);
   const userRef = doc(db, GLOBAL_COLLECTIONS.USERS, userId);
+  const pointsRecordRef = doc(collection(db, GLOBAL_COLLECTIONS.POINTS_RECORDS));
   const sessionDoc = await getDoc(sessionRef);
   if (!sessionDoc.exists()) return { deducted: 0, count: 0 };
 
@@ -310,6 +328,18 @@ export const processSessionRealtimeDeduction = async (
       nextDeductionAt: Timestamp.fromDate(newNextDeductionAt),
       deductionCount: (latestData.deductionCount || 1) + totalIntervals,
       updatedAt: Timestamp.fromDate(now)
+    });
+    transaction.set(pointsRecordRef, {
+      userId,
+      userName: latestData.userName || userData.displayName,
+      type: 'spend',
+      amount: totalNewDeduction,
+      source: 'visit',
+      description: `驻店计时扣费 (${0.5 * totalIntervals}小时，共${totalNewDeduction}积分)`,
+      relatedId: sessionId,
+      balance: affordability.balanceAfterCharge,
+      createdAt: Timestamp.fromDate(now),
+      createdBy: 'system'
     });
 
     return { deducted: totalNewDeduction, count: totalIntervals };

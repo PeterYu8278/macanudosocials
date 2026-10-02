@@ -60,10 +60,10 @@ describe('formatPointsRecordDescription', () => {
 })
 
 describe('consolidateVisitPointsRecords', () => {
-  it('hides visit deductions while their check-in session is pending', () => {
+  it('shows visit deductions while their check-in session is pending', () => {
     const records = [record({ relatedId: 'pending-session' })]
 
-    expect(consolidateVisitPointsRecords(records, new Set(['pending-session']))).toEqual([])
+    expect(consolidateVisitPointsRecords(records, new Set(['pending-session']))).toEqual(records)
   })
 
   it('combines legacy deductions from the same completed session', () => {

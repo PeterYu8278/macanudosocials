@@ -10,7 +10,7 @@ export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction
     return t('pointsConfig.records.reloadDescription', { amount: reload[1], points: reload[2], defaultValue: 'Reload RM {{amount}} ({{points}} points)' })
   }
   if (record.source === 'visit') {
-    const duration = description.trim().match(/^驻店计时扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)]$/)
+    const duration = description.trim().match(/^驻店(?:开始|计时)扣费\s*[（(]\s*([\d,.]+)\s*小时\s*[，,]\s*共\s*([\d,.]+)\s*积分\s*[）)]$/)
     if (duration) {
       return t('pointsConfig.records.visitDurationDescription', { hours: duration[1], points: duration[2], defaultValue: 'Visit duration fee ({{hours}} h, {{points}} points)' })
     }
@@ -51,7 +51,7 @@ const isCumulativeVisitSummary = (record: PointsRecord): boolean => (
 
 export const consolidateVisitPointsRecords = (
   records: PointsRecord[],
-  pendingSessionIds: ReadonlySet<string>
+  _pendingSessionIds: ReadonlySet<string>
 ): PointsRecord[] => {
   const durationRecordsBySession = new Map<string, PointsRecord[]>()
 
@@ -98,10 +98,6 @@ export const consolidateVisitPointsRecords = (
 
     if (!sessionId) {
       visibleRecords.push(record)
-      continue
-    }
-
-    if (pendingSessionIds.has(sessionId)) {
       continue
     }
 
