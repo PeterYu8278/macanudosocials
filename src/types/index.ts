@@ -673,7 +673,7 @@ export interface VisitSession {
   
   // 时长计算
   durationMinutes?: number; // 实际驻店时长（分钟）
-  durationHours?: number;   // 计费时长（小时，向上取整）
+  durationHours?: number;   // 驻店时长（小时，由完整分钟换算）
   calculatedAt?: Date;      // 计算时间
   
   // 兑换项（必须在check-in到check-out之间设定）

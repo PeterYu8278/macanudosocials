@@ -499,7 +499,7 @@ const StoreManagement: React.FC = () => {
             label={<span style={{ color: '#ccc' }}>{t('storeManagement.email')}</span>}
             rules={[{ required: true, message: t('common.required') }, { type: 'email', message: t('auth.emailInvalid') }]}
           >
-            <Input placeholder="Store email" />
+            <Input placeholder="Lounge email" />
           </Form.Item>
         </Form>
       </Modal>

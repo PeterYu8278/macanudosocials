@@ -18,16 +18,13 @@ function randomDateInLast18Months(): Date {
 }
 
 /**
- * 计算驻店时长（分钟转小时，向上取整）
+ * 按完整分钟计算驻店时长并转换为小时。
  */
 function calculateVisitDuration(minutes: number): number {
-  if (minutes <= 15) {
-    return 0 // 15分钟内不计费
-  } else if (minutes <= 30) {
-    return 0.5 // 超过15分钟但不超过30分钟，按半小时
-  } else {
-    return Math.ceil(minutes / 60) // 超过30分钟，按小时向上取整
-  }
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0
+
+  const completedMinutes = Math.floor(minutes)
+  return completedMinutes / 60
 }
 
 /**

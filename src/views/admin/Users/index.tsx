@@ -1,6 +1,6 @@
 // 用户管理页面
 import React, { useEffect, useMemo, useState } from 'react'
-import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber, Tooltip } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber, Tooltip, Upload, Alert } from 'antd'
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
@@ -35,6 +35,11 @@ import { collection, query, where, getDocs, limit, doc, setDoc } from 'firebase/
 import { UserSkeletonList } from '../../../components/features/admin/UserSkeleton'
 import { auth, db } from '../../../config/firebase'
 import { generateMemberId } from '../../../utils/memberId'
+import {
+  prepareLegacyMigrationWorkbook,
+  type LegacyMigrationPayload,
+  type LegacyMigrationWorkbookReport,
+} from '../../../utils/legacyMigrationWorkbook'
 
 // CSS样式对象
 const glassmorphismInputStyle = {
@@ -64,6 +69,14 @@ type BulkImportRow = {
   totalVisitHours: number
   points: number
   redeemedCigarCount: number
+}
+
+type LegacyMigrationStage = 'users' | 'reload' | 'membership' | 'visits'
+type LegacyMigrationStageResult = {
+  created: number
+  updated: number
+  skipped: number
+  failedCount: number
 }
 
 const parseDurationHours = (value: string) => {
@@ -138,6 +151,13 @@ const AdminUsers: React.FC = () => {
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [bulkImportRows, setBulkImportRows] = useState<BulkImportRow[]>([emptyBulkImportRow()])
   const [bulkImportLoading, setBulkImportLoading] = useState(false)
+  const [legacyDryRunOpen, setLegacyDryRunOpen] = useState(false)
+  const [legacyDryRunLoading, setLegacyDryRunLoading] = useState(false)
+  const [legacyDryRunReport, setLegacyDryRunReport] = useState<LegacyMigrationWorkbookReport | null>(null)
+  const [legacyMigrationPayload, setLegacyMigrationPayload] = useState<LegacyMigrationPayload | null>(null)
+  const [legacyMigrationBatchId, setLegacyMigrationBatchId] = useState('')
+  const [legacyMigrationStageLoading, setLegacyMigrationStageLoading] = useState<LegacyMigrationStage | null>(null)
+  const [legacyMigrationResults, setLegacyMigrationResults] = useState<Partial<Record<LegacyMigrationStage, LegacyMigrationStageResult>>>({})
   const [deleting, setDeleting] = useState<null | User>(null)
   const [resettingPasswordLoading, setResettingPasswordLoading] = useState(false)
   const [form] = Form.useForm()
@@ -613,6 +633,109 @@ const AdminUsers: React.FC = () => {
     setBulkImportRows(parsed)
   }
 
+  const handleLegacyWorkbookDryRun = async (file: File) => {
+    setLegacyDryRunLoading(true)
+    try {
+      const data = await file.arrayBuffer()
+      const prepared = prepareLegacyMigrationWorkbook(data, file.name)
+      const digest = await crypto.subtle.digest('SHA-256', data.slice(0))
+      const batchId = `legacy_${Array.from(new Uint8Array(digest)).map(byte => byte.toString(16).padStart(2, '0')).join('').slice(0, 24)}`
+      const report = prepared.report
+      setLegacyDryRunReport(report)
+      setLegacyMigrationPayload(prepared.payload)
+      setLegacyMigrationBatchId(batchId)
+      setLegacyMigrationResults({})
+      setLegacyDryRunOpen(true)
+      if (report.sheets.missing.length) {
+        message.warning(t('usersAdmin.migrationDryRunMissingSheets'))
+      } else {
+        message.success(t('usersAdmin.migrationDryRunComplete'))
+      }
+    } catch (error) {
+      console.error('[LegacyMigrationDryRun] Failed:', error)
+      message.error(t('usersAdmin.migrationDryRunFailed'))
+    } finally {
+      setLegacyDryRunLoading(false)
+    }
+    return false
+  }
+
+  const runLegacyMigrationStage = async (stage: LegacyMigrationStage) => {
+    if (!legacyMigrationPayload || !legacyMigrationBatchId) return
+    setLegacyMigrationStageLoading(stage)
+    try {
+      const token = await auth.currentUser?.getIdToken()
+      if (!token) throw new Error(t('usersAdmin.migrationAuthenticationRequired'))
+      const rows: unknown[] = stage === 'users'
+        ? legacyMigrationPayload.users
+        : stage === 'reload'
+          ? legacyMigrationPayload.reloads
+          : stage === 'membership'
+            ? legacyMigrationPayload.memberships
+            : legacyMigrationPayload.visits
+      const chunks = <T,>(items: T[], size: number) => Array.from(
+        { length: Math.ceil(items.length / size) },
+        (_, index) => items.slice(index * size, (index + 1) * size),
+      )
+      const jobs: Array<{ rows: unknown[]; redemptions?: unknown[] }> = []
+      if (stage !== 'visits') {
+        chunks(rows, stage === 'users' ? 20 : 50).forEach(chunk => jobs.push({ rows: chunk }))
+      } else {
+        const remainingRedemptions = new Set(legacyMigrationPayload.redemptions)
+        chunks(legacyMigrationPayload.visits, 30).forEach(visitChunk => {
+          const matched = legacyMigrationPayload.redemptions.filter(redemption => {
+            const redeemedAt = new Date(redemption.occurredAt).getTime()
+            const match = visitChunk.some(visit => (
+              visit.phone === redemption.phone
+              && visit.lounge.trim().toLowerCase() === redemption.lounge.trim().toLowerCase()
+              && redeemedAt >= new Date(visit.occurredAt).getTime()
+              && redeemedAt <= new Date(visit.endedAt).getTime()
+            ))
+            if (match) remainingRedemptions.delete(redemption)
+            return match
+          })
+          jobs.push({ rows: visitChunk, redemptions: matched })
+        })
+        chunks([...remainingRedemptions], 40).forEach(chunk => jobs.push({ rows: [], redemptions: chunk }))
+      }
+      if (!jobs.length) jobs.push({ rows: [], ...(stage === 'visits' ? { redemptions: [] } : {}) })
+
+      const result = { created: 0, updated: 0, skipped: 0, failedCount: 0 }
+      for (const job of jobs) {
+        const response = await fetch('/.netlify/functions/legacy-migration', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ stage, batchId: legacyMigrationBatchId, ...job }),
+        })
+        const chunkResult = await response.json()
+        if (!response.ok || !chunkResult.success) throw new Error(chunkResult.error || t('usersAdmin.migrationStageFailed'))
+        result.created += Number(chunkResult.created || 0)
+        result.updated += Number(chunkResult.updated || 0)
+        result.skipped += Number(chunkResult.skipped || 0)
+        result.failedCount += Number(chunkResult.failedCount || 0)
+      }
+      setLegacyMigrationResults(current => ({
+        ...current,
+        [stage]: {
+          created: Number(result.created || 0),
+          updated: Number(result.updated || 0),
+          skipped: Number(result.skipped || 0),
+          failedCount: Number(result.failedCount || 0),
+        },
+      }))
+      if (stage === 'users') await refreshUsers()
+      if (result.failedCount) {
+        message.warning(t('usersAdmin.migrationStagePartial', { failed: result.failedCount }))
+      } else {
+        message.success(t('usersAdmin.migrationStageComplete'))
+      }
+    } catch (error: any) {
+      message.error(error?.message || t('usersAdmin.migrationStageFailed'))
+    } finally {
+      setLegacyMigrationStageLoading(null)
+    }
+  }
+
   return (
     <div style={{
       height: isMobile ? '90vh' : 'auto',
@@ -854,14 +977,31 @@ const AdminUsers: React.FC = () => {
                     {t('usersAdmin.addUser')}
                   </button>
                   {currentUser?.role === 'developer' && (
-                    <Button
-                      size="small"
-                      icon={<UploadOutlined />}
-                      onClick={() => setBulkImportOpen(true)}
-                      style={{ background: 'rgba(244, 175, 37, 0.14)', border: '1px solid #C48D3A', color: '#FDE08D' }}
-                    >
-                      {t('usersAdmin.bulkImport')}
-                    </Button>
+                    <>
+                      <Button
+                        size="small"
+                        icon={<UploadOutlined />}
+                        onClick={() => setBulkImportOpen(true)}
+                        style={{ background: 'rgba(244, 175, 37, 0.14)', border: '1px solid #C48D3A', color: '#FDE08D' }}
+                      >
+                        {t('usersAdmin.bulkImport')}
+                      </Button>
+                      <Upload
+                        accept=".xlsx,.xls"
+                        showUploadList={false}
+                        disabled={legacyDryRunLoading}
+                        beforeUpload={handleLegacyWorkbookDryRun}
+                      >
+                        <Button
+                          size="small"
+                          loading={legacyDryRunLoading}
+                          icon={<SearchOutlined />}
+                          style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(253,224,141,0.45)', color: '#FDE08D' }}
+                        >
+                          {t('usersAdmin.migrationDryRun')}
+                        </Button>
+                      </Upload>
+                    </>
                   )}
                 </Space>
               </div>
@@ -1789,6 +1929,179 @@ const AdminUsers: React.FC = () => {
         <Typography.Text style={{ display: 'block', color: 'rgba(255,255,255,0.55)', marginTop: 8, fontSize: 12 }}>
           {t('usersAdmin.bulkImportSecurity')}
         </Typography.Text>
+      </Modal>
+
+      {/* Legacy migration workbook dry run */}
+      <Modal
+        title={<span style={{ color: '#FFFFFF' }}>{t('usersAdmin.migrationDryRunTitle')}</span>}
+        open={legacyDryRunOpen}
+        onCancel={() => setLegacyDryRunOpen(false)}
+        width={getModalWidth(isMobile, 900)}
+        styles={getModalThemeStyles(isMobile, true)}
+        footer={[
+          <Button key="close" onClick={() => setLegacyDryRunOpen(false)}>
+            {t('common.close')}
+          </Button>,
+        ]}
+      >
+        {legacyDryRunReport && (
+          <Space direction="vertical" size={16} style={{ width: '100%' }}>
+            <Alert
+              type={legacyDryRunReport.sheets.missing.length ? 'error' : 'info'}
+              showIcon
+              message={legacyDryRunReport.sheets.missing.length
+                ? t('usersAdmin.migrationMissingSheets', { sheets: legacyDryRunReport.sheets.missing.join(', ') })
+                : t('usersAdmin.migrationDryRunOnly')}
+            />
+
+            <Typography.Text style={{ color: 'rgba(255,255,255,0.72)' }}>
+              {legacyDryRunReport.fileName}
+            </Typography.Text>
+
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 1, border: '1px solid rgba(196,141,58,0.4)', background: 'rgba(196,141,58,0.35)' }}>
+              {[
+                [t('usersAdmin.migrationReadyUsers'), legacyDryRunReport.users.readyForAuth],
+                [t('usersAdmin.migrationInvalidUsers'), legacyDryRunReport.users.invalidIdentity],
+                [t('usersAdmin.migrationReferralPlaceholders'), legacyDryRunReport.referrals.placeholderCount],
+                [t('usersAdmin.migrationCoVisitCandidates'), legacyDryRunReport.referrals.coVisitCandidatePairs],
+                [t('usersAdmin.migrationWalletSnapshots'), legacyDryRunReport.wallet.snapshotUsers],
+                [t('usersAdmin.migrationReloadAmount'), `RM ${legacyDryRunReport.wallet.reloadAmount.toLocaleString()}`],
+                [t('usersAdmin.migrationVisitMinutes'), legacyDryRunReport.visits.completedMinutes.toLocaleString()],
+                [t('usersAdmin.migrationIssues'), legacyDryRunReport.issues.length],
+              ].map(([label, value]) => (
+                <div key={String(label)} style={{ minWidth: 0, padding: 12, background: '#191816' }}>
+                  <Typography.Text style={{ display: 'block', color: 'rgba(255,255,255,0.58)', fontSize: 12 }}>{label}</Typography.Text>
+                  <Typography.Text style={{ color: '#FDE08D', fontSize: 20, fontWeight: 700 }}>{value}</Typography.Text>
+                </div>
+              ))}
+            </div>
+
+            <Row gutter={[12, 12]}>
+              <Col xs={24} md={8}>
+                <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>{t('usersAdmin.migrationUsers')}</Typography.Text>
+                <div style={{ color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+                  {t('usersAdmin.migrationUserStatusSummary', {
+                    available: legacyDryRunReport.users.available,
+                    pending: legacyDryRunReport.users.pending,
+                    deleted: legacyDryRunReport.users.deleted,
+                  })}
+                </div>
+              </Col>
+              <Col xs={24} md={8}>
+                <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>{t('usersAdmin.migrationBusinessRecords')}</Typography.Text>
+                <div style={{ color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+                  {t('usersAdmin.migrationBusinessSummary', {
+                    fees: legacyDryRunReport.membership.successfulRows,
+                    visits: legacyDryRunReport.visits.successfulRows,
+                    redemptions: legacyDryRunReport.redemptions.successfulRows,
+                  })}
+                </div>
+              </Col>
+              <Col xs={24} md={8}>
+                <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>{t('usersAdmin.migrationReview')}</Typography.Text>
+                <div style={{ color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
+                  {t('usersAdmin.migrationReviewSummary', {
+                    balances: legacyDryRunReport.wallet.usersRequiringBalanceReview,
+                    visits: legacyDryRunReport.visits.anomalousDurationRows,
+                    cigars: legacyDryRunReport.redemptions.unresolvedCigarRows,
+                  })}
+                </div>
+              </Col>
+            </Row>
+
+            <div>
+              <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>{t('usersAdmin.migrationLounges')}</Typography.Text>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 8 }}>
+                {legacyDryRunReport.lounges.map(lounge => <Tag key={lounge} color="gold">{lounge}</Tag>)}
+              </div>
+            </div>
+
+            <div>
+              <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                {t('usersAdmin.migrationStages')}
+              </Typography.Text>
+              <Alert
+                type="warning"
+                showIcon
+                style={{ marginTop: 8, marginBottom: 10 }}
+                message={t('usersAdmin.migrationWriteWarning')}
+              />
+              <Space direction="vertical" size={8} style={{ width: '100%' }}>
+                {([
+                  ['users', t('usersAdmin.migrationStageUsers'), legacyMigrationPayload?.users.length || 0],
+                  ['reload', t('usersAdmin.migrationStageReload'), legacyMigrationPayload?.reloads.length || 0],
+                  ['membership', t('usersAdmin.migrationStageMembership'), legacyMigrationPayload?.memberships.length || 0],
+                  ['visits', t('usersAdmin.migrationStageVisits'), (legacyMigrationPayload?.visits.length || 0) + (legacyMigrationPayload?.redemptions.length || 0)],
+                ] as Array<[LegacyMigrationStage, string, number]>).map(([stage, label, count], index) => {
+                  const previousStage = (['users', 'reload', 'membership', 'visits'] as LegacyMigrationStage[])[index - 1]
+                  const result = legacyMigrationResults[stage]
+                  const disabled = legacyDryRunReport.sheets.missing.length > 0 || (index > 0 && !legacyMigrationResults[previousStage])
+                  return (
+                    <div
+                      key={stage}
+                      style={{
+                        display: 'grid',
+                        gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(280px, 2fr) auto',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: 10,
+                        border: '1px solid rgba(196,141,58,0.35)',
+                        background: 'rgba(255,255,255,0.025)',
+                      }}
+                    >
+                      <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>
+                        {index + 1}. {label} ({count})
+                      </Typography.Text>
+                      <Typography.Text style={{ color: result ? '#b7eb8f' : 'rgba(255,255,255,0.55)' }}>
+                        {result
+                          ? t('usersAdmin.migrationStageResult', result)
+                          : disabled && index > 0
+                            ? t('usersAdmin.migrationCompletePreviousStage')
+                            : t('usersAdmin.migrationStageReady')}
+                      </Typography.Text>
+                      <Button
+                        type="primary"
+                        disabled={disabled || !!legacyMigrationStageLoading}
+                        loading={legacyMigrationStageLoading === stage}
+                        onClick={() => modal.confirm({
+                          title: t('usersAdmin.migrationConfirmTitle', { stage: label }),
+                          content: t('usersAdmin.migrationConfirmContent', { count }),
+                          okText: result ? t('usersAdmin.migrationRetryStage') : t('usersAdmin.migrationRunStage'),
+                          cancelText: t('common.cancel'),
+                          centered: true,
+                          styles: getModalThemeStyles(isMobile, true),
+                          okButtonProps: { style: modalButtonStyles.primary },
+                          cancelButtonProps: { style: modalButtonStyles.secondary },
+                          onOk: () => runLegacyMigrationStage(stage),
+                        })}
+                      >
+                        {result ? t('usersAdmin.migrationRetryStage') : t('usersAdmin.migrationRunStage')}
+                      </Button>
+                    </div>
+                  )
+                })}
+              </Space>
+            </div>
+
+            <Table
+              size="small"
+              bordered
+              pagination={{ pageSize: 8, showSizeChanger: false }}
+              rowKey={(record, index) => `${record.code}-${record.sheet || ''}-${record.row || index}`}
+              dataSource={legacyDryRunReport.issues}
+              scroll={{ x: 680 }}
+              columns={[
+                {
+                  title: t('usersAdmin.migrationSeverity'), dataIndex: 'severity', width: 90,
+                  render: (severity: string) => <Tag color={severity === 'error' ? 'red' : severity === 'warning' ? 'orange' : 'blue'}>{severity.toUpperCase()}</Tag>,
+                },
+                { title: t('usersAdmin.migrationLocation'), key: 'location', width: 150, render: (_: unknown, record) => `${record.sheet || '-'}${record.row ? ` #${record.row}` : ''}` },
+                { title: t('usersAdmin.migrationMessage'), dataIndex: 'message' },
+              ]}
+              locale={{ emptyText: t('usersAdmin.migrationNoIssues') }}
+            />
+          </Space>
+        )}
       </Modal>
 
       {/* 删除确认 */}

@@ -57,18 +57,14 @@ const processVisitSessionData = (data: any, docId: string): VisitSession => {
 };
 
 /**
- * 计算驻店时长（分钟转小时，向上取整）
- * 规则：超过15分钟按半小时算，超过半小时则按1小时算
+ * 按完整分钟计算驻店时长并转换为小时。
+ * 不足一分钟的部分不计入，返回值仍以小时为单位供费率计算使用。
  */
 export const calculateVisitDuration = (minutes: number): number => {
-  if (minutes <= 15) {
-    return 0; // 15分钟内不计费
-  } else if (minutes <= 30) {
-    return 0.5; // 超过15分钟但不超过30分钟，按半小时
-  } else {
-    // 超过30分钟，按小时向上取整
-    return Math.ceil(minutes / 60);
-  }
+  if (!Number.isFinite(minutes) || minutes <= 0) return 0;
+
+  const completedMinutes = Math.floor(minutes);
+  return completedMinutes / 60;
 };
 
 /**
@@ -402,7 +398,7 @@ export const completeVisitSession = async (
 
     // 检查门店一致性 (非强制结算且提供了门店ID时)
     if (currentStoreId && session.storeId && session.storeId !== currentStoreId) {
-      return { success: false, error: `签退失败：该记录属于[${session.storeName || '其他门店'}]，请在原门店进行签退` };
+      return { success: false, error: `签退失败：该记录属于[${session.storeName || '其他会所'}]，请在原会所进行签退` };
     }
 
     const now = new Date();
@@ -886,7 +882,7 @@ export const completeVisitSession = async (
               paidAt: now
             },
             shipping: {
-              address: '店内兑换'
+              address: '会所兑换'
             },
             createdAt: now,
             updatedAt: now
@@ -1079,7 +1075,7 @@ export const reconcileCompletedSessionRedemptions = async (
       status: 'completed',
       source: { type: 'direct', note: sourceNote },
       payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(checkoutAt) },
-      shipping: { address: '店内兑换' },
+      shipping: { address: '会所兑换' },
       ...(session.storeId ? { storeId: session.storeId } : {}),
       createdAt: Timestamp.fromDate(checkoutAt),
       updatedAt: Timestamp.fromDate(new Date())

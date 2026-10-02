@@ -241,7 +241,7 @@ const SystemConfig: React.FC = () => {
         {t('navigation.systemConfig', 'System Config')}
       </h1>
       <Text style={{ color: 'rgba(255,255,255,0.45)', display: 'block', marginBottom: 20 }}>
-        {t('systemConfig.subtitle', 'Points rules & store management — superAdmin only')}
+        {t('systemConfig.subtitle', 'Points rules & lounge management — superAdmin only')}
       </Text>
 
       {/* Tab bar */}
@@ -526,7 +526,7 @@ const SystemConfig: React.FC = () => {
             </Col>
           </Row>
           <Form.Item name="email" label={<span style={{ color: '#ccc' }}>{t('storeManagement.email')}</span>} rules={[{ required: true, message: t('common.required') }, { type: 'email', message: t('auth.emailInvalid') }]}>
-            <Input placeholder="Store email" />
+            <Input placeholder="Lounge email" />
           </Form.Item>
         </Form>
       </Modal>

@@ -262,7 +262,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
     if (/(已有未完成|active visit already exists)/i.test(error)) return t('scanner.activeVisitAlreadyExists');
     if (/(积分不足|insufficient points)/i.test(error)) return t('scanner.insufficientPoints');
     if (/(已完成|已过期|already completed|expired)/i.test(error)) return t('scanner.visitAlreadyClosed');
-    if (/(原门店|original store)/i.test(error)) return t('scanner.visitStoreRestricted');
+    if (/(原会所|原门店|original lounge|original store)/i.test(error)) return t('scanner.visitStoreRestricted');
     if (/(雪茄不存在|兑换|库存|redemption|inventory)/i.test(error)) return t('scanner.visitSettlementFailed');
     return t(fallbackKey);
   };

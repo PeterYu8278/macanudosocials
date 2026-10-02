@@ -372,7 +372,7 @@ const NotificationManagement: React.FC<NotificationManagementProps> = ({ embedde
       render: (role: UserRole) => <Tag className="notification-role-tag">{role}</Tag>,
     },
     {
-      title: 'Store',
+      title: 'Lounge',
       dataIndex: 'storeId',
       key: 'storeId',
     },
@@ -485,7 +485,7 @@ const NotificationManagement: React.FC<NotificationManagementProps> = ({ embedde
           <Space className="notification-toolbar">
           <Input.Search
             allowClear
-            placeholder="Search user, subscription, device, OS, browser, role, or store"
+            placeholder="Search user, subscription, device, OS, browser, role, or lounge"
             onChange={(event) => setSearch(event.target.value)}
           />
             <Button className="notification-refresh-button" icon={<ReloadOutlined />} loading={loading} onClick={loadUsers}>
@@ -528,7 +528,7 @@ const NotificationManagement: React.FC<NotificationManagementProps> = ({ embedde
 
                 <div className="notification-mobile-meta">
                   <div><span>Phone</span><strong>{record.phone}</strong></div>
-                  <div><span>Store</span><strong>{record.storeId}</strong></div>
+                  <div><span>Lounge</span><strong>{record.storeId}</strong></div>
                   <div className="notification-subscription-row">
                     <span>Subscription</span>
                     {renderSubscription(record)}

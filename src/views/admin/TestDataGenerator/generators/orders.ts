@@ -229,7 +229,7 @@ async function generateRedemptionOrders(
           paidAt: createdAt
         },
         shipping: {
-          address: '店内自提',
+          address: '会所自提',
           trackingNumber: undefined
         },
         createdAt,
