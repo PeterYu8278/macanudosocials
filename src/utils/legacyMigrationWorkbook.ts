@@ -407,9 +407,9 @@ export const analyzeLegacyMigrationWorkbook = (
       const detailed = visitMinutesByPhone.get(phone) || 0
       if (Math.abs(declared - detailed) <= 5) return
       issues.push({
-        severity: 'warning',
-        code: 'VISIT_TOTAL_MISMATCH',
-        message: `${phone} has ${formatDuration(declared)} declared and ${formatDuration(detailed)} detailed`,
+        severity: 'info',
+        code: 'VISIT_TOTAL_DIFFERENCE',
+        message: `TOTAL SPEND ${formatDuration(declared)} will be imported; check-in details total ${formatDuration(detailed)}`,
         sheet: 'member',
         row: row.__row,
       })
@@ -529,7 +529,7 @@ export const prepareLegacyMigrationWorkbook = (
     const member = memberByPhone.get(phone)
     const declaredVisitMinutes = member ? durationMinutes(member['TOTAL SPEND']) : 0
     const detailedVisitMinutes = visitMinutesByPhone.get(phone) || 0
-    const resolvedVisitMinutes = Math.max(declaredVisitMinutes, detailedVisitMinutes)
+    const resolvedVisitMinutes = declaredVisitMinutes
     const activationDate = member ? asDate(member['ACTIVATION DATE']) : undefined
     const activeUntil = activationDate ? addOneYear(activationDate) : undefined
     const now = new Date()
@@ -545,7 +545,7 @@ export const prepareLegacyMigrationWorkbook = (
         totalReload: numberValue(member['TOTAL RELOAD (RM)']),
         legacyVisitMinutes: declaredVisitMinutes,
         resolvedVisitMinutes,
-        visitCarryForwardMinutes: Math.max(0, declaredVisitMinutes - detailedVisitMinutes),
+        visitCarryForwardMinutes: declaredVisitMinutes - detailedVisitMinutes,
         sourceLounge: text(member.LOUNGE),
         ...(activationDate && activeUntil ? {
           membershipActiveFrom: activationDate.toISOString(),

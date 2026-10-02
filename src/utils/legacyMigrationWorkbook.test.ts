@@ -120,8 +120,8 @@ describe('legacyMigrationWorkbook', () => {
       phone: '+60123456789',
       referralCount: 2,
       legacyVisitMinutes: 120,
-      resolvedVisitMinutes: 2940,
-      visitCarryForwardMinutes: 0,
+      resolvedVisitMinutes: 120,
+      visitCarryForwardMinutes: -2820,
       sourceLounge: 'Main Lounge',
       membershipIsActive: true,
     })
