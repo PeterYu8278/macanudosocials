@@ -20,6 +20,16 @@ const ROLE_RANK: Record<string, number> = {
   guest: 0,
 }
 
+const ROLE_SORT_INDEX: Record<string, number> = {
+  developer: 0,
+  superAdmin: 1,
+  admin: 2,
+  storeAdmin: 3,
+  vip: 4,
+  member: 5,
+  guest: 6,
+}
+
 import { getUsers, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
@@ -40,6 +50,23 @@ import {
   type LegacyMigrationPayload,
   type LegacyMigrationWorkbookReport,
 } from '../../../utils/legacyMigrationWorkbook'
+
+const compareUsersByRoleAndName = (a: User, b: User, locale: string) => {
+  const roleDifference = (ROLE_SORT_INDEX[a.role] ?? Number.MAX_SAFE_INTEGER)
+    - (ROLE_SORT_INDEX[b.role] ?? Number.MAX_SAFE_INTEGER)
+  if (roleDifference !== 0) return roleDifference
+
+  const nameDifference = (a.displayName || '').localeCompare(b.displayName || '', locale, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+  if (nameDifference !== 0) return nameDifference
+
+  return (a.memberId || a.email || a.id).localeCompare(b.memberId || b.email || b.id, locale, {
+    sensitivity: 'base',
+    numeric: true,
+  })
+}
 
 // CSS样式对象
 const glassmorphismInputStyle = {
@@ -513,13 +540,8 @@ const AdminUsers: React.FC = () => {
 
       return passKw && passStatus && passRole && passLevel
     })
-    // 按字母顺序排序（按displayName）
-    return filtered.sort((a, b) => {
-      const nameA = (a.displayName || '').toLowerCase()
-      const nameB = (b.displayName || '').toLowerCase()
-      return nameA.localeCompare(nameB)
-    })
-  }, [users, keyword, statusFilter, roleFilter, levelFilter, statusMap, currentUser?.role])
+    return filtered.sort((a, b) => compareUsersByRoleAndName(a, b, i18n.language))
+  }, [users, keyword, statusFilter, roleFilter, levelFilter, statusMap, currentUser?.role, i18n.language])
 
   const groupedByInitial = useMemo(() => {
     const groups: Record<string, User[]> = {}
@@ -531,8 +553,11 @@ const AdminUsers: React.FC = () => {
       groups[key].push(u)
     }
     const sortedKeys = Object.keys(groups).sort()
-    return sortedKeys.map(k => ({ key: k, items: groups[k].sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '')) }))
-  }, [filteredUsers])
+    return sortedKeys.map(k => ({
+      key: k,
+      items: groups[k].sort((a, b) => compareUsersByRoleAndName(a, b, i18n.language)),
+    }))
+  }, [filteredUsers, i18n.language])
 
   const alphaIndex = useMemo(() => {
     const letters = Array.from({ length: 26 }, (_, i) => String.fromCharCode(65 + i))
