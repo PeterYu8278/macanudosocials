@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, Suspense, lazy } from 'react'
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react'
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { Layout, App as AntApp } from 'antd'
 import AppSider from './components/layout/AppSider'
@@ -16,6 +16,7 @@ import OneSignalIntegration from './components/common/OneSignalIntegration'
 import NotificationOpenTracker from './components/common/NotificationOpenTracker'
 import AppMessageBridge from './components/common/AppMessageBridge'
 import { isFeatureVisible } from './services/firebase/featureVisibility'
+import { getLoginLandingPath } from './utils/loginLanding'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -60,6 +61,12 @@ const { Content } = Layout
 const AppContent: React.FC = () => {
   const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
   const location = useLocation()
+  const previousUserId = useRef<string | null>(null)
+  const loginLandingPath = getLoginLandingPath(user?.role)
+  const firstAuthenticatedHome = !!user && previousUserId.current !== user.id && loginLandingPath !== '/'
+  useEffect(() => {
+    if (!authLoading) previousUserId.current = user?.id || null
+  }, [authLoading, user?.id])
   const [layoutWidth, setLayoutWidth] = useState(() => typeof window === 'undefined' ? 1200 : window.innerWidth)
   const isDesktop = layoutWidth >= 992
   const isTablet = layoutWidth >= 769 && layoutWidth < 992
@@ -336,7 +343,7 @@ const AppContent: React.FC = () => {
                   <Route path="/auth/complete-profile" element={<CompleteProfile />} />
 
                   {/* 前端路由 */}
-                  <Route path="/" element={user ? <Home /> : <Landing loginOnly={guestPageVisible === false} />} />
+                  <Route path="/" element={user ? (firstAuthenticatedHome ? <Navigate to={loginLandingPath} replace /> : <Home />) : <Landing loginOnly={guestPageVisible === false} />} />
                   <Route path="/events" element={<ProtectedRoute><Events /></ProtectedRoute>} />
                   <Route path="/shop" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><Shop /></ProtectedRoute>} />
                   <Route path="/profile" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><Profile /></ProtectedRoute>} />
@@ -346,7 +353,7 @@ const AppContent: React.FC = () => {
                   <Route path="/brand/:brandId" element={<ProtectedRoute roles={['guest', 'member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer']}><BrandDetail /></ProtectedRoute>} />
 
                   {/* 管理后台路由 */}
-                  <Route path="/admin" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminDashboard /></ProtectedRoute>} />
+                  <Route path="/admin" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><AdminDashboard /></ProtectedRoute>} />
                   <Route path="/admin/users" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminUsers /></ProtectedRoute>} />
                   <Route path="/admin/inventory" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminInventory /></ProtectedRoute>} />
                   <Route path="/admin/events" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><AdminEvents /></ProtectedRoute>} />

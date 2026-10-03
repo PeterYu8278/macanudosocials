@@ -119,7 +119,7 @@ const MobileBottomNav: React.FC = () => {
 
   const adminNavItems = useMemo(() => {
     if (isStoreAdmin) {
-      return adminNavItemsBase.filter(item => item.key === '/admin/points-config')
+      return adminNavItemsBase.filter(item => ['/admin', '/admin/points-config'].includes(item.key))
     }
     if (isDeveloper) {
       return adminNavItemsBase

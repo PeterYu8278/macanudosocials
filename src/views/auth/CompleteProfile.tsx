@@ -12,6 +12,7 @@ import { useAuthStore } from '../../store/modules/auth'
 import type { User as FirebaseUser } from 'firebase/auth'
 import type { AppConfig } from '../../types'
 import { getAppConfig } from '../../services/firebase/appConfig'
+import { getLoginLandingPath } from '../../utils/loginLanding'
 
 const { Title, Text } = Typography
 
@@ -121,7 +122,7 @@ const CompleteProfile: React.FC = () => {
         const isProfileComplete = userData?.displayName && userData?.email && userData?.profile?.phone
         if (isProfileComplete) {
           // 用户已完善信息，重定向到原页面或首页
-          navigate(from, { replace: true })
+          navigate(getLoginLandingPath(userData?.role, from), { replace: true })
         }
       }
       
@@ -199,7 +200,7 @@ const CompleteProfile: React.FC = () => {
               await new Promise(resolve => setTimeout(resolve, 500));
           }
           
-          navigate(from, { replace: true });
+          navigate(getLoginLandingPath(userData?.role, from), { replace: true });
         };
         
         setupUserState();

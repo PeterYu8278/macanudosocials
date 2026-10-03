@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next'
 import type { Order, User, Cigar, Transaction } from '../../../types'
 import { updateDocument, COLLECTIONS } from '../../../services/firebase/firestore'
 import { refundOrderPoints } from '../../../services/firebase/orders'
-import { getStatusColor, getStatusText, getPaymentText, getUserName, getUserPhone } from './helpers'
+import { getStatusColor, getStatusText, getPaymentText, getUserName, getUserPhone, getOrderNoteText, getOrderAddressText } from './helpers'
 import { getModalTheme } from '../../../config/modalTheme'
 
 interface OrderDetailsProps {
@@ -207,8 +207,8 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
               </div>
               <div style={theme.content.row}>
                 <p style={theme.text.secondary}>{t('ordersAdmin.status.title')}</p>
-                <Tag color={getStatusColor(order.status)} style={{ margin: 0 }}>
-                  {getStatusText(order.status, t)}
+                <Tag color={getStatusColor(order.status, order.completedStatusDisplay)} style={{ margin: 0 }}>
+                  {getStatusText(order.status, t, order.completedStatusDisplay)}
                 </Tag>
               </div>
               <div style={theme.content.row}>
@@ -279,7 +279,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
               <div style={{ ...theme.content.row, alignItems: 'flex-start', gap: '16px' }}>
                 <p style={{ ...theme.text.secondary, whiteSpace: 'nowrap', width: '100px' }}>{t('ordersAdmin.note')}</p>
                 <p style={{ ...theme.text.body, whiteSpace: 'pre-wrap', flex: 1, textAlign: 'right' }}>
-                  {order.source?.note || '-'}
+                  {getOrderNoteText(order.source?.note, t)}
                 </p>
               </div>
               <div style={theme.content.row}>
@@ -315,7 +315,7 @@ const OrderDetails: React.FC<OrderDetailsProps> = ({
               </div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', fontSize: '14px' }}>
                 <p style={{ ...theme.text.secondary, whiteSpace: 'nowrap', marginRight: '16px' }}>{t('ordersAdmin.address')}</p>
-                <p style={{ ...theme.text.body, textAlign: 'right' }}>{order.shipping.address || '-'}</p>
+                <p style={{ ...theme.text.body, textAlign: 'right' }}>{getOrderAddressText(order.shipping.address, t)}</p>
               </div>
             </div>
           </section>

@@ -895,6 +895,7 @@ export const completeVisitSession = async (
             })),
             total: 0, // 兑换订单金额为0
             status: 'completed',
+            completedStatusDisplay: true,
             source: {
               type: 'direct',
               note: `驻店兑换订单 (Session: ${sessionId})`
@@ -1085,11 +1086,13 @@ export const reconcileCompletedSessionRedemptions = async (
       }
     }
 
+    const orderSnapshot = await getDoc(doc(db, COLLECTIONS.ORDERS, orderId));
     await setDoc(doc(db, COLLECTIONS.ORDERS, orderId), {
       userId: session.userId,
       items: orderItems,
       total: 0,
       status: 'completed',
+      ...(!orderSnapshot.exists() ? { completedStatusDisplay: true } : {}),
       source: { type: 'direct', note: sourceNote },
       payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(checkoutAt) },
       shipping: { address: '会所兑换' },
@@ -1268,6 +1271,23 @@ export const getAllPendingVisitSessions = async (storeId?: string): Promise<Visi
     console.error('获取待处理驻店记录失败:', error);
     return [];
   }
+};
+
+export const subscribeToPendingVisitSessions = (
+  storeId: string | undefined,
+  onChange: (sessions: VisitSession[]) => void,
+  onError: (error: Error) => void
+): Unsubscribe => {
+  let pendingQuery = query(
+    collection(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS),
+    where('status', '==', 'pending')
+  );
+  if (storeId) pendingQuery = query(pendingQuery, where('storeId', '==', storeId));
+  return onSnapshot(pendingQuery, snapshot => {
+    const sessions = snapshot.docs.map(entry => processVisitSessionData(entry.data(), entry.id));
+    sessions.sort((a, b) => b.checkInAt.getTime() - a.checkInAt.getTime());
+    onChange(sessions);
+  }, onError);
 };
 
 /**

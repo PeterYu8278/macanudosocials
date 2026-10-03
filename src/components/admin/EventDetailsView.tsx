@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Descriptions, Input, Select, DatePicker, InputNumber, Tag, Progress, Space, Switch, Row, Col } from 'antd'
 import { EditOutlined, DeleteOutlined, FileTextOutlined, CalendarOutlined, TeamOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs'
@@ -34,11 +34,16 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
   const { t } = useTranslation()
   const theme = getModalTheme()
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    const handleResize = () => setIsMobile(window.innerWidth <= 768)
-    window.addEventListener('resize', handleResize)
-    return () => window.removeEventListener('resize', handleResize)
+    const container = containerRef.current
+    if (!container) return
+    const observer = new ResizeObserver(([entry]) => {
+      if (entry.contentRect.width > 0) setIsMobile(entry.contentRect.width <= 680)
+    })
+    observer.observe(container)
+    return () => observer.disconnect()
   }, [])
 
   // 创建模式：使用卡片布局
@@ -102,7 +107,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
     )
 
     return (
-      <div style={{ width: '100%', overflow: 'hidden' }}>
+      <div ref={containerRef} style={{ width: '100%', overflow: 'hidden' }}>
         {/* 手机端：图片在上，Basic Info 在下 */}
         {isMobile && (
           <>
@@ -275,9 +280,9 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
 
   // 查看/编辑模式：使用原有的 Descriptions 布局
   return (
-    <div style={{ color: '#FFFFFF' }}>
+    <div ref={containerRef} style={{ color: '#FFFFFF', minWidth: 0 }}>
       {/* 活动基本信息 - 手机端垂直布局，桌面端左右布局 */}
-      <div style={{ 
+      <div className={isMobile ? undefined : 'event-basic-info-desktop'} style={{ 
         display: 'flex', 
         flexDirection: isMobile ? 'column' : 'row',
         gap: '16px', 
@@ -312,7 +317,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
                   }}
                   folder="events"
                   maxSize={2 * 1024 * 1024} // 2MB
-                  width={100}
+                  width={200}
                   height={100}
                   showPreview={true}
                 />
@@ -322,7 +327,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
         )}
         
         {/* 左侧：活动名称和描述 */}
-        <div style={{ flex: 1 }}>
+        <div className="event-basic-info-fields" style={{ flex: 1, minWidth: 0 }}>
           <Descriptions 
             className="cigar-bordered-descriptions"
             bordered 
@@ -391,7 +396,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
         
         {/* 右侧：活动图片上传 - 桌面端显示 */}
         {!isMobile && (
-          <div style={{ width: '150px', flexShrink: 0 }}>
+          <div className="event-basic-info-image" style={{ width: '234px', flexShrink: 0 }}>
             <div style={{ 
               padding: '16px', 
               border: '1px solid rgba(244, 175, 37, 0.6)', 
@@ -417,7 +422,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
                 }}
                 folder="events"
                 maxSize={2 * 1024 * 1024} // 2MB
-                width={100}
+                width={200}
                 height={100}
                 showPreview={true}
               />
@@ -623,7 +628,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
           <button 
             style={{ 
               display: 'flex', 
-              alignItems: 'center', 
+              alignItems: 'center',
               justifyContent: 'center',
               gap: 8, 
               padding: '8px 16px', 
@@ -682,7 +687,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
               {t('common.cancelEdit')}
             </button>
           )}
-          <button 
+          {isEditing && event.id !== 'new' && <button 
             style={{ 
               display: 'flex', 
               alignItems: 'center',
@@ -700,7 +705,7 @@ const EventDetailsView: React.FC<EventDetailsViewProps> = ({
           >
             <DeleteOutlined />
             {t('common.deleteEvent')}
-          </button>
+          </button>}
         </Space>
       </div>
     </div>

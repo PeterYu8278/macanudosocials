@@ -423,7 +423,13 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
         const snapshot = await batch.get(ref)
         const sessionSnapshot = await batch.get(db.collection('visitSessions').doc(sessionId))
         const existing = snapshot.data()?.redemptions || []
-        const { redemptions, totals } = mergeLegacyRedemptionEntries(existing, item)
+        const existingItem = existing.find((entry: AnyRow) => entry.id === item.id)
+        const { redemptions, totals } = mergeLegacyRedemptionEntries(existing, {
+          ...item,
+          ...(!existingItem || existingItem.historicalOperatorDisplay
+            ? { historicalOperatorDisplay: true }
+            : {}),
+        })
 
         const orderAt = matching?.end || occurredAt
         const legacyOrderId = `REDEMPTION-${sessionId}`
@@ -458,6 +464,7 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
         }))
         const now = Timestamp.now()
 
+        const orderSnapshot = await batch.get(db.collection('orders').doc(orderId))
         batch.set(ref, {
           visitSessionId: sessionId, userId: user.id, userName: row.name || user.data.displayName,
           redemptions, createdAt: snapshot.data()?.createdAt || Timestamp.fromDate(occurredAt), updatedAt: now,
@@ -470,6 +477,7 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
           items: orderItems,
           total: 0,
           status: 'completed',
+          ...(!orderSnapshot.exists ? { completedStatusDisplay: true } : {}),
           source: { type: 'direct', note: `驻店兑换订单 (Session: ${sessionId}) (H)` },
           payment: { method: 'bank_transfer', paidAt: Timestamp.fromDate(orderAt) },
           shipping: { address: '会所兑换' },

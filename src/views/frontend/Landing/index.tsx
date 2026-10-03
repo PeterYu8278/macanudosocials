@@ -22,6 +22,7 @@ import {
   CloseOutlined
 } from '@ant-design/icons'
 import { getBrands, getUpcomingEvents } from '../../../services/firebase/firestore'
+import { getAuthenticatedLandingPath } from '../../../services/firebase/auth'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { loginWithEmailOrPhone, registerUser, loginWithGoogle } from '../../../services/firebase/auth'
 import { getAppConfig } from '../../../services/firebase/appConfig'
@@ -139,7 +140,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
       if (result.success) {
         message.success(t('auth.loginSuccess'))
         setAuthModalVisible(false)
-        navigate('/')
+        navigate(await getAuthenticatedLandingPath(result.user?.uid, (result as any).firestoreUserId), { replace: true })
       } else {
         const errMsg = (result as any).error?.message || t('auth.loginFailed')
         setLoginError(errMsg)
@@ -164,7 +165,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
         }
         message.success(t('auth.loginSuccess'))
         setAuthModalVisible(false)
-        navigate('/')
+        navigate((res as any).needsProfile ? '/auth/complete-profile' : await getAuthenticatedLandingPath(res.user?.uid, (res as any).firestoreUserId), { replace: true })
       } else {
         message.error((res as any).error?.message || t('auth.loginFailed'))
       }

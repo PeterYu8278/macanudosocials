@@ -1,5 +1,5 @@
 // Common User Profile View Component
-import React, { useMemo, useState, useEffect } from 'react'
+import React, { useMemo, useState, useEffect, useRef } from 'react'
 import { Row, Col, Card, Typography, Tag, Button, Space, Spin, App, Drawer } from 'antd'
 import {
   CalendarOutlined,
@@ -33,6 +33,9 @@ import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/t
 import { formatPointsRecordDescription, isHistoricalPointsRecord, isVisitDurationRecord } from '../../utils/pointsRecordDisplay'
 
 interface ProfileViewProps {
+  active?: boolean
+  closing?: boolean
+  onCloseComplete?: () => void
   detailDrawerWidth?: number
   user?: User | null          // Direct user object
   userId?: string              // Or User ID (loaded internally)
@@ -59,6 +62,9 @@ const summarizeVisitRedemptions = (session: VisitSession | null) => {
 }
 
 export const ProfileView: React.FC<ProfileViewProps> = ({
+  active = true,
+  closing = false,
+  onCloseComplete,
   detailDrawerWidth,
   user: propUser,
   userId: propUserId,
@@ -95,6 +101,31 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [pointsRecordReviewer, setPointsRecordReviewer] = useState<{ id?: string; name?: string }>({})
   const [selectedVisitSession, setSelectedVisitSession] = useState<VisitSession | null>(null)
   const [pointsRecordDrawerOpen, setPointsRecordDrawerOpen] = useState(false)
+  const pendingDrawerClosures = useRef(new Set<string>())
+  const closeComplete = useRef(onCloseComplete)
+  closeComplete.current = onCloseComplete
+  useEffect(() => {
+    if (!closing) return
+    pendingDrawerClosures.current = new Set([
+      ...(selectedCigarGroup ? ['group'] : []),
+      ...(cigarRecordDrawerOpen ? ['cigar'] : []),
+      ...(pointsRecordDrawerOpen ? ['points'] : []),
+    ])
+    if (pendingDrawerClosures.current.size === 0) closeComplete.current?.()
+  }, [closing])
+  const onDrawerOpenChange = (drawer: string, open: boolean) => {
+    if (open || !closing || !pendingDrawerClosures.current.delete(drawer)) return
+    if (pendingDrawerClosures.current.size === 0) closeComplete.current?.()
+  }
+  useEffect(() => {
+    setSelectedCigarGroup(null)
+    setCigarRecordDrawerOpen(false)
+    setPointsRecordDrawerOpen(false)
+    setSelectedOrder(null)
+    setSelectedPointsRecord(null)
+    setSelectedVisitSession(null)
+    setShowMemberCard(false)
+  }, [active, propUser?.id, propUserId])
   const [loadingPointsRecordDetails, setLoadingPointsRecordDetails] = useState(false)
   const canViewDiscount = authUser?.role === 'developer' || authUser?.role === 'superAdmin'
   const [loadingPointsRecords, setLoadingPointsRecords] = useState(false)
@@ -653,7 +684,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   return (
     <div style={{ color: '#FFFFFF' }}>
       <CigarRedemptionDrawer
-        group={selectedCigarGroup}
+        open={active && !closing && Boolean(selectedCigarGroup)}
+        afterOpenChange={(open) => onDrawerOpenChange('group', open)}
+        group={active ? selectedCigarGroup : null}
         onClose={() => setSelectedCigarGroup(null)}
         rootStyle={detailDrawerRootStyle}
         isMobile={isMobile}
@@ -665,7 +698,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         placement="bottom"
         rootStyle={detailDrawerRootStyle}
         zIndex={2100}
-        open={cigarRecordDrawerOpen}
+        open={active && !closing && cigarRecordDrawerOpen}
+        afterOpenChange={(open) => onDrawerOpenChange('cigar', open)}
         onClose={() => setCigarRecordDrawerOpen(false)}
         height={isMobile ? '56vh' : 420}
         styles={{
@@ -730,7 +764,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
         placement="bottom"
         rootStyle={detailDrawerRootStyle}
         zIndex={2100}
-        open={pointsRecordDrawerOpen}
+        open={active && !closing && pointsRecordDrawerOpen}
+        afterOpenChange={(open) => onDrawerOpenChange('points', open)}
         onClose={() => setPointsRecordDrawerOpen(false)}
         height="auto"
         styles={{

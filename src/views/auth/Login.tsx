@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react'
 import { Form, Input, Button, Card, Typography, Space, App, Divider, Spin, Modal } from 'antd'
 import { UserOutlined, LockOutlined, GoogleOutlined, LoadingOutlined, EyeOutlined, EyeInvisibleOutlined } from '@ant-design/icons'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { loginWithEmailOrPhone, loginWithGoogle, handleGoogleRedirectResult, sendPasswordResetEmailFor, resetPasswordByPhone } from '../../services/firebase/auth'
+import { loginWithEmailOrPhone, loginWithGoogle, handleGoogleRedirectResult, sendPasswordResetEmailFor, resetPasswordByPhone, getAuthenticatedLandingPath } from '../../services/firebase/auth'
+import { getLoginLandingPath } from '../../utils/loginLanding'
 import { useAuthStore } from '../../store/modules/auth'
 import { useTranslation } from 'react-i18next'
 import { identifyInputType, normalizePhoneNumber, isValidEmail } from '../../utils/phoneNormalization'
@@ -170,7 +171,7 @@ const Login: React.FC = () => {
         navigate('/auth/complete-profile', { replace: true })
       } else {
         // 资料完整，重定向到首页
-        navigate('/', { replace: true })
+        navigate(getLoginLandingPath(user.role), { replace: true })
       }
     }
   }, [user, navigate])
@@ -194,7 +195,7 @@ const Login: React.FC = () => {
             navigate('/auth/complete-profile', { replace: true })
           } else {
             message.success(t('auth.loginSuccess'))
-            navigate('/', { replace: true })
+            navigate(await getAuthenticatedLandingPath(result.user?.uid, (result as any).firestoreUserId), { replace: true })
           }
         } else if (!result.noResult) {
           message.error(result.error?.message || t('auth.loginFailed'))
@@ -232,7 +233,7 @@ const Login: React.FC = () => {
       const result = await loginWithEmailOrPhone(values.email, values.password)
       if (result.success) {
         message.success(t('auth.loginSuccess'))
-        navigate('/', { replace: true })
+        navigate(await getAuthenticatedLandingPath(result.user?.uid, (result as any).firestoreUserId), { replace: true })
       } else {
         // 使用 placeholder 显示错误
         setLoginError(t('auth.loginFailedPrefix') + ((result as any).error?.message || t('auth.loginFailed')))
@@ -270,7 +271,7 @@ const Login: React.FC = () => {
           navigate('/auth/complete-profile', { replace: true })
         } else {
           message.success(t('auth.loginSuccess'))
-          navigate('/', { replace: true })
+          navigate(await getAuthenticatedLandingPath(res.user?.uid, (res as any).firestoreUserId), { replace: true })
         }
       } else {
         // 使用 placeholder 显示错误

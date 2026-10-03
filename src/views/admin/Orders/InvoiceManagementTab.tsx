@@ -792,8 +792,8 @@ export const InvoiceManagementTab: React.FC<InvoiceManagementTabProps> = ({
                       >
                         {record.id.substring(0, 30)}
                       </Button>
-                      <Tag color={getStatusColor(record.status)} style={{ margin: 0 }}>
-                        {getStatusText(record.status, t)}
+                      <Tag color={getStatusColor(record.status, record.completedStatusDisplay)} style={{ margin: 0 }}>
+                        {getStatusText(record.status, t, record.completedStatusDisplay)}
                       </Tag>
                     </div>
 
@@ -1190,5 +1190,4 @@ export const InvoiceManagementTab: React.FC<InvoiceManagementTabProps> = ({
 }
 
 export default InvoiceManagementTab
-
 

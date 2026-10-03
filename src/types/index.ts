@@ -306,6 +306,7 @@ export interface Order {
   }[];
   total: number;
   status: 'pending' | 'confirmed' | 'shipped' | 'delivered' | 'completed' | 'cancelled';
+  completedStatusDisplay?: boolean;
   source?: {
     type: 'event' | 'direct';
     eventId?: string | null; // 当来源为活动时记录
@@ -857,6 +858,7 @@ export interface RedemptionRecordItem {
   
   redeemedAt: Date;
   redeemedBy: string;        // 用户ID（用户发起）或管理员ID（管理员创建/确认）
+  historicalOperatorDisplay?: boolean;
   
   createdAt: Date;
   updatedAt?: Date;          // 管理员更新时的时间

@@ -5,7 +5,7 @@ import dayjs from 'dayjs'
 import { useTranslation } from 'react-i18next'
 import ActionButtons from '../../../components/common/ActionButtons'
 import type { Order, User, Cigar, Transaction } from '../../../types'
-import { getStatusColor, getStatusText, getPaymentText, getUserName, getUserPhone, getCigarInfo } from './helpers'
+import { getStatusColor, getStatusText, getPaymentText, getUserName, getUserPhone, getCigarInfo, getOrderAddressText } from './helpers'
 
 interface UseOrderColumnsProps {
   users: User[]
@@ -156,13 +156,13 @@ export const getOrderColumns = ({
       key: 'shipping',
       width: 130,
       render: (_: any, record: Order) => {
-        const addr = (record as any)?.shipping?.address as string
+        const addr = getOrderAddressText(record.shipping?.address, t)
         const display = addr ? (addr.length > 20 ? `${addr.substring(0, 20)}...` : addr) : '-'
         return (
           <div>
             <Tooltip title={addr}><div style={{ fontSize: '12px', color: '#FFFFFF' }}>{display}</div></Tooltip>
             <div style={{ marginTop: 4 }}>
-              <Tag color={getStatusColor(record.status)}>{getStatusText(record.status, t)}</Tag>
+              <Tag color={getStatusColor(record.status, record.completedStatusDisplay)}>{getStatusText(record.status, t, record.completedStatusDisplay)}</Tag>
             </div>
           </div>
         )

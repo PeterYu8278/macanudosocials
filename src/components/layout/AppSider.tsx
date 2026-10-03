@@ -172,7 +172,7 @@ const AppSider: React.FC<AppSiderProps> = ({ onCollapseChange, forceCollapsed = 
     if (isAdmin || isStoreAdmin) {
       const filteredAdminBase = adminMenuItemsBase.filter(item => {
         // 角色权限检查
-        if (isStoreAdmin && !['admin/points-config'].some(k => item.key.includes(k))) return false;
+        if (isStoreAdmin && !['/admin', '/admin/points-config'].includes(item.key)) return false;
         if (item.key === '/admin/finance' && !isSuperAdmin) return false;
 
         if (isDeveloper) return true;

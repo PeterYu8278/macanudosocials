@@ -172,6 +172,11 @@ const AdminUsers: React.FC = () => {
 
   const { data: users = [], loading: usersLoading, refresh: refreshUsers } = useFirestoreQuery(getUsers)
   const { item: editing, open: editingOpen, openDrawer: openEditing, closeDrawer: closeEditing } = useDetailDrawer<User>()
+  const [closingProfile, setClosingProfile] = useState(false)
+  const finishClosingProfile = () => {
+    closeEditing()
+    setClosingProfile(false)
+  }
   const { item: resettingPassword, open: resettingPasswordOpen, openDrawer: openResettingPassword, closeDrawer: closeResettingPassword } = useDetailDrawer<User>()
   const [actionLoading, setLoading] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -1468,7 +1473,8 @@ const AdminUsers: React.FC = () => {
       <Modal
         title={null}
         open={editingOpen}
-        onCancel={closeEditing}
+        destroyOnHidden
+        onCancel={() => setClosingProfile(true)}
         footer={null}
         width={isMobile ? '100%' : 480}
         style={{ top: isMobile ? 0 : 20 }}
@@ -1488,7 +1494,7 @@ const AdminUsers: React.FC = () => {
         className="user-detail-modal"
         closable={false}
       >
-        {editing && (
+        {editingOpen && editing && (
           <div style={{
             minHeight: isMobile ? '100vh' : 'auto',
             color: '#FFFFFF'
@@ -1509,7 +1515,7 @@ const AdminUsers: React.FC = () => {
               <Button
                 type="text"
                 icon={<ArrowLeftOutlined />}
-                onClick={closeEditing}
+                onClick={() => setClosingProfile(true)}
                 style={{ color: '#FFFFFF', fontSize: '20px' }}
               />
               <h1 style={{
@@ -1527,6 +1533,9 @@ const AdminUsers: React.FC = () => {
             {/* ProfileView Component */}
             <div>
               <ProfileView
+                active={editingOpen && !creating}
+                closing={closingProfile}
+                onCloseComplete={finishClosingProfile}
                 detailDrawerWidth={480}
                 user={editing}
                 readOnly={false}
@@ -1995,7 +2004,11 @@ const AdminUsers: React.FC = () => {
         title={<span style={{ color: '#FFFFFF' }}>{t('usersAdmin.migrationDryRunTitle')}</span>}
         open={legacyDryRunOpen}
         onCancel={() => setLegacyDryRunOpen(false)}
-        width={getModalWidth(isMobile, 900)}
+        width={900}
+        centered
+        wrapClassName="legacy-migration-modal"
+        zIndex={2100}
+        style={{ maxWidth: 'calc(100% - 32px)', paddingBottom: 0 }}
         styles={getModalThemeStyles(isMobile, true)}
         footer={[
           <Button key="close" onClick={() => setLegacyDryRunOpen(false)}>
@@ -2017,7 +2030,7 @@ const AdminUsers: React.FC = () => {
               {legacyDryRunReport.fileName}
             </Typography.Text>
 
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, minmax(0, 1fr))' : 'repeat(4, minmax(0, 1fr))', gap: 1, border: '1px solid rgba(196,141,58,0.4)', background: 'rgba(196,141,58,0.35)' }}>
+            <div className="legacy-migration-summary" style={{ display: 'grid', gap: 1, border: '1px solid rgba(196,141,58,0.4)', background: 'rgba(196,141,58,0.35)' }}>
               {[
                 [t('usersAdmin.migrationReadyUsers'), legacyDryRunReport.users.readyForAuth],
                 [t('usersAdmin.migrationInvalidUsers'), legacyDryRunReport.users.invalidIdentity],
@@ -2035,7 +2048,7 @@ const AdminUsers: React.FC = () => {
               ))}
             </div>
 
-            <Row gutter={[12, 12]}>
+            <Row gutter={[12, 12]} style={{ marginInline: 0 }}>
               <Col xs={24} md={8}>
                 <Typography.Text style={{ color: '#FFFFFF', fontWeight: 600 }}>{t('usersAdmin.migrationUsers')}</Typography.Text>
                 <div style={{ color: 'rgba(255,255,255,0.7)', marginTop: 6 }}>
@@ -2098,9 +2111,9 @@ const AdminUsers: React.FC = () => {
                   return (
                     <div
                       key={stage}
+                      className="legacy-migration-stage"
                       style={{
                         display: 'grid',
-                        gridTemplateColumns: isMobile ? '1fr' : 'minmax(220px, 1fr) minmax(280px, 2fr) auto',
                         alignItems: 'center',
                         gap: 10,
                         padding: 10,

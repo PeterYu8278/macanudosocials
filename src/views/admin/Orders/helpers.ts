@@ -1,24 +1,41 @@
 import dayjs from 'dayjs'
 import type { Order, User, Cigar } from '../../../types'
 
+export const getOrderNoteText = (
+  note: string | undefined,
+  t: (key: string, options?: Record<string, string>) => string
+) => {
+  if (!note) return '-'
+  const redemption = /^驻店兑换订单 \(Session: ([^)]+)\)( \(H\))?$/.exec(note)
+  if (!redemption) return note
+  return t('ordersAdmin.loungeRedemptionNote', { sessionId: redemption[1] }) + (redemption[2] || '')
+}
+
+export const getOrderAddressText = (address: string | undefined, t: (key: string) => string) => {
+  if (address === '会所兑换') return t('ordersAdmin.loungeRedemptionAddress')
+  return address || '-'
+}
+
 // 状态相关辅助函数
-export const getStatusColor = (status: string) => {
+export const getStatusColor = (status: string, completedStatusDisplay = false) => {
   switch (status) {
     case 'pending': return 'orange'
     case 'confirmed': return 'blue'
     case 'shipped': return 'purple'
     case 'delivered': return 'green'
+    case 'completed': return completedStatusDisplay ? 'green' : 'default'
     case 'cancelled': return 'red'
     default: return 'default'
   }
 }
 
-export const getStatusText = (status: string, t: (key: string) => string) => {
+export const getStatusText = (status: string, t: (key: string) => string, completedStatusDisplay = false) => {
   switch (status) {
     case 'pending': return t('ordersAdmin.status.pending')
     case 'confirmed': return t('ordersAdmin.status.confirmed')
     case 'shipped': return t('ordersAdmin.status.shipped')
     case 'delivered': return t('ordersAdmin.status.delivered')
+    case 'completed': return t(completedStatusDisplay ? 'ordersAdmin.status.completed' : 'profile.unknown')
     case 'cancelled': return t('ordersAdmin.status.cancelled')
     default: return t('profile.unknown')
   }

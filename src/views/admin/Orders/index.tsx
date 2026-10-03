@@ -471,6 +471,7 @@ const AdminOrders: React.FC = () => {
                             <Option value="confirmed">{t('ordersAdmin.status.confirmed')}</Option>
                             <Option value="shipped">{t('ordersAdmin.status.shipped')}</Option>
                             <Option value="delivered">{t('ordersAdmin.status.delivered')}</Option>
+                            <Option value="completed">{t('ordersAdmin.status.completed')}</Option>
                             <Option value="cancelled">{t('ordersAdmin.status.cancelled')}</Option>
                           </Select>
                           <Select
@@ -584,6 +585,7 @@ const AdminOrders: React.FC = () => {
                               <Option value="confirmed">{t('ordersAdmin.status.confirmed')}</Option>
                               <Option value="shipped">{t('ordersAdmin.status.shipped')}</Option>
                               <Option value="delivered">{t('ordersAdmin.status.delivered')}</Option>
+                              <Option value="completed">{t('ordersAdmin.status.completed')}</Option>
                               <Option value="cancelled">{t('ordersAdmin.status.cancelled')}</Option>
                             </Select>
                           </div>
@@ -713,8 +715,8 @@ const AdminOrders: React.FC = () => {
                                   <div style={{ fontSize: 13, fontWeight: 700, color: '#FFFFFF' }}>
                                     {getUserName(order.userId, users)}
                                   </div>
-                                  <span style={{ fontSize: 12, fontWeight: 600, color: getStatusColor(order.status) === 'green' ? '#34d399' : getStatusColor(order.status) === 'red' ? '#f87171' : getStatusColor(order.status) === 'orange' ? '#fb923c' : getStatusColor(order.status) === 'blue' ? '#60a5fa' : '#a78bfa' }}>
-                                    {getStatusText(order.status, t)}
+                                  <span style={{ fontSize: 12, fontWeight: 600, color: getStatusColor(order.status, order.completedStatusDisplay) === 'green' ? '#34d399' : getStatusColor(order.status) === 'red' ? '#f87171' : getStatusColor(order.status) === 'orange' ? '#fb923c' : getStatusColor(order.status) === 'blue' ? '#60a5fa' : '#a78bfa' }}>
+                                    {getStatusText(order.status, t, order.completedStatusDisplay)}
                                   </span>
                                 </div>
 

@@ -7,6 +7,8 @@ import type { Event, Order, VisitSession } from '../../types'
 import type { CigarRedemptionGroup } from '../../utils/cigarRedemptionGroups'
 
 interface Props {
+  open?: boolean
+  afterOpenChange?: (open: boolean) => void
   group: CigarRedemptionGroup | null
   onClose: () => void
   rootStyle: CSSProperties
@@ -20,7 +22,7 @@ interface RedemptionContext {
   event: Event | null
 }
 
-export const CigarRedemptionDrawer = ({ group, onClose, rootStyle, isMobile, formatDateTime, formatVisitPeriod }: Props) => {
+export const CigarRedemptionDrawer = ({ group, open = Boolean(group), afterOpenChange, onClose, rootStyle, isMobile, formatDateTime, formatVisitPeriod }: Props) => {
   const { t } = useTranslation()
   const [contexts, setContexts] = useState<Record<string, RedemptionContext>>({})
   const [loading, setLoading] = useState(false)
@@ -51,7 +53,8 @@ export const CigarRedemptionDrawer = ({ group, onClose, rootStyle, isMobile, for
     <Drawer
       title={t('profile.cigarRecordDetails')}
       placement="bottom"
-      open={Boolean(group)}
+      open={open}
+      afterOpenChange={afterOpenChange}
       onClose={onClose}
       rootStyle={rootStyle}
       zIndex={2100}

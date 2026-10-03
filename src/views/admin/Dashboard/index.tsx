@@ -27,6 +27,8 @@ import { getAllRoomBookings } from '../../../services/firebase/rooms'
 import { getAllReloadRecords } from '../../../services/firebase/reload'
 import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import OrderDetails from '../Orders/OrderDetails'
+import CurrentVisits from './CurrentVisits'
+import { canAccessRoute } from '../../../config/permissions'
 
 const { Title } = Typography
 import { createBill } from '../../../services/billplz'
@@ -1447,7 +1449,7 @@ const AdminDashboard: React.FC = () => {
 
             return (
               <>
-                {eventsAdminFeatureVisible && (
+                {eventsAdminFeatureVisible && user && canAccessRoute(user.role, '/admin/events') && (
                   <QuickActionButton
                     {...quickActionSharedProps}
                     variant="primary"
@@ -1456,7 +1458,7 @@ const AdminDashboard: React.FC = () => {
                     icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M10 2a1 1 0 011 1v6h6a1 1 0 110 2h-6v6a1 1 0 11-2 0v-6H3a1 1 0 110-2h6V3a1 1 0 011-1z" /></svg>}
                   />
                 )}
-                {ordersFeatureVisible && (
+                {ordersFeatureVisible && user && canAccessRoute(user.role, '/admin/orders') && (
                   <QuickActionButton
                     {...quickActionSharedProps}
                     label={t('dashboard.orders')}
@@ -1464,13 +1466,13 @@ const AdminDashboard: React.FC = () => {
                     icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 001 1h14a1 1 0 001-1V4a1 1 0 00-1-1H3zm12 11H5V5h10v9z" fillRule="evenodd"></path><path d="M9 7a1 1 0 100 2h2a1 1 0 100-2H9z"></path></svg>}
                   />
                 )}
-                <QuickActionButton
+                {user && canAccessRoute(user.role, '/admin/users') && <QuickActionButton
                   {...quickActionSharedProps}
                   label={t('dashboard.user')}
                   onClick={() => navigate('/admin/users')}
                   icon={<svg width="24" height="24" viewBox="0 0 20 20" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path clipRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" fillRule="evenodd"></path></svg>}
-                />
-                {inventoryFeatureVisible && (
+                />}
+                {inventoryFeatureVisible && user && canAccessRoute(user.role, '/admin/inventory') && (
                   <QuickActionButton
                     {...quickActionSharedProps}
                     label={t('dashboard.inventory')}
@@ -1483,6 +1485,8 @@ const AdminDashboard: React.FC = () => {
           })()}
         </div>
       </div>
+
+      <CurrentVisits users={users} cigars={cigars} />
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: 18, paddingInline: 8, marginBottom: 16, alignItems: 'start' }}>
       {/* Reload trend */}

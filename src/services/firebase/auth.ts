@@ -22,6 +22,7 @@ import { getAppConfig } from './appConfig';
 import { loginPhoneWithPassword } from './phoneLogin';
 import { normalizePhoneNumber, identifyInputType } from '../../utils/phoneNormalization';
 import { generateMemberId, getUserByMemberId } from '../../utils/memberId';
+import { getLoginLandingPath } from '../../utils/loginLanding';
 
 /**
  * 创建 Google 登录临时用户数据的公共函数
@@ -201,6 +202,12 @@ export const registerUser = async (
 };
 
 // 用户登录
+export const getAuthenticatedLandingPath = async (firebaseUid?: string, firestoreUserId?: string) => {
+  const id = firestoreUserId || sessionStorage.getItem('firestoreUserId') || firebaseUid;
+  const user = id ? await getUserData(id) : null;
+  return getLoginLandingPath(user?.role);
+};
+
 export const loginUser = async (email: string, password: string) => {
   try {
     const userCredential = await signInWithEmailAndPassword(auth, email, password);

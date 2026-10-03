@@ -8,7 +8,7 @@ import {
   ArrowLeftOutlined, MailOutlined, PhoneOutlined, BellOutlined,
   CalendarOutlined, WalletOutlined, ShoppingOutlined, GiftOutlined,
   SaveOutlined, LockOutlined, SettingOutlined, UserOutlined, LogoutOutlined,
-  CloudDownloadOutlined
+  CloudDownloadOutlined, ClearOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -32,6 +32,7 @@ import {
   syncPushSubscriptionToFirestore,
 } from '../../../services/oneSignal'
 import { usePWA } from '../../../utils/pwa'
+import { clearApplicationCache } from '../../../utils/clearApplicationCache'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -40,6 +41,7 @@ const Profile: React.FC = () => {
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
+  const [clearingCache, setClearingCache] = useState(false)
   const [form] = Form.useForm()
   const [activeTab, setActiveTab] = useState('basic')
   const pushStatus = usePushNotificationStore((state) => state.status)
@@ -60,7 +62,7 @@ const Profile: React.FC = () => {
   }, [])
 
   const theme = getModalTheme()
-  const labelFlex = isMobile ? '40%' : '120px'
+  const labelFlex = '120px'
 
   const buildFormValues = (userData: User) => {
     const pushPrefs = (userData as any)?.preferences?.pushNotifications || {}
@@ -290,13 +292,13 @@ const Profile: React.FC = () => {
 
   const renderBasicSection = () => (
     <Form
+      className="profile-basic-form"
       form={form}
       layout="horizontal"
-      labelCol={{ flex: labelFlex }}
-      wrapperCol={{ flex: '1 0 0' }}
+      labelCol={{ flex: isMobile ? '96px' : labelFlex }}
+      wrapperCol={{ flex: '1 1 0' }}
       labelAlign="left"
-      labelWrap={false}
-      style={{ rowGap: 8 }}
+      labelWrap
     >
       <Form.Item label={<span style={{ color: '#fff' }}>{t('profile.avatar')}</span>} style={{ marginBottom: 8 }}>
         <ImageUpload
@@ -312,6 +314,8 @@ const Profile: React.FC = () => {
             }
           }}
           folder="avatars"
+          width={96}
+          height={96}
         />
       </Form.Item>
 
@@ -431,13 +435,14 @@ const Profile: React.FC = () => {
 
   const renderSecuritySection = () => (
     <Form
+      className="profile-inline-form"
+      colon={false}
       form={form}
       layout="horizontal"
-      labelCol={{ flex: labelFlex }}
-      wrapperCol={{ flex: '1 0 0' }}
+      labelCol={{ flex: '160px' }}
+      wrapperCol={{ flex: '1 1 0' }}
       labelAlign="left"
-      labelWrap={false}
-      style={{ rowGap: 8 }}
+      labelWrap
     >
       <Form.Item
         name="currentPassword"
@@ -475,15 +480,31 @@ const Profile: React.FC = () => {
     </Form>
   )
 
+  const handleClearCache = async () => {
+    if (clearingCache) return
+    setClearingCache(true)
+    try {
+      await clearApplicationCache()
+      message.success(t('profile.cache.cleared'))
+    } catch (error) {
+      console.error('[Profile] Failed to clear application cache:', error)
+      message.error(t('profile.cache.failed'))
+    } finally {
+      setClearingCache(false)
+    }
+  }
+
   const renderPreferencesSection = () => (
-    <>
+    <div className="profile-preferences">
       <Form
+        className="profile-inline-form"
+        colon={false}
         form={form}
         layout="horizontal"
-        labelCol={{ flex: labelFlex }}
-        wrapperCol={{ flex: '1 0 0' }}
+        labelCol={{ flex: '160px' }}
+        wrapperCol={{ flex: '1 1 0' }}
         labelAlign="left"
-        labelWrap={false}
+        labelWrap
       >
         <Form.Item
           name="notifications"
@@ -525,6 +546,20 @@ const Profile: React.FC = () => {
           onClick={handleCheckForUpdates}
         >
           {checkingForUpdate ? t('profile.systemUpdate.checking') : t('profile.systemUpdate.check')}
+        </Button>
+      </div>
+
+      <Divider style={{ margin: '16px 0', borderColor: 'rgba(255,255,255,0.1)' }} />
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
+        <Space size={8}>
+          <ClearOutlined style={{ color: '#F4AF25' }} />
+          <Typography.Text style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
+            {t('profile.cache.title')}
+          </Typography.Text>
+        </Space>
+        <Button icon={<ClearOutlined />} loading={clearingCache} onClick={handleClearCache}>
+          {t(clearingCache ? 'profile.cache.clearing' : 'profile.cache.clear')}
         </Button>
       </div>
 
@@ -671,7 +706,7 @@ const Profile: React.FC = () => {
           }}
         </Form.Item>
       </Form>
-    </>
+    </div>
   )
 
   // ── Mobile Drawer header ────────────────────────────────────────────────────

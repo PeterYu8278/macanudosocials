@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid } from 'antd';
+import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -106,17 +106,27 @@ const VisitSessionsPage: React.FC = () => {
   const [expandedSessions, setExpandedSessions] = useState<Set<string>>(new Set());
   const screens = Grid.useBreakpoint();
   const isMobile = !screens.md;
-  const tableScroll = useVirtualTableScroll();
+  const tableScroll = useVirtualTableScroll(1180, 300);
+  const pendingRedemptionSessions = useMemo(() => new Set(
+    Array.from(redemptionRecords.entries())
+      .filter(([, records]) => records.some(record => record.status === 'pending'))
+      .map(([sessionId]) => sessionId)
+  ), [redemptionRecords]);
+  const expandedRowKeys = useMemo(() => sessions
+    .filter(session => expandedSessions.has(session.id) || pendingRedemptionSessions.has(session.id))
+    .map(session => `${session.id}-deduction`), [sessions, expandedSessions, pendingRedemptionSessions]);
   useEffect(() => {
     let cancelled = false;
     const records = [...allRedemptionRecords, ...Array.from(redemptionRecords.values()).flat()];
-    getUserDisplayNames(records.map(record => record.redeemedBy)).then(names => {
+    getUserDisplayNames(records.map(record => record.redeemedBy).filter(id => id !== 'legacy_migration')).then(names => {
       if (!cancelled) setOperatorNames(names);
     });
     return () => { cancelled = true; };
   }, [allRedemptionRecords, redemptionRecords]);
 
-  const operatorName = (id?: string) => id
+  const operatorName = (id?: string, historicalOperatorDisplay = false) => id === 'legacy_migration' && historicalOperatorDisplay
+    ? t('visitSessions.historicalImportOperator')
+    : id
     ? operatorNames[id] || t('visitSessions.unknownUser', { defaultValue: 'Unknown User' })
     : '-';
   const sessionDisplayRows = useMemo<VisitSessionDisplayRow[]>(() => sessions.flatMap(session => {
@@ -141,7 +151,16 @@ const VisitSessionsPage: React.FC = () => {
     setRedemptionRecordsLoading(true);
     setRedemptionPage(1);
     try {
-      setAllRedemptionRecords(await getAllRedemptionRecords(isSuperAdmin ? undefined : user?.storeId));
+      const records = await getAllRedemptionRecords(isSuperAdmin ? undefined : user?.storeId);
+      setAllRedemptionRecords(records);
+      const bySession = new Map<string, RedemptionRecord[]>();
+      records.forEach(record => {
+        if (!record.visitSessionId) return;
+        const entries = bySession.get(record.visitSessionId) || [];
+        entries.push(record);
+        bySession.set(record.visitSessionId, entries);
+      });
+      setRedemptionRecords(bySession);
     } catch (error) {
       console.error('[VisitSessions] Failed to load all redemption records:', error);
       message.error(t('visitSessions.loadRedemptionRecordsFailed'));
@@ -363,7 +382,7 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.user'),
       dataIndex: 'userName',
       key: 'userName',
-      width: 120,
+      width: 150,
       render: (name: string, record: VisitSessionDisplayRow) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontWeight: 600, color: '#fff' }}>{name || '-'}</span>
@@ -379,18 +398,19 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.store'),
       dataIndex: 'storeId',
       key: 'storeId',
-      width: 120,
+      width: 160,
       render: (storeId: string, record: VisitSessionDisplayRow) => {
         if (!storeId) return '-';
         const store = stores.find(s => s.id === storeId);
-        return <span style={{ color: 'rgba(255,255,255,0.85)' }}>{store?.name || record.storeName || storeId}</span>;
+        const name = store?.name || record.storeName || storeId;
+        return <Tooltip title={name}><span className="visit-session-lounge">{name}</span></Tooltip>;
       }
     },
     {
       title: t('visitSessions.type'),
       dataIndex: 'checkInType',
       key: 'checkInType',
-      width: 100,
+      width: 130,
       render: (type: string, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate') {
           return <Tag color="green" style={{ margin: 0, fontSize: 11 }}>{t('visitSessions.rebatePoints')}</Tag>;
@@ -418,11 +438,11 @@ const VisitSessionsPage: React.FC = () => {
     {
       title: t('visitSessions.duration'),
       key: 'duration',
-      width: 90,
+      width: 100,
       render: (_: any, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate') return '-';
         if (record.durationHours !== undefined) {
-          return <span style={{ fontWeight: 500 }}>{formatDurationHours(record.durationHours)} {t('visitSessions.hours')}</span>;
+          return <span style={{ fontWeight: 500, whiteSpace: 'nowrap', fontSize: 12 }}>{formatDurationHours(record.durationHours)} {t('visitSessions.hours')}</span>;
         }
         if (record.status === 'pending') {
           const now = new Date();
@@ -456,7 +476,7 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.status'),
       dataIndex: 'status',
       key: 'status',
-      width: 90,
+      width: 110,
       render: (status: string, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate') return '-';
         if (record.checkoutPending?.status === 'awaiting_reload') {
@@ -484,14 +504,15 @@ const VisitSessionsPage: React.FC = () => {
     {
       title: t('visitSessions.actions'),
       key: 'action',
-      width: 180,
+      width: 140,
+      fixed: 'right' as const,
       render: (_: any, record: VisitSessionDisplayRow) => {
         if (record.displayRowKind === 'rebate' || record.status !== 'pending') {
           return null;
         }
 
         return (
-          <Space size={4}>
+          <Space direction="vertical" size={4}>
             <Button
               size="small"
               icon={<CheckOutlined />}
@@ -544,7 +565,7 @@ const VisitSessionsPage: React.FC = () => {
             label: <span style={{ fontSize: 16, fontWeight: 700, paddingInline: 8 }}>{t('visitSessions.title')}</span>,
             children: (
               <div>
-                <Space direction="vertical" size="large" style={{ width: '100%' }}>
+                <Space direction="vertical" size="middle" style={{ width: '100%', minWidth: 0 }}>
                   {isMobile ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 8 }}>
                       {/* Row 1: Search Input */}
@@ -591,7 +612,7 @@ const VisitSessionsPage: React.FC = () => {
                           <Button
                             icon={<ReloadOutlined />}
                             onClick={async () => {
-                              await refreshSessions()
+                              await Promise.all([refreshSessions(), loadAllRedemptions()])
                             }}
                             loading={loading}
                             style={{
@@ -604,13 +625,13 @@ const VisitSessionsPage: React.FC = () => {
                       </div>
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', gap: 8, marginBottom: 8, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div className="visit-sessions-toolbar" style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between' }}>
                       <div style={{ display: 'flex', gap: 8, flex: 1, minWidth: 300, alignItems: 'center', flexWrap: 'wrap' }}>
                         <Search
                           placeholder={t('visitSessions.searchPlaceholder')}
                           allowClear
                           enterButton={t('common.search')}
-                          style={{ flex: 1, minWidth: 200 }}
+                          style={{ flex: 1, minWidth: 200, maxWidth: 360 }}
                           onSearch={(value) => {
                             setSearchUserId(value || '');
                           }}
@@ -651,7 +672,7 @@ const VisitSessionsPage: React.FC = () => {
                         <Button
                           icon={<ReloadOutlined />}
                           onClick={async () => {
-                            await refreshSessions()
+                            await Promise.all([refreshSessions(), loadAllRedemptions()])
                           }}
                           loading={loading}
                           style={{
@@ -672,7 +693,9 @@ const VisitSessionsPage: React.FC = () => {
                         <OrderSkeleton isMobile={false} />
                       ) : (
                         <Table
+                          className="visit-sessions-table"
                           size="small"
+                          tableLayout="fixed"
                           columns={columns}
                           dataSource={sessionDisplayRows}
                           rowKey="displayRowId"
@@ -691,17 +714,14 @@ const VisitSessionsPage: React.FC = () => {
                             background: 'transparent'
                           }}
                           expandable={{
+                            columnWidth: 40,
+                            expandedRowKeys,
                             expandedRowRender: (record: VisitSessionDisplayRow) => {
                               // 从 redemptionRecords state 中获取该 session 的所有兑换记录（包括待处理和已完成）
                               const allRedemptionRecords = redemptionRecords.get(record.id) || [];
 
-                              // 如果还没有加载，则加载
-                              if (allRedemptionRecords.length === 0 && record.status === 'pending') {
-                                loadRedemptionRecords(record.id);
-                              }
-
                               return (
-                                <div style={{ padding: '16px', background: 'rgba(255, 255, 255, 0.05)', marginLeft: 24, borderRadius: 8, border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+                                <div className="visit-session-redemption-panel">
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                                     <div style={{ fontWeight: 600, color: '#FFD700' }}>
                                       <GiftOutlined style={{ marginRight: 8 }} />
@@ -731,104 +751,57 @@ const VisitSessionsPage: React.FC = () => {
                                   {allRedemptionRecords.length === 0 ? (
                                     <Text style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{t('visitSessions.noRedemptionRecords')}</Text>
                                   ) : (
-                                    <div className="points-config-form">
-                                      <Table
-                                        dataSource={allRedemptionRecords}
-                                        rowKey={(item) => item.id || `${record.id}-${item.createdAt}`}
-                                        pagination={false}
-                                        size="small"
-                                        style={{
-                                          background: 'transparent'
-                                        }}
-                                        columns={[
-                                          {
-                                            title: t('visitSessions.status'),
-                                            dataIndex: 'status',
-                                            key: 'status',
-                                            width: 100,
-                                            render: (status: string) => {
-                                              if (status === 'pending') {
-                                                return <Tag color="orange">{t('visitSessions.statusToSelect')}</Tag>;
-                                              }
-                                              return <Tag color="green">{t('visitSessions.statusCompleted')}</Tag>;
-                                            }
-                                          },
-                                          {
-                                            title: t('visitSessions.cigarName'),
-                                            dataIndex: 'cigarName',
-                                            key: 'cigarName',
-                                            width: 200,
-                                            render: (name: string, record: any) => {
-                                              if (record.status === 'pending') {
-                                                return <Text style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{t('visitSessions.statusToSelect')}</Text>;
-                                              }
-                                              return <Text strong style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{name}</Text>;
-                                            }
-                                          },
-                                          {
-                                            title: t('visitSessions.quantity'),
-                                            dataIndex: 'quantity',
-                                            key: 'quantity',
-                                            width: 100,
-                                            align: 'center' as const,
-                                            render: (quantity: number) => (
-                                              <Tag color="blue">{quantity} {t('visitSessions.sticks')}</Tag>
-                                            )
-                                          },
-                                          {
-                                            title: t('visitSessions.redemptionTime'),
-                                            dataIndex: 'redeemedAt',
-                                            key: 'redeemedAt',
-                                            width: 180,
-                                            render: (date: Date) => {
-                                              if (!date) return '-';
-                                              // 处理 Firestore Timestamp 或 Date
-                                              const dateObj = date instanceof Date ? date : (date as any)?.toDate?.() || new Date(date);
-                                              return dayjs(dateObj).format('YYYY-MM-DD HH:mm:ss');
-                                            }
-                                          },
-                                          {
-                                            title: t('visitSessions.operator'),
-                                            dataIndex: 'redeemedBy',
-                                            key: 'redeemedBy',
-                                            width: 150,
-                                            render: (userId: string) => operatorName(userId)
-                                          },
-                                          {
-                                            title: t('visitSessions.actions'),
-                                            key: 'action',
-                                            width: 100,
-                                            render: (_: any, redemptionRecord: any) => {
-                                              const canEdit = record.status === 'pending' || redemptionRecord.status === 'pending';
-                                              if (!canEdit) return null;
-
-                                              return (
+                                    <div className="visit-session-redemption-list">
+                                      {allRedemptionRecords.map((redemptionRecord: RedemptionRecord) => {
+                                        const pending = redemptionRecord.status === 'pending';
+                                        const canEdit = record.status === 'pending' || pending;
+                                        const date = redemptionRecord.redeemedAt;
+                                        const dateObj = date instanceof Date ? date : (date as any)?.toDate?.() || new Date(date);
+                                        return (
+                                          <div className="visit-session-redemption-item" key={redemptionRecord.id}>
+                                            <div className="visit-session-redemption-summary">
+                                              <strong>{pending ? t('visitSessions.statusToSelect') : redemptionRecord.cigarName || '-'}</strong>
+                                              <span className="visit-session-redemption-quantity">x{redemptionRecord.quantity}</span>
+                                              <Tag color={pending ? 'orange' : 'green'} style={{ margin: 0 }}>
+                                                {pending ? t('visitSessions.statusToSelect') : t('visitSessions.statusCompleted')}
+                                              </Tag>
+                                            </div>
+                                            <div className="visit-session-redemption-meta">
+                                              <span><ClockCircleOutlined /> {date ? dayjs(dateObj).format('YYYY-MM-DD HH:mm:ss') : '-'}</span>
+                                              <span>{t('visitSessions.operator')}: {operatorName(redemptionRecord.redeemedBy, redemptionRecord.historicalOperatorDisplay)}</span>
+                                            </div>
+                                            {canEdit && (
+                                              <Tooltip title={t('common.edit')}>
                                                 <Button
-                                                  type="link"
+                                                  className="visit-session-redemption-edit"
+                                                  type="text"
                                                   size="small"
+                                                  aria-label={t('common.edit')}
                                                   icon={<EditOutlined />}
                                                   onClick={() => {
                                                     openRedemptionDrawer(redemptionRecord);
                                                     openSessionDrawer(record);
-                                                    form.setFieldsValue({
-                                                      cigarId: redemptionRecord.cigarId || undefined,
-                                                      quantity: redemptionRecord.quantity || 1
-                                                    });
+                                                    form.setFieldsValue({ cigarId: redemptionRecord.cigarId || undefined, quantity: redemptionRecord.quantity || 1 });
                                                   }}
-                                                >
-                                                  {t('common.edit')}
-                                                </Button>
-                                              );
-                                            }
-                                          }
-                                        ]}
-                                      />
+                                                />
+                                              </Tooltip>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                 </div>
                               );
                             },
                             onExpand: (expanded, record) => {
+                              if (!expanded && pendingRedemptionSessions.has(record.id)) return;
+                              setExpandedSessions(prev => {
+                                const next = new Set(prev);
+                                if (expanded) next.add(record.id);
+                                else next.delete(record.id);
+                                return next;
+                              });
                               if (expanded) {
                                 // 展开时加载兑换记录
                                 loadRedemptionRecords(record.id);
@@ -885,12 +858,7 @@ const VisitSessionsPage: React.FC = () => {
                           };
 
                           const allRedemptionRecords = redemptionRecords.get(record.id) || [];
-                          const expanded = expandedSessions.has(record.id);
-
-                          // 展开时自动加载兑换记录
-                          if (expanded && allRedemptionRecords.length === 0) {
-                            loadRedemptionRecords(record.id);
-                          }
+                          const expanded = expandedSessions.has(record.id) || pendingRedemptionSessions.has(record.id);
 
                           return (
                             <div
@@ -947,7 +915,9 @@ const VisitSessionsPage: React.FC = () => {
                                   <Button
                                     type="link"
                                     size="small"
+                                    disabled={pendingRedemptionSessions.has(record.id)}
                                     onClick={() => {
+                                      if (pendingRedemptionSessions.has(record.id)) return;
                                       const newExpanded = !expanded;
                                       if (newExpanded) {
                                         setExpandedSessions(prev => new Set(prev).add(record.id));
@@ -1082,7 +1052,7 @@ const VisitSessionsPage: React.FC = () => {
                                               )}
                                               {redemptionRecord.redeemedBy && (
                                                 <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)' }}>
-                                                  {t('visitSessions.operator')}: {operatorName(redemptionRecord.redeemedBy)}
+                                                  {t('visitSessions.operator')}: {operatorName(redemptionRecord.redeemedBy, redemptionRecord.historicalOperatorDisplay)}
                                                 </div>
                                               )}
                                             </div>
@@ -1271,6 +1241,7 @@ const VisitSessionsPage: React.FC = () => {
         onClose={() => setQrScannerVisible(false)}
         onSuccess={() => {
           refreshSessions();
+          loadAllRedemptions();
         }}
       />
 
