@@ -1860,3 +1860,45 @@ a:hover {
 .profile-preferences .ant-select {
   width: 100%;
 }
+.reload-verification-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.reload-verification-filter {
+  width: 150px;
+  min-width: 0;
+}
+
+.reload-verification-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+@media (max-width: 768px) {
+  .reload-verification-filter {
+    width: auto;
+    flex: 1 1 0;
+  }
+
+  .reload-verification-actions .ant-btn {
+    padding-inline: 10px;
+    font-size: 13px;
+  }
+
+  .reload-verification-refresh.ant-btn {
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    flex: 0 0 40px;
+  }
+
+  .reload-verification-refresh-label {
+    display: none;
+  }
+}

@@ -1,8 +1,8 @@
 // 充值验证组件
 import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App } from 'antd';
-import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined } from '@ant-design/icons';
+import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App, Tooltip } from 'antd';
+import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
 import { processPendingMembershipFees } from '../../services/firebase/scheduledJobs';
 import dayjs from 'dayjs';
@@ -399,20 +399,19 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
 
   return (
     <>
-      <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+      <div className="reload-verification-toolbar">
         <Select
           value={statusFilter}
           onChange={(value) => setStatusFilter(value)}
-          style={{ width: 150 }}
           options={[
             { label: t('pointsConfig.reloadVerification.statusAll'), value: 'all' },
             { label: t('pointsConfig.reloadVerification.statusPending'), value: 'pending' },
             { label: t('pointsConfig.reloadVerification.statusCompleted'), value: 'completed' },
             { label: t('pointsConfig.reloadVerification.statusRejected'), value: 'rejected' }
           ]}
-          className="points-config-form"
+          className="points-config-form reload-verification-filter"
         />
-        <Space>
+        <div className="reload-verification-actions">
           {isSuperAdmin && (
             <Button
               icon={<PlusOutlined />}
@@ -431,7 +430,11 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               {t('pointsConfig.reloadVerification.manualCreate')}
             </Button>
           )}
+          <Tooltip title={t('common.refresh')}>
           <Button
+            className="reload-verification-refresh"
+            aria-label={t('common.refresh')}
+            icon={<ReloadOutlined />}
             onClick={loadRecords}
             loading={loading}
             style={{
@@ -440,9 +443,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               color: '#FFFFFF'
             }}
           >
-            {t('common.refresh')}
+            <span className="reload-verification-refresh-label">{t('common.refresh')}</span>
           </Button>
-        </Space>
+          </Tooltip>
+        </div>
       </div>
       {!isMobile ? (
         <div className="points-config-form">
