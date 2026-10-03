@@ -147,6 +147,8 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
       const migratedRole = membershipActiveFrom
         ? (existing?.role === 'vip' ? 'vip' : 'member')
         : (existing?.role || 'guest')
+      const joinDate = existing?.membership?.joinDate
+        || (membershipActiveFrom && membershipActiveUntil ? Timestamp.fromDate(membershipActiveFrom) : undefined)
       await userRef.set({
         displayName: row.name,
         email,
@@ -162,7 +164,7 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
           ...(membershipActiveFrom && membershipActiveUntil ? {
             activeFrom: Timestamp.fromDate(membershipActiveFrom),
             activeUntil: Timestamp.fromDate(membershipActiveUntil),
-            joinDate: existing?.membership?.joinDate || Timestamp.fromDate(membershipActiveFrom),
+            joinDate,
           } : {}),
         },
         referral: {
@@ -184,7 +186,7 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
           archived: deleted,
           importedAt: now,
         },
-        updatedAt: now,
+        updatedAt: joinDate || now,
         ...(!existing ? {
           preferences: { locale: 'zh-CN', notifications: true },
           createdAt: now,
@@ -304,6 +306,7 @@ const processMemberships = async (rows: AnyRow[], batchId: string) => {
         if (!currentFrom || activatedAt >= currentFrom) {
           const now = new Date()
           const active = now >= activatedAt && now < activeUntil && user.data.migration?.legacySourceStatus === 'available'
+          const joinDate = user.data.membership?.joinDate || at
           await db.collection('users').doc(user.id).set({
             role: protectedRole(user.data.role) ? user.data.role : 'member',
             status: active ? 'active' : 'inactive',
@@ -311,9 +314,9 @@ const processMemberships = async (rows: AnyRow[], batchId: string) => {
               ...(user.data.membership || {}),
               activeFrom: at,
               activeUntil: Timestamp.fromDate(activeUntil),
-              joinDate: user.data.membership?.joinDate || at,
+              joinDate,
             },
-            updatedAt: Timestamp.now(),
+            updatedAt: joinDate,
           }, { merge: true })
         }
       }
