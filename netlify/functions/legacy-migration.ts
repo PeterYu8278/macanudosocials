@@ -5,6 +5,7 @@ import { getAuth } from 'firebase-admin/auth'
 import { Timestamp, getFirestore } from 'firebase-admin/firestore'
 import { mergeLegacyRedemptionEntries } from '../../src/utils/legacyRedemptionArtifacts'
 import { addUnknownReferralEntries } from '../../src/utils/legacyReferralPlaceholders'
+import { forEachMigrationMember } from '../../src/utils/legacyMigrationConcurrency'
 import { getRedemptionOrderMonth, resolveRedemptionOrderId } from '../../src/utils/redemptionOrderId'
 
 type Stage = 'users' | 'reload' | 'membership' | 'visits'
@@ -48,10 +49,27 @@ const getAuthUserByPhone = async (phone: string) => {
   }
 }
 
-const loadPhoneUsers = async () => {
-  const snapshot = await getFirestore().collection('users').get()
+const loadMigrationUsers = async (rows: AnyRow[], includeEmail = false) => {
+  const users = getFirestore().collection('users')
+  const fields = includeEmail ? ['profile.phone', 'email'] : ['profile.phone']
+  const matches = await Promise.all(fields.map(async field => {
+    const values = [...new Set(rows.map(row => field === 'email'
+      ? String(row.email || '').trim().toLowerCase()
+      : String(row.phone || '').trim()).filter(Boolean))]
+    const documents: FirebaseFirestore.QueryDocumentSnapshot[] = []
+    for (let offset = 0; offset < values.length; offset += 10) {
+      const snapshot = await users.where(field, 'in', values.slice(offset, offset + 10)).get()
+      documents.push(...snapshot.docs)
+    }
+    return documents
+  }))
+  return [...new Map(matches.flat().map(document => [document.id, document])).values()]
+}
+
+const loadPhoneUsers = async (rows: AnyRow[]) => {
+  const documents = await loadMigrationUsers(rows)
   const map = new Map<string, { id: string; data: FirebaseFirestore.DocumentData }>()
-  snapshot.docs.forEach(document => {
+  documents.forEach(document => {
     const data = document.data()
     const phone = data.profile?.phone
     if (typeof phone === 'string' && phone) map.set(phone, { id: document.id, data })
@@ -74,11 +92,11 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
   if (!password || password.length < 6) throw new Error('BULK_IMPORT_DEFAULT_PASSWORD is not configured')
   const protectedRoles = new Set(['developer', 'superAdmin', 'admin', 'storeAdmin'])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
-  const usersSnapshot = await db.collection('users').get()
+  const userDocuments = await loadMigrationUsers(rows, true)
   type ExistingUser = { id: string; data: FirebaseFirestore.DocumentData }
   const usersByEmail = new Map<string, ExistingUser>()
   const usersByPhone = new Map<string, ExistingUser>()
-  usersSnapshot.docs.forEach(document => {
+  userDocuments.forEach(document => {
     const data = document.data()
     const existingUser = { id: document.id, data }
     const email = String(data.email || '').trim().toLowerCase()
@@ -187,9 +205,11 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
           importedAt: now,
         },
         updatedAt: joinDate || now,
+        ...(!existing || existing.migration?.source === 'legacy_workbook' ? {
+          createdAt: joinDate || existing?.createdAt || now,
+        } : {}),
         ...(!existing ? {
           preferences: { locale: 'zh-CN', notifications: true },
-          createdAt: now,
         } : {}),
       }, { merge: true })
       const unresolvedReferralPlaceholders = migratedReferrals.filter(
@@ -239,10 +259,9 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
 
 const processReloads = async (rows: AnyRow[], batchId: string) => {
   const db = getFirestore()
-  const users = await loadPhoneUsers()
-  const lounges = await loadLounges()
+  const [users, lounges] = await Promise.all([loadPhoneUsers(rows), loadLounges()])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
-  for (const row of rows) {
+  await forEachMigrationMember(rows, row => String(row.phone || ''), async row => {
     try {
       const user = users.get(row.phone)
       if (!user) throw new Error('User not found for phone')
@@ -272,16 +291,15 @@ const processReloads = async (rows: AnyRow[], batchId: string) => {
       if (existed) result.updated += 1
       else result.created += 1
     } catch (error: any) { result.failed.push({ row: row.sourceRow, error: error?.message || 'Reload import failed' }) }
-  }
+  })
   return result
 }
 
 const processMemberships = async (rows: AnyRow[], batchId: string) => {
   const db = getFirestore()
-  const users = await loadPhoneUsers()
-  const lounges = await loadLounges()
+  const [users, lounges] = await Promise.all([loadPhoneUsers(rows), loadLounges()])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
-  for (const row of rows) {
+  await forEachMigrationMember(rows, row => String(row.phone || ''), async row => {
     try {
       const user = users.get(row.phone)
       if (!user) throw new Error('User not found for phone')
@@ -307,7 +325,7 @@ const processMemberships = async (rows: AnyRow[], batchId: string) => {
           const now = new Date()
           const active = now >= activatedAt && now < activeUntil && user.data.migration?.legacySourceStatus === 'available'
           const joinDate = user.data.membership?.joinDate || at
-          await db.collection('users').doc(user.id).set({
+          const userUpdate = {
             role: protectedRole(user.data.role) ? user.data.role : 'member',
             status: active ? 'active' : 'inactive',
             membership: {
@@ -317,13 +335,16 @@ const processMemberships = async (rows: AnyRow[], batchId: string) => {
               joinDate,
             },
             updatedAt: joinDate,
-          }, { merge: true })
+            ...(user.data.migration?.source === 'legacy_workbook' ? { createdAt: joinDate } : {}),
+          }
+          await db.collection('users').doc(user.id).set(userUpdate, { merge: true })
+          user.data = { ...user.data, ...userUpdate }
         }
       }
       if (existed) result.updated += 1
       else result.created += 1
     } catch (error: any) { result.failed.push({ row: row.sourceRow, error: error?.message || 'Membership import failed' }) }
-  }
+  })
   return result
 }
 
@@ -331,8 +352,7 @@ const protectedRole = (role: unknown) => ['developer', 'superAdmin', 'admin', 's
 
 const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: string) => {
   const db = getFirestore()
-  const users = await loadPhoneUsers()
-  const lounges = await loadLounges()
+  const [users, lounges] = await Promise.all([loadPhoneUsers([...rows, ...redemptions]), loadLounges()])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
   const sessionsByPhone = new Map<string, Array<{ id: string; start: Date; end: Date; lounge: string; userId: string; userName: string }>>()
   for (const row of rows) {
