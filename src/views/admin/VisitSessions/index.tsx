@@ -94,19 +94,19 @@ const VisitSessionsPage: React.FC = () => {
     [statusFilter, searchUserId, isSuperAdmin, user?.storeId]
   );
   const [addingRedemption, setAddingRedemption] = useState(false);
+  const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
   const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
     async () => {
-      const ids = [...new Set(sessions.map(session => session.userId).filter(Boolean))];
+      const ids = [...new Set([...sessions, ...allRedemptionRecords].map(record => record.userId).filter(Boolean))];
       const entries = await Promise.all(ids.map(async id => {
         const member = await getDocument<User>(COLLECTIONS.USERS, id);
         return [id, member?.profile?.phone || member?.phone || '-'] as const;
       }));
       return Object.fromEntries(entries);
     },
-    [sessions]
+    [sessions, allRedemptionRecords]
   );
   const [redemptionRecords, setRedemptionRecords] = useState<Map<string, any[]>>(new Map());
-  const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
   const [operatorNames, setOperatorNames] = useState<Record<string, string>>({});
   const [redemptionRecordsLoading, setRedemptionRecordsLoading] = useState(false);
   const [redemptionSearch, setRedemptionSearch] = useState('');
@@ -219,8 +219,8 @@ const VisitSessionsPage: React.FC = () => {
       render: (_: unknown, record: RedemptionRecord) => (
         <div>
           <div style={{ fontWeight: 600, color: '#fff' }}>{record.userName || '-'}</div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)', fontFamily: 'monospace' }}>
-            {record.userId.substring(0, 12)}...
+          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.45)' }}>
+            {memberPhones?.[record.userId] || '-'}
           </div>
         </div>
       )
@@ -284,7 +284,7 @@ const VisitSessionsPage: React.FC = () => {
         </Button>
       ) : null
     }
-  ], [form, openRedemptionDrawer, openSessionDrawer, sessions, t]);
+  ], [form, memberPhones, openRedemptionDrawer, openSessionDrawer, sessions, t]);
 
   // 加载指定 session 的所有兑换记录（包括待处理和已完成）
   const loadRedemptionRecords = async (sessionId: string) => {
@@ -1160,7 +1160,11 @@ const VisitSessionsPage: React.FC = () => {
                       columns={redemptionColumns}
                       dataSource={filteredAllRedemptions}
                       scroll={{ x: 850 }}
-                      pagination={{ pageSize: 10, showSizeChanger: true }}
+                      pagination={{
+                        pageSize: 10,
+                        showSizeChanger: true,
+                        showTotal: (total, range) => t('common.paginationTotal', { start: range[0], end: range[1], total })
+                      }}
                       locale={{ emptyText: t('visitSessions.noRedemptionRecords') }}
                     />
                   </div>
@@ -1174,6 +1178,7 @@ const VisitSessionsPage: React.FC = () => {
                           <div className="redemption-card-head">
                             <div className="redemption-user-block">
                               <strong>{record.userName || '-'}</strong>
+                              <span>{memberPhones?.[record.userId] || '-'}</span>
                               <span>{dayjs(record.redeemedAt).format('DD MMM YYYY, HH:mm')}</span>
                             </div>
                             <div className="redemption-card-tags">
@@ -1227,6 +1232,7 @@ const VisitSessionsPage: React.FC = () => {
                         total={filteredAllRedemptions.length}
                         onChange={setRedemptionPage}
                         showSizeChanger={false}
+                        showTotal={(total, range) => t('common.paginationTotal', { start: range[0], end: range[1], total })}
                         size="small"
                         className="redemptions-mobile-pagination"
                       />
