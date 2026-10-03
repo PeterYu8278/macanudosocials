@@ -21,6 +21,26 @@ export const handler: Handler = async event => {
   const phone = normalizePhoneNumber(input.phone)
   if (!phone) return invalidCredentials()
 
+  const startedAt = Date.now()
+  let stage = 'initialization'
+  const runStage = async <T>(name: string, timeoutMs: number, operation: () => Promise<T>): Promise<T> => {
+    stage = name
+    const remaining = Math.min(timeoutMs, 25000 - (Date.now() - startedAt))
+    if (remaining <= 0) throw new Error('stage-timeout')
+    const stageStartedAt = Date.now()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    try {
+      const result = await Promise.race([
+        operation(),
+        new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error('stage-timeout')), remaining) }),
+      ])
+      console.info('[phone-login] stage-complete', { stage: name, durationMs: Date.now() - stageStartedAt })
+      return result
+    } finally {
+      if (timer) clearTimeout(timer)
+    }
+  }
+
   try {
     const apiKey = process.env.FIREBASE_WEB_API_KEY || process.env.VITE_FIREBASE_API_KEY
     if (!apiKey) throw new Error('missing-config')
@@ -33,7 +53,7 @@ export const handler: Handler = async event => {
     const ip = event.headers['x-nf-client-connection-ip'] || 'local'
     const keys = [`ip:${ip}`, `phone:${phone}`].map(value => createHash('sha256').update(value).digest('hex'))
     const now = Date.now()
-    const allowed = await db.runTransaction(async transaction => {
+    const allowed = await runStage('rate-limit', 8000, () => db.runTransaction(async transaction => {
       const refs = keys.map(key => db.collection('_phoneLoginAttempts').doc(key))
       const snapshots = await Promise.all(refs.map(ref => transaction.get(ref)))
       const attempts = snapshots.map(snapshot => {
@@ -43,20 +63,23 @@ export const handler: Handler = async event => {
       if (attempts.some(attempt => attempt.count >= 20)) return false
       refs.forEach((ref, index) => transaction.set(ref, { ...attempts[index], count: attempts[index].count + 1, expiresAt: new Date(now + 300000) }))
       return true
-    })
+    }, { maxAttempts: 3 }))
     if (!allowed) return reply(429, { success: false, code: 'auth/too-many-requests' })
 
     // This lookup is private: no email or profile is exposed before password verification.
-    const users = await db.collection('users').where('profile.phone', '==', phone).limit(2).get()
+    const users = await runStage('user-lookup', 6000, () => db.collection('users').where('profile.phone', '==', phone).limit(2).get())
     if (users.docs.length !== 1) return invalidCredentials()
     const email = users.docs[0].data().email
     if (typeof email !== 'string' || !email) return invalidCredentials()
-    const verified = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password: input.password, returnSecureToken: true }),
-      signal: AbortSignal.timeout(10000),
+    const { verified, result } = await runStage('password-verification', 10000, async () => {
+      const verified = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password: input.password, returnSecureToken: true }),
+        signal: AbortSignal.timeout(10000),
+      })
+      const result = await verified.json() as { idToken?: string; localId?: string; error?: { message?: string } }
+      return { verified, result }
     })
-    const result = await verified.json() as { idToken?: string; localId?: string; error?: { message?: string } }
     if (!verified.ok) {
       if (result.error?.message?.startsWith('TOO_MANY_ATTEMPTS')) return reply(429, { success: false, code: 'auth/too-many-requests' })
       if (verified.status >= 500) throw new Error('upstream-unavailable')
@@ -68,10 +91,15 @@ export const handler: Handler = async event => {
     // Identity Toolkit has already verified the password and returned the
     // authenticated Firebase localId. Verifying the same ID token again with
     // Admin SDK added another network round trip without changing the result.
-    const customToken = await adminAuth.createCustomToken(result.localId)
+    const customToken = await runStage('token-signing', 3000, () => adminAuth.createCustomToken(result.localId!))
     return reply(200, { success: true, customToken, firestoreUserId: users.docs[0].id })
-  } catch {
+  } catch (error) {
     // Never log submitted passwords, phone numbers, or authentication tokens.
+    console.error('[phone-login] request-failed', {
+      stage,
+      durationMs: Date.now() - startedAt,
+      reason: error instanceof Error && error.message === 'stage-timeout' ? 'stage-timeout' : 'dependency-failure',
+    })
     return reply(503, { success: false, code: 'auth/service-unavailable' })
   }
 }

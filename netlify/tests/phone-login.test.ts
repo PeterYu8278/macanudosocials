@@ -27,16 +27,16 @@ describe('phone-login backend', () => {
     mocks.verify.mockResolvedValue({ uid: 'auth-uid', email: 'member@example.com' })
     mocks.token.mockResolvedValue('custom-token')
   })
-  afterEach(() => { vi.unstubAllEnvs(); vi.unstubAllGlobals() })
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllEnvs(); vi.unstubAllGlobals(); vi.restoreAllMocks() })
 
-  it('verifies the password and token before issuing a session for the real Auth UID', async () => {
+  it('verifies the password before issuing a session for the upstream Auth UID', async () => {
     const result = await login()
     expect(result.statusCode).toBe(200)
     expect(JSON.parse(result.body)).toEqual({ success: true, customToken: 'custom-token' })
     expect(result.headers['Cache-Control']).toBe('no-store')
     expect(mocks.where).toHaveBeenCalledWith('profile.phone', '==', '+60123456789')
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({ email: 'member@example.com', password: 'correct-password' })
-    expect(mocks.verify).toHaveBeenCalledWith('verified-id-token', true)
+    expect(mocks.verify).not.toHaveBeenCalled()
     expect(mocks.token).toHaveBeenCalledWith('auth-uid')
   })
 
@@ -63,10 +63,35 @@ describe('phone-login backend', () => {
     expect(mocks.token).not.toHaveBeenCalled()
   })
 
-  it('rejects a verified identity belonging to another account', async () => {
-    mocks.verify.mockResolvedValueOnce({ uid: 'other-user', email: 'member@example.com' })
-    expect((await login()).statusCode).toBe(401)
+  it('fails closed when the rate-limit transaction stalls and logs no credentials', async () => {
+    vi.useFakeTimers()
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.rateGet.mockReturnValue(new Promise(() => {}))
+    const response = login()
+    await vi.advanceTimersByTimeAsync(8000)
+    expect((await response).statusCode).toBe(503)
+    expect(log).toHaveBeenCalledWith('[phone-login] request-failed', { stage: 'rate-limit', durationMs: 8000, reason: 'stage-timeout' })
+    expect(mocks.lookup).not.toHaveBeenCalled()
     expect(mocks.token).not.toHaveBeenCalled()
+  })
+
+  it('returns a controlled failure when user lookup stalls', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.lookup.mockReturnValue(new Promise(() => {}))
+    const response = login()
+    await vi.advanceTimersByTimeAsync(6000)
+    expect((await response).statusCode).toBe(503)
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('returns a controlled failure when token signing stalls', async () => {
+    vi.useFakeTimers()
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.token.mockReturnValue(new Promise(() => {}))
+    const response = login()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect((await response).statusCode).toBe(503)
   })
 
   it('enforces distributed request limits before querying user profiles', async () => {
