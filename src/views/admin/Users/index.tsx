@@ -2137,6 +2137,7 @@ const AdminUsers: React.FC = () => {
                         loading={legacyMigrationStageLoading === stage}
                         onClick={() => modal.confirm({
                           title: t('usersAdmin.migrationConfirmTitle', { stage: label }),
+                          zIndex: 2110,
                           content: t('usersAdmin.migrationConfirmContent', { count }),
                           okText: result ? t('usersAdmin.migrationRetryStage') : t('usersAdmin.migrationRunStage'),
                           cancelText: t('common.cancel'),
