@@ -1,7 +1,7 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
 import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
-import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
+import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
   getUserVisitSessions,
@@ -12,7 +12,7 @@ import {
   addRedemptionToSession
 } from '../../../services/firebase/visitSessions';
 // 不再使用服务端分页，改为加载所有数据并使用客户端分页
-import { getCigars } from '../../../services/firebase/firestore';
+import { getCigars, getDocument, COLLECTIONS } from '../../../services/firebase/firestore';
 import { getUserDisplayNames } from '../../../services/firebase/userDisplayNames';
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll';
 import { getAllStores } from '../../../services/firebase/stores';
@@ -20,7 +20,7 @@ import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsByS
 import { useAuthStore } from '../../../store/modules/auth';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer';
-import type { VisitSession, Cigar, RedemptionRecord } from '../../../types';
+import type { VisitSession, Cigar, RedemptionRecord, User } from '../../../types';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import { QRScanner } from '../../../components/admin/QRScanner';
@@ -94,6 +94,17 @@ const VisitSessionsPage: React.FC = () => {
     [statusFilter, searchUserId, isSuperAdmin, user?.storeId]
   );
   const [addingRedemption, setAddingRedemption] = useState(false);
+  const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
+    async () => {
+      const ids = [...new Set(sessions.map(session => session.userId).filter(Boolean))];
+      const entries = await Promise.all(ids.map(async id => {
+        const member = await getDocument<User>(COLLECTIONS.USERS, id);
+        return [id, member?.profile?.phone || member?.phone || '-'] as const;
+      }));
+      return Object.fromEntries(entries);
+    },
+    [sessions]
+  );
   const [redemptionRecords, setRedemptionRecords] = useState<Map<string, any[]>>(new Map());
   const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
   const [operatorNames, setOperatorNames] = useState<Record<string, string>>({});
@@ -386,11 +397,9 @@ const VisitSessionsPage: React.FC = () => {
       render: (name: string, record: VisitSessionDisplayRow) => (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <span style={{ fontWeight: 600, color: '#fff' }}>{name || '-'}</span>
-          {record.userId && (
-            <span style={{ fontSize: 10, color: 'rgba(255, 255, 255, 0.35)', fontFamily: 'monospace' }}>
-              ID: {record.userId.substring(0, 8)}...
-            </span>
-          )}
+          <span style={{ fontSize: 11, color: 'rgba(255, 255, 255, 0.55)' }}>
+            {memberPhones?.[record.userId] || '-'}
+          </span>
         </div>
       )
     },

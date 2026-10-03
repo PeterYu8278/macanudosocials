@@ -1,12 +1,12 @@
 // 积分配置管理页面
 import React, { useState, useEffect } from 'react';
-import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery';
+import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal } from 'antd';
 import { SaveOutlined, ReloadOutlined, HistoryOutlined, SettingOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { getPointsConfig, updatePointsConfig, getDefaultPointsConfig } from '../../../services/firebase/pointsConfig';
 import { getAllPointsRecords } from '../../../services/firebase/pointsRecords';
 import { getMembershipFeeConfig, updateMembershipFeeConfig, getDefaultMembershipFeeConfig, getAllMembershipFeeRecords, createMembershipFeeRecord } from '../../../services/firebase/membershipFee';
-import { getAllTransactions, getAllOrders, createTransaction, COLLECTIONS, getAllUsers, updateDocument, deleteDocument, getCigars, getAllInboundOrders, getAllOutboundOrders, getAllInventoryMovements, getOutboundOrdersByReferenceNo, getUsers } from '../../../services/firebase/firestore';
+import { getAllTransactions, getAllOrders, createTransaction, COLLECTIONS, getAllUsers, getDocument, updateDocument, deleteDocument, getCigars, getAllInboundOrders, getAllOutboundOrders, getAllInventoryMovements, getOutboundOrdersByReferenceNo, getUsers } from '../../../services/firebase/firestore';
 import { getAllStores } from '../../../services/firebase/stores';
 import type { User, Store } from '../../../types';
 import type { MembershipFeeRecord } from '../../../types';
@@ -46,6 +46,20 @@ const PointsConfigPage: React.FC = () => {
   const { data: users = [] } = useFirestoreQuery(
     () => creatingFeeRecord ? getUsers({ limit: 300 }) : Promise.resolve([]),
     [creatingFeeRecord]
+  );
+
+  const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
+    async () => {
+      if (activeTab === 'reload') return {};
+      const records = activeTab === 'records' ? pointsRecords : membershipFeeRecords;
+      const ids = [...new Set(records.map(record => record.userId).filter(Boolean))];
+      const entries = await Promise.all(ids.map(async id => {
+        const member = await getDocument<User>(COLLECTIONS.USERS, id);
+        return [id, member?.profile?.phone || member?.phone || '-'] as const;
+      }));
+      return Object.fromEntries(entries) as Record<string, string>;
+    },
+    [activeTab, membershipFeeRecords, pointsRecords]
   );
 
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
@@ -288,7 +302,13 @@ const PointsConfigPage: React.FC = () => {
       dataIndex: 'userName',
       key: 'userName',
       width: 150,
-      render: (name: string, record: PointsRecord) => name || record.userId
+      ellipsis: true,
+      render: (name: string, record: PointsRecord) => (
+        <div>
+          <div title={name || record.userId}>{name || record.userId}</div>
+          <div style={{ fontSize: 12, color: '#999', marginTop: 2 }}>{memberPhones?.[record.userId] || '-'}</div>
+        </div>
+      )
     },
     {
       title: t('pointsConfig.records.type'),
@@ -317,6 +337,7 @@ const PointsConfigPage: React.FC = () => {
       dataIndex: 'source',
       key: 'source',
       width: 120,
+      ellipsis: true,
       render: (source: string) => {
         const sourceKey = `pointsConfig.records.sources.${source}`;
         const translated = t(sourceKey);
@@ -340,7 +361,7 @@ const PointsConfigPage: React.FC = () => {
   ];
 
   return (
-    <div style={{ minHeight: '100vh', color: '#FFFFFF', paddingBottom: isMobile ? '100px' : '0' }}>
+    <div className="points-config-page" style={{ minHeight: '100vh', color: '#FFFFFF', paddingBottom: isMobile ? '100px' : '0' }}>
       {/* 标题 */}
       <h1 style={{ 
         fontSize: 22, 
@@ -766,6 +787,8 @@ const PointsConfigPage: React.FC = () => {
             {!isMobile ? (
               <div className="points-config-form">
                     <Table
+                      size="small"
+                      tableLayout="fixed"
                       columns={columns}
                       dataSource={pointsRecords}
                       rowKey="id"
@@ -834,6 +857,9 @@ const PointsConfigPage: React.FC = () => {
                               </span>
                             </div>
                             <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
+                              <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4, overflowWrap: 'anywhere' }}>
+                                {memberPhones?.[record.userId] || '-'}
+                              </div>
                               {formatPointsRecordDescription(record, t)}
                             </div>
                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)' }}>
@@ -902,19 +928,28 @@ const PointsConfigPage: React.FC = () => {
             {!isMobile ? (
               <div className="points-config-form">
                     <Table
+                      size="small"
+                      tableLayout="fixed"
                       columns={[
                         {
                           title: t('pointsConfig.membershipFee.user'),
                           dataIndex: 'userName',
                           key: 'userName',
                           width: 150,
-                          render: (name: string, record: MembershipFeeRecord) => name || record.userId
+                          ellipsis: true,
+                          render: (name: string, record: MembershipFeeRecord) => (
+                            <div style={{ overflowWrap: 'anywhere' }}>
+                              <div title={name || record.userId}>{name || record.userId}</div>
+                              <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{memberPhones?.[record.userId] || '-'}</div>
+                            </div>
+                          )
                         },
                         {
                           title: t('pointsConfig.membershipFee.store'),
                           dataIndex: 'storeId',
                           key: 'storeId',
                           width: 150,
+                          ellipsis: true,
                           render: (storeId: string) => {
                             const store = stores.find(s => s.id === storeId);
                             return store?.name || '-';
@@ -1051,6 +1086,9 @@ const PointsConfigPage: React.FC = () => {
                           <div style={{ flex: 1 }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
                               {record.userName || record.userId.substring(0, 20)}
+                            </div>
+                            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4, overflowWrap: 'anywhere' }}>
+                              {memberPhones?.[record.userId] || '-'}
                             </div>
                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
                               {t('pointsConfig.membershipFee.due')}: {dayjs(dueDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}

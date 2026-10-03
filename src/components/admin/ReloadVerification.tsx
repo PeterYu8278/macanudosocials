@@ -35,7 +35,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   const [proofUrl, setProofUrl] = useState<string>('');
   const [stores, setStores] = useState<Store[]>([]);
   const [users, setUsers] = useState<User[]>([]);
-  const [reviewerNames, setReviewerNames] = useState<Record<string, string>>({});
+  const [recordUsers, setRecordUsers] = useState<Record<string, User | null>>({});
   const { t, i18n } = useTranslation();
   const { isSuperAdmin } = useAuthStore();
   const reviewer = useAuthStore(state => state.actualUser || state.user);
@@ -49,20 +49,33 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
 
   useEffect(() => {
     let cancelled = false;
-    const ids = [...new Set(records.filter(record => !record.verifiedByName && record.verifiedBy && record.verifiedBy !== 'admin').map(record => record.verifiedBy!))];
+    const ids = [...new Set(records.flatMap(record => [
+      record.userId,
+      ...(!record.verifiedByName && record.verifiedBy && record.verifiedBy !== 'admin' ? [record.verifiedBy] : [])
+    ]).filter(Boolean))];
     Promise.all(ids.map(async id => {
-      const user = await getDocument<User>(GLOBAL_COLLECTIONS.USERS, id);
-      return [id, user?.displayName || ''] as const;
+      try {
+        const user = users.find(user => user.id === id) || await getDocument<User>(GLOBAL_COLLECTIONS.USERS, id);
+        return [id, user || null] as const;
+      } catch (error) {
+        console.error('[ReloadVerification] Failed to load member details:', error);
+        return [id, null] as const;
+      }
     })).then(entries => {
-      if (!cancelled) setReviewerNames(Object.fromEntries(entries));
+      if (!cancelled) setRecordUsers(Object.fromEntries(entries));
     });
     return () => { cancelled = true; };
-  }, [records]);
+  }, [records, users]);
 
   const reviewerName = (record: ReloadRecord) => {
     if (record.status === 'pending') return '-';
-    return record.verifiedByName || reviewerNames[record.verifiedBy || '']
+    return record.verifiedByName || recordUsers[record.verifiedBy || '']?.displayName
       || (record.verifiedBy && record.verifiedBy !== 'admin' ? record.verifiedBy : t('pointsConfig.reloadVerification.reviewerNotRecorded', { defaultValue: 'Not recorded' }));
+  };
+
+  const memberPhone = (record: ReloadRecord) => {
+    const member = recordUsers[record.userId] || users.find(user => user.id === record.userId);
+    return member?.profile?.phone || member?.phone || '-';
   };
 
   const loadStores = async () => {
@@ -238,6 +251,16 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
     }
   };
 
+  const renderStatus = (status: string) => {
+    const statusMap: Record<string, { color: string; text: string }> = {
+      pending: { color: 'orange', text: t('pointsConfig.reloadVerification.statusPending') },
+      completed: { color: 'green', text: t('pointsConfig.reloadVerification.statusCompleted') },
+      rejected: { color: 'red', text: t('pointsConfig.reloadVerification.statusRejected') }
+    };
+    const statusInfo = statusMap[status] || { color: 'default', text: status };
+    return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
+  };
+
   const columns = [
     {
       title: t('pointsConfig.reloadVerification.time'),
@@ -251,13 +274,20 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       dataIndex: 'userName',
       key: 'userName',
       width: 150,
-      render: (name: string, record: ReloadRecord) => name || record.userId
+      ellipsis: true,
+      render: (name: string, record: ReloadRecord) => (
+        <div style={{ overflowWrap: 'anywhere' }}>
+          <div title={name || recordUsers[record.userId]?.displayName || record.userId}>{name || recordUsers[record.userId]?.displayName || record.userId}</div>
+          <div style={{ fontSize: 12, color: '#999', marginTop: 4 }}>{memberPhone(record)}</div>
+        </div>
+      )
     },
     {
       title: t('pointsConfig.reloadVerification.store'),
       dataIndex: 'storeId',
       key: 'storeId',
       width: 150,
+      ellipsis: true,
       render: (storeId: string) => {
         const store = stores.find(s => s.id === storeId);
         return store?.name || '-';
@@ -267,7 +297,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       title: t('pointsConfig.reloadVerification.amount'),
       dataIndex: 'requestedAmount',
       key: 'requestedAmount',
-      width: 120,
+      width: 150,
       render: (amount: number, record: ReloadRecord) => (
         <div>
           <div>{amount} RM</div>
@@ -278,41 +308,33 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       )
     },
     {
-      title: t('pointsConfig.reloadVerification.status'),
-      dataIndex: 'status',
-      key: 'status',
-      width: 100,
-      render: (status: string) => {
-        const statusMap: Record<string, { color: string; text: string }> = {
-          pending: { color: 'orange', text: t('pointsConfig.reloadVerification.statusPending') },
-          completed: { color: 'green', text: t('pointsConfig.reloadVerification.statusCompleted') },
-          rejected: { color: 'red', text: t('pointsConfig.reloadVerification.statusRejected') }
-        };
-        const statusInfo = statusMap[status] || { color: 'default', text: status };
-        return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
-      }
-    },
-    {
       title: t('pointsConfig.reloadVerification.reviewer', { defaultValue: 'Reviewed By' }),
       key: 'reviewer',
       width: 160,
-      render: (_: unknown, record: ReloadRecord) => reviewerName(record)
+      ellipsis: true,
+      render: (_: unknown, record: ReloadRecord) => (
+        <div>
+          <div title={reviewerName(record)} style={{ overflowWrap: 'anywhere' }}>{reviewerName(record)}</div>
+          <div style={{ marginTop: 6 }}>{renderStatus(record.status)}</div>
+        </div>
+      )
     },
     {
       title: t('pointsConfig.reloadVerification.adminNotes'),
       dataIndex: 'adminNotes',
       key: 'adminNotes',
-      ellipsis: true,
-      render: (notes: string) => notes || '-'
-    },
-    {
-      title: t('pointsConfig.reloadVerification.proof'),
-      dataIndex: 'verificationProof',
-      key: 'verificationProof',
-      width: 100,
-      render: (proof: string) => {
-        if (!proof) return '-';
+      width: 180,
+      render: (notes: string, record: ReloadRecord) => {
+        const proof = record.verificationProof;
+        const notePreview = (
+          <Tooltip title={notes || undefined}>
+            <div style={{ maxWidth: 148, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{notes || '-'}</div>
+          </Tooltip>
+        );
+        if (!proof) return notePreview;
         return (
+          <div style={{ overflowWrap: 'anywhere' }}>
+            {notes && notePreview}
           <Button
             type="link"
             icon={<EyeOutlined />}
@@ -349,8 +371,9 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
             padding: 0
           }}
           >
-            {t('pointsConfig.reloadVerification.view')}
+            {t('pointsConfig.reloadVerification.proof')}
           </Button>
+          </div>
         );
       }
     },
@@ -451,11 +474,13 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       {!isMobile ? (
         <div className="points-config-form">
       <Table
+        size="small"
+        tableLayout="fixed"
         columns={columns}
         dataSource={records}
         rowKey="id"
         loading={loading}
-        scroll={{ x: 1300 }}
+        scroll={{ x: 1170 }}
         pagination={{
           pageSize: 20,
           showSizeChanger: true
@@ -493,6 +518,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               return (
                 <div
                   key={record.id}
+                  className="reload-verification-mobile-card"
                   style={{
                     border: '1px solid rgba(244,175,37,0.2)',
                     borderRadius: 12,
@@ -502,39 +528,24 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div style={{ flex: 1 }}>
+                    <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
                         {record.userName || record.userId.substring(0, 20)}
+                      </div>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4, overflowWrap: 'anywhere' }}>
+                        {memberPhone(record)}
                       </div>
                       <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
                         {dayjs(createdDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}
                       </div>
-                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>
-                        {record.requestedAmount} RM {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
-                      </div>
-                      <div style={{ fontSize: 12, color: '#f4af25', marginTop: 4 }}>
-                        {t('pointsConfig.reloadVerification.store')}: {stores.find(s => s.id === record.storeId)?.name || '-'}
-                      </div>
-                      {record.status !== 'pending' && (
-                        <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, overflowWrap: 'anywhere' }}>
-                          {t('pointsConfig.reloadVerification.reviewer', { defaultValue: 'Reviewed By' })}: {reviewerName(record)}
-                        </div>
-                      )}
-                      {record.adminNotes && (
-                        <div style={{ 
-                          fontSize: 12, 
-                          color: 'rgba(255,255,255,0.5)', 
-                          marginTop: 4,
-                          padding: '4px 8px',
-                          background: 'rgba(255,255,255,0.05)',
-                          borderRadius: 4,
-                          borderLeft: '2px solid rgba(244,175,37,0.5)'
-                        }}>
-                          {record.adminNotes}
-                        </div>
-                      )}
                     </div>
-                    <div style={{ textAlign: 'right', marginLeft: 12 }}>
+                    <div style={{ textAlign: 'right', marginLeft: 12, maxWidth: '48%', overflowWrap: 'anywhere' }}>
+                      <div style={{ fontSize: 18, fontWeight: 700, color: '#f4af25', marginBottom: 4 }}>
+                        {record.requestedAmount} RM
+                      </div>
+                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
+                        {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
+                      </div>
                       <div style={{
                         fontSize: 11,
                         padding: '2px 8px',
@@ -592,6 +603,21 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                       )}
                     </div>
                   </div>
+                  <div style={{ fontSize: 12, color: '#f4af25', overflowWrap: 'anywhere' }}>
+                    {t('pointsConfig.reloadVerification.store')}: {stores.find(s => s.id === record.storeId)?.name || '-'}
+                  </div>
+                  {record.status !== 'pending' && (
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginTop: 4, overflowWrap: 'anywhere' }}>
+                      {t('pointsConfig.reloadVerification.reviewer', { defaultValue: 'Reviewed By' })}: {reviewerName(record)}
+                    </div>
+                  )}
+                  {record.adminNotes && (
+                    <Tooltip title={record.adminNotes}>
+                      <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', marginTop: 6, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {record.adminNotes}
+                      </div>
+                    </Tooltip>
+                  )}
                   {record.status === 'pending' && (
                     <div style={{ display: 'flex', gap: 8, marginTop: 8, paddingTop: 8, borderTop: '1px solid rgba(244,175,37,0.1)' }}>
                       <Button
