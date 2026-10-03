@@ -41,6 +41,8 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../../store/modules/auth'
 import { getModalThemeStyles, getModalWidth, getResponsiveModalConfig, modalButtonStyles } from '../../../config/modalTheme'
 import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
+import { usePhoneChangeVerification } from '../../../hooks/usePhoneChangeVerification'
+import { updateMemberPhone } from '../../../services/firebase/memberPhone'
 import { collection, query, where, getDocs, limit, doc, setDoc } from 'firebase/firestore'
 import { UserSkeletonList } from '../../../components/features/admin/UserSkeleton'
 import { auth, db } from '../../../config/firebase'
@@ -200,6 +202,7 @@ const AdminUsers: React.FC = () => {
   const [legacyMigrationBatchId, setLegacyMigrationBatchId] = useState('')
   const [legacyMigrationStageLoading, setLegacyMigrationStageLoading] = useState<LegacyMigrationStage | null>(null)
   const [legacyMigrationResults, setLegacyMigrationResults] = useState<Partial<Record<LegacyMigrationStage, LegacyMigrationStageResult>>>({})
+  const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
   const [deleting, setDeleting] = useState<null | User>(null)
   const [resettingPasswordLoading, setResettingPasswordLoading] = useState(false)
   const [form] = Form.useForm()
@@ -810,6 +813,7 @@ const AdminUsers: React.FC = () => {
       paddingRight: isMobile && activeTab === 'list' ? '32px' : '0',
       paddingBottom: isMobile ? '46px' : '0'
     }}>
+      {phoneVerificationModal}
       {/* 标签页 */}
       <div>
         <div style={{
@@ -1637,12 +1641,19 @@ const AdminUsers: React.FC = () => {
               ) : {}
 
               if (editing) {
+                if (normalizedPhone) {
+                  if (!await verifyPhoneChange()) return
+                  await updateMemberPhone(editing.id, normalizedPhone)
+                } else if (editing.profile?.phone) {
+                  throw new Error(t('profile.phoneRequired'))
+                }
                 const res = await updateDocument<User>(COLLECTIONS.USERS, editing.id, {
                   displayName: values.displayName,
                   email: values.email || undefined, // ✅ 允许email为空
                   role: values.role,
                   membership: { ...editing.membership, level: values.level },
-                  profile: { ...(editing as any).profile, phone: normalizedPhone, gender: values.gender || null, race: values.race || null },
+                  'profile.gender': values.gender || null,
+                  'profile.race': values.race || null,
                   ...discountPayload,
                 } as any)
                 if (res.success) message.success(t('usersAdmin.saved'))
@@ -1685,6 +1696,8 @@ const AdminUsers: React.FC = () => {
               await refreshUsers()
               setCreating(false)
               closeEditing()
+            } catch (error) {
+              message.error(error instanceof Error ? error.message : t('profile.phoneSync.failed'))
             } finally {
               setLoading(false)
             }

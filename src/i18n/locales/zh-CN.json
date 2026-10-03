@@ -1918,6 +1918,18 @@
     "notFoundDesc": "抱歉，您查找的品牌不存在。"
   },
   "profile": {
+    "phoneSync": {
+      "verifyTitle": "验证账号身份",
+      "verifyPassword": "验证并保存电话号码",
+      "verifyGoogle": "使用 Google 验证",
+      "verificationFailed": "验证失败，请检查密码或使用已关联的 Google 账号。",
+      "noProvider": "请使用已关联的电邮密码或 Google 账号登录后修改电话号码。",
+      "reauthRequired": "请重新验证账号身份后保存电话号码。",
+      "inUse": "该电话号码已关联其他会员。",
+      "accountMissing": "该会员尚未关联 Authentication 账号，请先创建或关联账号。",
+      "syncFailed": "Authentication 已更新，但会员资料同步失败，请重新保存相同的电话号码。",
+      "failed": "电话号码更新失败，可能没有操作权限或服务暂时不可用。"
+    },
     "title": "个人资料",
     "editProfile": "编辑资料",
     "settings": "偏好设置",

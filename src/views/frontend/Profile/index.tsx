@@ -33,6 +33,8 @@ import {
 } from '../../../services/oneSignal'
 import { usePWA } from '../../../utils/pwa'
 import { clearApplicationCache } from '../../../utils/clearApplicationCache'
+import { usePhoneChangeVerification } from '../../../hooks/usePhoneChangeVerification'
+import { updateMemberPhone } from '../../../services/firebase/memberPhone'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -43,6 +45,7 @@ const Profile: React.FC = () => {
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [clearingCache, setClearingCache] = useState(false)
   const [form] = Form.useForm()
+  const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
   const [activeTab, setActiveTab] = useState('basic')
   const pushStatus = usePushNotificationStore((state) => state.status)
   const pushBusy = usePushNotificationStore((state) => state.busy)
@@ -110,9 +113,16 @@ const Profile: React.FC = () => {
       const values = await form.validateFields()
       setSaving(true)
 
+      const phone = normalizePhoneNumber(values.phone)
+      if (!phone) throw new Error(t('profile.phoneInvalidFormat'))
+      // Re-save unchanged profile numbers too: older accounts may not have an Auth phone.
+      if (auth.currentUser?.phoneNumber !== phone || normalizePhoneNumber(user.profile?.phone || '') !== phone) {
+        if (!await verifyPhoneChange()) return
+        await updateMemberPhone(user.id, phone)
+      }
+
       const updates: any = {
         displayName: values.displayName,
-        'profile.phone': normalizePhoneNumber(values.phone),
         'profile.gender': values.gender || null,
         'profile.race': values.race || null,
         'preferences.notifications': values.notifications,
@@ -768,6 +778,7 @@ const Profile: React.FC = () => {
       minHeight: '100vh',
       paddingBottom: isMobile ? '80px' : '40px'
     }}>
+      {phoneVerificationModal}
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
         {/* Header */}
         <div style={{

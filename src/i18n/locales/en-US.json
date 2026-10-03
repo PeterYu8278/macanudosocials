@@ -1918,6 +1918,18 @@
     "notFoundDesc": "Sorry, the brand you are looking for does not exist."
   },
   "profile": {
+    "phoneSync": {
+      "verifyTitle": "Verify your account",
+      "verifyPassword": "Verify and save phone",
+      "verifyGoogle": "Verify with Google",
+      "verificationFailed": "Verification failed. Check your password or use the linked Google account.",
+      "noProvider": "Sign in with a linked email/password or Google account to change your phone.",
+      "reauthRequired": "Please verify your account again before saving your phone.",
+      "inUse": "This phone number is already linked to another member.",
+      "accountMissing": "This member has no linked Authentication account. Create or link their account first.",
+      "syncFailed": "Authentication was updated, but the profile could not be synced. Retry saving the same phone number.",
+      "failed": "Could not update the phone number. Your account may lack permission or the service is unavailable."
+    },
     "title": "Profile",
     "editProfile": "Edit Profile",
     "settings": "Settings",

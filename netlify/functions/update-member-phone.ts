@@ -1,0 +1,83 @@
+import type { Handler } from '@netlify/functions'
+import { cert, getApps, initializeApp } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
+import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
+
+const reply = (statusCode: number, code: string, extra = {}) => ({
+  statusCode,
+  headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+  body: JSON.stringify({ success: statusCode === 200, code, ...extra }),
+})
+const ranks: Record<string, number> = { developer: 5, superAdmin: 4, admin: 3 }
+
+export const handler: Handler = async event => {
+  if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
+  if (!event.body || event.body.length > 8192) return reply(400, 'invalid-request')
+  let input: { userId?: unknown; phone?: unknown }
+  try { input = JSON.parse(event.body || '{}') } catch { return reply(400, 'invalid-request') }
+  if (!input || typeof input.userId !== 'string' || !input.userId || input.userId.includes('/')
+    || typeof input.phone !== 'string') return reply(400, 'invalid-request')
+  const phone = normalizePhoneNumber(input.phone)
+  if (!phone) return reply(400, 'invalid-phone')
+  const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/)?.[1]
+  if (!token) return reply(401, 'auth-required')
+  let authUpdated = false
+  try {
+    if (!getApps().length) {
+      const credentials = process.env.FIREBASE_SERVICE_ACCOUNT
+      if (!credentials) throw new Error('missing-config')
+      initializeApp({ credential: cert(JSON.parse(credentials)) })
+    }
+    const adminAuth = getAuth()
+    const identity = await adminAuth.verifyIdToken(token, true)
+    const age = Date.now() / 1000 - identity.auth_time
+    if (!Number.isFinite(age) || age < -60 || age > 300
+      || !['password', 'google.com'].includes(identity.firebase.sign_in_provider)) {
+      return reply(401, 'reauth-required')
+    }
+    const db = getFirestore()
+    const ref = db.collection('users').doc(input.userId)
+    const member = (await ref.get()).data()
+    if (!member) return reply(404, 'member-not-found')
+    // Legacy Firestore IDs can differ from Auth UIDs. Resolve from stored data,
+    // never from a caller-supplied email or UID mapping.
+    let account
+    try { account = await adminAuth.getUser(input.userId) } catch (error) {
+      if ((error as { code?: string }).code !== 'auth/user-not-found') throw error
+      if (!member.email) return reply(409, 'auth-account-missing')
+      try { account = await adminAuth.getUserByEmail(member.email) } catch (lookupError) {
+        if ((lookupError as { code?: string }).code === 'auth/user-not-found') return reply(409, 'auth-account-missing')
+        throw lookupError
+      }
+    }
+    if (account.uid !== identity.uid) {
+      const operator = (await db.collection('users').doc(identity.uid).get()).data()
+      const linkedMember = account.uid === input.userId ? member : (await db.collection('users').doc(account.uid).get()).data()
+      const targetRank = Math.max(ranks[member.role] || (member.role === 'storeAdmin' ? 2 : 0), ranks[linkedMember?.role] || (linkedMember?.role === 'storeAdmin' ? 2 : 0))
+      if (!operator || !ranks[operator.role] || targetRank >= ranks[operator.role]) {
+        return reply(403, 'forbidden')
+      }
+    }
+    const duplicates = await db.collection('users').where('profile.phone', '==', phone).limit(2).get()
+    if (duplicates.docs.some(document => document.id !== input.userId)) return reply(409, 'phone-in-use')
+    if (account.phoneNumber !== phone) await adminAuth.updateUser(account.uid, { phoneNumber: phone })
+    authUpdated = true
+    // Auth is authoritative. Repeating this request repairs a failed profile sync.
+    await ref.update({
+      'profile.phone': phone,
+      'profile.phoneAuth': { uid: account.uid, ownershipVerified: false, updatedBy: identity.uid, updatedAt: Timestamp.now() },
+      updatedAt: Timestamp.now(),
+    })
+    return reply(200, 'phone-updated', { phone })
+  } catch (error) {
+    const code = (error as { code?: string | number })?.code
+    if (code === 'auth/phone-number-already-exists') return reply(409, 'phone-in-use')
+    if (code === 'auth/invalid-phone-number') return reply(400, 'invalid-phone')
+    if (typeof code === 'string' && ['auth/id-token-expired', 'auth/id-token-revoked', 'auth/argument-error', 'auth/user-disabled'].includes(code)) {
+      return reply(401, 'reauth-required')
+    }
+    console.error('[update-member-phone] failed', { code: code || 'dependency-failure', authUpdated })
+    return reply(503, authUpdated ? 'profile-sync-failed' : 'service-unavailable')
+  }
+}
