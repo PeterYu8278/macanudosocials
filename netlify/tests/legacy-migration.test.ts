@@ -2,7 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Timestamp } from 'firebase-admin/firestore'
 
-const mocks = vi.hoisted(() => ({ documents: new Map<string, Record<string, any>>(), writes: vi.fn(), queries: vi.fn() }))
+const mocks = vi.hoisted(() => ({ documents: new Map<string, Record<string, any>>(), writes: vi.fn(), queries: vi.fn(), commit: vi.fn() }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], initializeApp: vi.fn(), cert: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({
   verifyIdToken: async () => ({ uid: 'operator' }),
@@ -26,12 +26,22 @@ vi.mock('firebase-admin/firestore', async importOriginal => {
       .filter(([path]) => path.startsWith(`${name}/`) && path.split('/').length === 2)
       .map(([path, data]) => ({ id: path.split('/')[1], data: () => data })) }),
     doc: (id: string) => ({
+      path: `${name}/${id}`,
       get: async () => ({ exists: mocks.documents.has(`${name}/${id}`), data: () => mocks.documents.get(`${name}/${id}`) }),
       set: async (data: Record<string, any>) => { mocks.writes(`${name}/${id}`, data) },
       collection: (child: string) => collection(`${name}/${id}/${child}`),
     }),
   })
-  return { ...original, getFirestore: () => ({ collection }) }
+  return { ...original, getFirestore: () => ({ collection, batch: () => {
+    const pending: Array<[string, Record<string, any>]> = []
+    return {
+      set: (ref: { path: string }, data: Record<string, any>) => { pending.push([ref.path, data]) },
+      commit: async () => {
+        await mocks.commit(pending)
+        pending.forEach(([path, data]) => mocks.writes(path, data))
+      },
+    }
+  } }) }
 })
 
 import { handler } from '../functions/legacy-migration'
@@ -52,6 +62,7 @@ describe('legacy migration member timestamps', () => {
     mocks.documents.clear()
     mocks.writes.mockClear()
     mocks.queries.mockClear()
+    mocks.commit.mockReset()
     mocks.documents.set('users/operator', { role: 'developer' })
     mocks.documents.set('stores/lounge', { name: 'Main Lounge' })
     vi.stubEnv('BULK_IMPORT_DEFAULT_PASSWORD', 'test-password')
@@ -77,6 +88,21 @@ describe('legacy migration member timestamps', () => {
     expect(userWrite().updatedAt.isEqual(joinDate)).toBe(true)
     expect(userWrite().membership.joinDate.isEqual(joinDate)).toBe(true)
     expect(userWrite()).not.toHaveProperty('createdAt')
+  })
+
+  it.each(['developer', 'superAdmin', 'admin', 'storeAdmin'])('reports the source record and reason when skipping a protected %s account', async role => {
+    mocks.documents.set('users/member', { email: memberRow.email, role })
+    const response = await migrate('users', { ...memberRow, sourceRow: 6 })
+    expect(response.statusCode).toBe(200)
+    const result = JSON.parse(response.body)
+    expect(result.skipped).toBe(1)
+    expect(result.skippedDetails).toEqual([{
+      row: 6, name: memberRow.name, phone: memberRow.phone, email: memberRow.email,
+      userId: 'member', role, reason: 'protected-role',
+    }])
+    expect(userWrite()).toBeUndefined()
+    const batchWrite = mocks.writes.mock.calls.find(([, data]) => data.stages)?.[1]
+    expect(batchWrite.stages.users.skippedDetails).toEqual(result.skippedDetails)
   })
 
   it('corrects createdAt for an existing legacy member on re-import', async () => {
@@ -154,5 +180,54 @@ describe('legacy migration member timestamps', () => {
     expect(updates).toHaveLength(2)
     expect(updates[1].membership.activeFrom.toDate().toISOString()).toBe('2026-04-01T00:00:00.000Z')
     expect(updates[1].membership.joinDate.toDate().toISOString()).toBe('2025-04-01T00:00:00.000Z')
+  })
+
+  it('commits visit and fee records together and reports existing visits as updated', async () => {
+    mocks.documents.set('users/member', { displayName: 'Member', profile: { phone: memberRow.phone } })
+    const row = { phone: memberRow.phone, lounge: 'Main Lounge', sourceRow: 12,
+      occurredAt: '2025-04-01T00:00:00Z', endedAt: '2025-04-01T02:00:00Z', durationMinutes: 120, legacyFeeRm: 40 }
+    const result = JSON.parse((await migrate('visits', row)).body)
+    expect(result).toMatchObject({ created: 1, updated: 0, failedCount: 0 })
+    expect(mocks.commit).toHaveBeenCalledTimes(1)
+    const pending = mocks.commit.mock.calls[0][0]
+    expect(pending.map(([path]: [string]) => path.split('/')[0])).toEqual(['visitSessions', 'pointsRecords'])
+    expect(pending[0][1].pointsRecordId).toBe(pending[1][0].split('/')[1])
+    expect(pending[1][1].migration.balanceNotApplied).toBe(true)
+    mocks.documents.set(pending[0][0], pending[0][1])
+    expect(JSON.parse((await migrate('visits', row)).body)).toMatchObject({ created: 0, updated: 1, failedCount: 0 })
+  })
+
+  it('limits parallel visit commits to four members and preserves each member order', async () => {
+    const phones = Array.from({ length: 6 }, (_, index) => `+6012345${String(index).padStart(4, '0')}`)
+    phones.forEach((phone, index) => mocks.documents.set(`users/member-${index}`, { displayName: `Member ${index}`, profile: { phone } }))
+    const rows = [1, 2].flatMap(sourceRow => phones.map(phone => ({ phone, sourceRow, lounge: 'Main Lounge',
+      occurredAt: '2025-04-01T00:00:00Z', endedAt: '2025-04-01T02:00:00Z', durationMinutes: 120 })))
+    let active = 0
+    let peak = 0
+    const running = new Set<string>()
+    const finished = new Map<string, number[]>()
+    mocks.commit.mockImplementation(async pending => {
+      const data = pending[0][1]
+      expect(running.has(data.userId)).toBe(false)
+      running.add(data.userId)
+      peak = Math.max(peak, ++active)
+      await new Promise(resolve => setTimeout(resolve, 1))
+      finished.set(data.userId, [...(finished.get(data.userId) || []), data.migration.sourceRow])
+      running.delete(data.userId)
+      active -= 1
+    })
+    expect(JSON.parse((await migrate('visits', rows)).body)).toMatchObject({ created: 12, failedCount: 0 })
+    expect(peak).toBe(4)
+    expect([...finished.values()]).toEqual(phones.map(() => [1, 2]))
+  })
+
+  it('reports failed visit commits and continues importing other rows', async () => {
+    mocks.documents.set('users/member', { displayName: 'Member', profile: { phone: memberRow.phone } })
+    mocks.commit.mockRejectedValueOnce(new Error('Quota exceeded'))
+    const row = { phone: memberRow.phone, lounge: 'Main Lounge',
+      occurredAt: '2025-04-01T00:00:00Z', endedAt: '2025-04-01T02:00:00Z', legacyFeeRm: 40 }
+    const result = JSON.parse((await migrate('visits', [{ ...row, sourceRow: 1 }, { ...row, sourceRow: 2 }])).body)
+    expect(result).toMatchObject({ created: 1, failedCount: 1, failed: [{ row: 1, error: 'Quota exceeded' }] })
+    expect(mocks.writes.mock.calls.filter(([path]) => path.startsWith('visitSessions/'))).toHaveLength(1)
   })
 })

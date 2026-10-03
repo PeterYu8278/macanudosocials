@@ -6,8 +6,8 @@ vi.mock('../../i18n', () => ({ default: { t: (key: string) => key } }))
 import { loginPhoneWithPassword } from './phoneLogin'
 
 describe('loginPhoneWithPassword', () => {
-  beforeEach(() => { vi.resetAllMocks(); vi.stubGlobal('fetch', mocks.fetch) })
-  afterEach(() => vi.unstubAllGlobals())
+  beforeEach(() => { vi.resetAllMocks(); vi.stubGlobal('fetch', mocks.fetch); sessionStorage.clear() })
+  afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear() })
 
   it('establishes the SDK session using only the verified backend token', async () => {
     mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, customToken: 'token' }) })
@@ -23,6 +23,25 @@ describe('loginPhoneWithPassword', () => {
       expect(await loginPhoneWithPassword('+60123456789', 'wrong')).toMatchObject({ success: false, code })
     }
     expect(mocks.signIn).not.toHaveBeenCalled()
+  })
+
+  it('clears a stale profile ID before the Auth listener handles the new session', async () => {
+    sessionStorage.setItem('firestoreUserId', 'previous-member')
+    mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, customToken: 'token' }) })
+    mocks.signIn.mockImplementation(async () => {
+      expect(sessionStorage.getItem('firestoreUserId')).toBeNull()
+      return { user: { uid: 'member' } }
+    })
+    expect((await loginPhoneWithPassword('+60123456789', 'password')).success).toBe(true)
+  })
+
+  it('preserves profile ID hints from an older backend during deployment', async () => {
+    mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ success: true, customToken: 'token', firestoreUserId: 'legacy-member' }) })
+    mocks.signIn.mockImplementation(async () => {
+      expect(sessionStorage.getItem('firestoreUserId')).toBe('legacy-member')
+      return { user: { uid: 'member' } }
+    })
+    expect((await loginPhoneWithPassword('+60123456789', 'password')).success).toBe(true)
   })
 
   it('handles an unavailable local function server without leaking raw errors', async () => {

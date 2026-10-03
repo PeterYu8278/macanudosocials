@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({ lookup: vi.fn(), rateGet: vi.fn(), rateSet: vi.fn(), fetch: vi.fn(), verify: vi.fn(), token: vi.fn(), where: vi.fn() }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], initializeApp: vi.fn(), cert: vi.fn() }))
-vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: mocks.verify, createCustomToken: mocks.token }) }))
+vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ getUserByPhoneNumber: mocks.lookup, verifyIdToken: mocks.verify, createCustomToken: mocks.token }) }))
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({
   collection: (name: string) => name === 'users'
     ? { where: mocks.where }
@@ -22,7 +22,7 @@ describe('phone-login backend', () => {
     vi.stubGlobal('fetch', mocks.fetch)
     mocks.rateGet.mockResolvedValue({ data: () => undefined })
     mocks.where.mockReturnValue({ limit: () => ({ get: mocks.lookup }) })
-    mocks.lookup.mockResolvedValue({ docs: [{ data: () => ({ email: 'member@example.com' }) }] })
+    mocks.lookup.mockResolvedValue({ uid: 'auth-uid', email: 'member@example.com', disabled: false })
     mocks.fetch.mockResolvedValue({ ok: true, json: async () => ({ idToken: 'verified-id-token', localId: 'auth-uid' }) })
     mocks.verify.mockResolvedValue({ uid: 'auth-uid', email: 'member@example.com' })
     mocks.token.mockResolvedValue('custom-token')
@@ -34,14 +34,15 @@ describe('phone-login backend', () => {
     expect(result.statusCode).toBe(200)
     expect(JSON.parse(result.body)).toEqual({ success: true, customToken: 'custom-token' })
     expect(result.headers['Cache-Control']).toBe('no-store')
-    expect(mocks.where).toHaveBeenCalledWith('profile.phone', '==', '+60123456789')
+    expect(mocks.lookup).toHaveBeenCalledWith('+60123456789')
+    expect(mocks.where).not.toHaveBeenCalled()
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toMatchObject({ email: 'member@example.com', password: 'correct-password' })
     expect(mocks.verify).not.toHaveBeenCalled()
     expect(mocks.token).toHaveBeenCalledWith('auth-uid')
   })
 
   it('returns the same generic failure for unknown phones and incorrect passwords', async () => {
-    mocks.lookup.mockResolvedValueOnce({ docs: [] })
+    mocks.lookup.mockRejectedValueOnce({ code: 'auth/user-not-found' })
     const missing = await login()
     mocks.fetch.mockResolvedValueOnce({ ok: false, status: 400, json: async () => ({ error: { message: 'INVALID_PASSWORD' } }) })
     const wrong = await login()
@@ -51,10 +52,30 @@ describe('phone-login backend', () => {
     expect(wrong.body).not.toContain('member@example.com')
   })
 
-  it('refuses ambiguous duplicate phones', async () => {
-    mocks.lookup.mockResolvedValueOnce({ docs: [{}, {}] })
+  it('refuses accounts without an email', async () => {
+    mocks.lookup.mockResolvedValueOnce({ uid: 'auth-uid' })
     expect((await login()).statusCode).toBe(401)
     expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('refuses disabled accounts', async () => {
+    mocks.lookup.mockResolvedValueOnce({ uid: 'auth-uid', email: 'member@example.com', disabled: true })
+    expect((await login()).statusCode).toBe(401)
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects a password verification response for a different Auth UID', async () => {
+    mocks.fetch.mockResolvedValueOnce({ ok: true, json: async () => ({ idToken: 'verified-id-token', localId: 'different-uid' }) })
+    expect((await login()).statusCode).toBe(401)
+    expect(mocks.token).not.toHaveBeenCalled()
+  })
+
+  it('does not treat Auth dependency failures as an unknown phone', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    mocks.lookup.mockRejectedValueOnce({ code: 'auth/internal-error' })
+    expect((await login()).statusCode).toBe(503)
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    expect(mocks.token).not.toHaveBeenCalled()
   })
 
   it('never bypasses a pending second factor', async () => {

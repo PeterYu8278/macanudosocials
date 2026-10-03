@@ -10,6 +10,10 @@ import { getRedemptionOrderMonth, resolveRedemptionOrderId } from '../../src/uti
 
 type Stage = 'users' | 'reload' | 'membership' | 'visits'
 type AnyRow = Record<string, any> & { sourceRow?: number; phone?: string }
+type SkippedRecord = {
+  row: number | null; name: string; phone: string; email: string
+  userId: string; role: string; reason: 'protected-role'
+}
 
 const json = (statusCode: number, body: Record<string, unknown>) => ({
   statusCode,
@@ -91,7 +95,7 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
   const password = process.env.BULK_IMPORT_DEFAULT_PASSWORD
   if (!password || password.length < 6) throw new Error('BULK_IMPORT_DEFAULT_PASSWORD is not configured')
   const protectedRoles = new Set(['developer', 'superAdmin', 'admin', 'storeAdmin'])
-  const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
+  const result = { created: 0, updated: 0, skipped: 0, skippedDetails: [] as SkippedRecord[], failed: [] as Array<{ row?: number; error: string }> }
   const userDocuments = await loadMigrationUsers(rows, true)
   type ExistingUser = { id: string; data: FirebaseFirestore.DocumentData }
   const usersByEmail = new Map<string, ExistingUser>()
@@ -125,6 +129,11 @@ const processUsers = async (rows: AnyRow[], batchId: string) => {
       const existing = existingDoc?.data
       if (existing?.role && protectedRoles.has(existing.role)) {
         result.skipped += 1
+        result.skippedDetails.push({
+          row: row.sourceRow ?? null,
+          name: String(row.name || existing.displayName || ''), phone, email,
+          userId: existingDoc!.id, role: existing.role, reason: 'protected-role',
+        })
         continue
       }
 
@@ -355,7 +364,7 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
   const [users, lounges] = await Promise.all([loadPhoneUsers([...rows, ...redemptions]), loadLounges()])
   const result = { created: 0, updated: 0, skipped: 0, failed: [] as Array<{ row?: number; error: string }> }
   const sessionsByPhone = new Map<string, Array<{ id: string; start: Date; end: Date; lounge: string; userId: string; userName: string }>>()
-  for (const row of rows) {
+  await forEachMigrationMember(rows, row => String(row.phone || ''), async row => {
     try {
       const user = users.get(row.phone)
       if (!user) throw new Error('User not found for phone')
@@ -372,7 +381,8 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
       const pointsRecordId = legacyFeePoints > 0
         ? `legacy_${stableId(batchId, 'visit-points', row.sourceRow, row.phone, row.occurredAt)}`
         : undefined
-      await ref.set({
+      const writes = db.batch()
+      writes.set(ref, {
         userId: user.id, userName: row.name || user.data.displayName, storeId: lounge.id, storeName: lounge.name,
         checkInAt: Timestamp.fromDate(start), checkInBy: 'legacy_migration',
         checkOutAt: Timestamp.fromDate(end), checkOutBy: 'legacy_migration',
@@ -386,7 +396,7 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
         migration: { source: 'legacy_workbook', batchId, sourceRow: row.sourceRow, sideEffectsSkipped: true },
       }, { merge: true })
       if (pointsRecordId) {
-        await db.collection('pointsRecords').doc(pointsRecordId).set({
+        writes.set(db.collection('pointsRecords').doc(pointsRecordId), {
           userId: user.id,
           userName: row.name || user.data.displayName,
           type: 'spend',
@@ -405,13 +415,14 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
           },
         }, { merge: true })
       }
+      await writes.commit()
       sessionsByPhone.set(row.phone, [...(sessionsByPhone.get(row.phone) || []), {
         id, start, end, lounge: lounge.id, userId: user.id, userName: row.name || user.data.displayName,
       }])
       if (existed) result.updated += 1
       else result.created += 1
     } catch (error: any) { result.failed.push({ row: row.sourceRow, error: error?.message || 'Visit import failed' }) }
-  }
+  })
   for (const row of redemptions) {
     try {
       const user = users.get(row.phone)

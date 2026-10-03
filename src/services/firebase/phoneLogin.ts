@@ -31,6 +31,9 @@ export const loginPhoneWithPassword = async (phone: string, password: string) =>
     // UID and wait through the legacy-user fallback path.
     if (result.firestoreUserId && typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem('firestoreUserId', result.firestoreUserId)
+    } else if (typeof sessionStorage !== 'undefined') {
+      // Let the Auth listener resolve the profile instead of reusing another account's ID.
+      sessionStorage.removeItem('firestoreUserId')
     }
     const credential = await signInWithCustomToken(auth, result.customToken)
     return { success: true as const, user: credential.user }

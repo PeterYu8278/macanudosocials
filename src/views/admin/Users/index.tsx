@@ -99,11 +99,21 @@ type BulkImportRow = {
 }
 
 type LegacyMigrationStage = 'users' | 'reload' | 'membership' | 'visits'
+type LegacyMigrationSkippedRecord = {
+  row: number | null
+  name: string
+  phone: string
+  email: string
+  userId: string
+  role: string
+  reason: string
+}
 type LegacyMigrationStageResult = {
   created: number
   updated: number
   skipped: number
   failedCount: number
+  skippedDetails: LegacyMigrationSkippedRecord[]
 }
 
 const parseDurationHours = (value: string) => {
@@ -742,7 +752,7 @@ const AdminUsers: React.FC = () => {
       }
       if (!jobs.length) jobs.push({ rows: [], ...(stage === 'visits' ? { redemptions: [] } : {}) })
 
-      const result = { created: 0, updated: 0, skipped: 0, failedCount: 0 }
+      const result: LegacyMigrationStageResult = { created: 0, updated: 0, skipped: 0, failedCount: 0, skippedDetails: [] }
       for (const job of jobs) {
         const response = await fetch('/.netlify/functions/legacy-migration', {
           method: 'POST',
@@ -765,6 +775,7 @@ const AdminUsers: React.FC = () => {
         result.created += Number(chunkResult.created || 0)
         result.updated += Number(chunkResult.updated || 0)
         result.skipped += Number(chunkResult.skipped || 0)
+        if (Array.isArray(chunkResult.skippedDetails)) result.skippedDetails.push(...chunkResult.skippedDetails)
         result.failedCount += Number(chunkResult.failedCount || 0)
       }
       setLegacyMigrationResults(current => ({
@@ -774,6 +785,7 @@ const AdminUsers: React.FC = () => {
           updated: Number(result.updated || 0),
           skipped: Number(result.skipped || 0),
           failedCount: Number(result.failedCount || 0),
+          skippedDetails: result.skippedDetails,
         },
       }))
       if (stage === 'users') await refreshUsers()
@@ -2150,6 +2162,34 @@ const AdminUsers: React.FC = () => {
                       >
                         {result ? t('usersAdmin.migrationRetryStage') : t('usersAdmin.migrationRunStage')}
                       </Button>
+                      {!!result?.skippedDetails.length && (
+                        <details style={{ gridColumn: '1 / -1', minWidth: 0 }}>
+                          <summary style={{ cursor: 'pointer', color: '#FDE08D' }}>
+                            {t('usersAdmin.migrationSkippedDetails', { count: result.skippedDetails.length })}
+                          </summary>
+                          <Table<LegacyMigrationSkippedRecord>
+                            size="small"
+                            style={{ marginTop: 8 }}
+                            dataSource={result.skippedDetails}
+                            rowKey={(record, rowIndex) => `${record.userId}-${record.row ?? rowIndex}`}
+                            pagination={{ pageSize: 5, showSizeChanger: false }}
+                            scroll={{ x: 760 }}
+                            columns={[
+                              { title: t('usersAdmin.migrationLocation'), dataIndex: 'row', width: 90, render: (row: number | null) => row == null ? '-' : `#${row}` },
+                              { title: t('usersAdmin.migrationSkippedRecord'), key: 'member', width: 230, render: (_: unknown, record) => (
+                                <div style={{ overflowWrap: 'anywhere' }}>
+                                  <div>{record.name || '-'}</div>
+                                  <div>{record.phone || '-'}</div>
+                                  <div>{record.email || '-'}</div>
+                                </div>
+                              ) },
+                              { title: t('usersAdmin.migrationSkippedReason'), key: 'reason', render: (_: unknown, record) => record.reason === 'protected-role'
+                                ? t('usersAdmin.migrationSkippedProtectedRole', { role: record.role })
+                                : record.reason },
+                            ]}
+                          />
+                        </details>
+                      )}
                     </div>
                   )
                 })}

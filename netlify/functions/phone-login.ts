@@ -67,9 +67,17 @@ export const handler: Handler = async event => {
     if (!allowed) return reply(429, { success: false, code: 'auth/too-many-requests' })
 
     // This lookup is private: no email or profile is exposed before password verification.
-    const users = await runStage('user-lookup', 6000, () => db.collection('users').where('profile.phone', '==', phone).limit(2).get())
-    if (users.docs.length !== 1) return invalidCredentials()
-    const email = users.docs[0].data().email
+    const adminAuth = getAuth()
+    const account = await runStage('user-lookup', 6000, async () => {
+      try {
+        return await adminAuth.getUserByPhoneNumber(phone)
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'auth/user-not-found') return null
+        throw error
+      }
+    })
+    if (!account || account.disabled) return invalidCredentials()
+    const email = account.email
     if (typeof email !== 'string' || !email) return invalidCredentials()
     const { verified, result } = await runStage('password-verification', 10000, async () => {
       const verified = await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${encodeURIComponent(apiKey)}`, {
@@ -86,13 +94,12 @@ export const handler: Handler = async event => {
       return invalidCredentials()
     }
     // MFA-pending responses have no ID token. Never mint a session before full authentication.
-    if (!result.idToken || !result.localId) return invalidCredentials()
-    const adminAuth = getAuth()
+    if (!result.idToken || result.localId !== account.uid) return invalidCredentials()
     // Identity Toolkit has already verified the password and returned the
     // authenticated Firebase localId. Verifying the same ID token again with
     // Admin SDK added another network round trip without changing the result.
     const customToken = await runStage('token-signing', 3000, () => adminAuth.createCustomToken(result.localId!))
-    return reply(200, { success: true, customToken, firestoreUserId: users.docs[0].id })
+    return reply(200, { success: true, customToken })
   } catch (error) {
     // Never log submitted passwords, phone numbers, or authentication tokens.
     console.error('[phone-login] request-failed', {
