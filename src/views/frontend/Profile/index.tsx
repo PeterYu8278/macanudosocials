@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react'
 import {
   Button, Modal, Form, Input, message, Switch, Select, Space, Tag,
-  Typography, Checkbox, Divider, TimePicker, Drawer, Tabs
+  Typography, Checkbox, Divider, TimePicker, Drawer, Tabs, Alert
 } from 'antd'
 import {
   ArrowLeftOutlined, MailOutlined, PhoneOutlined, BellOutlined,
@@ -22,7 +22,7 @@ import { logoutUser } from '../../../services/firebase/auth'
 import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
 import type { User } from '../../../types'
 import { auth } from '../../../config/firebase'
-import { updateEmail, updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
+import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { getResponsiveModalConfig, getModalTheme } from '../../../config/modalTheme'
 import LanguageSelect from '../../../components/common/LanguageSelect'
 import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
@@ -35,6 +35,7 @@ import { usePWA } from '../../../utils/pwa'
 import { clearApplicationCache } from '../../../utils/clearApplicationCache'
 import { usePhoneChangeVerification } from '../../../hooks/usePhoneChangeVerification'
 import { updateMemberPhone } from '../../../services/firebase/memberPhone'
+import { MemberEmailError, normalizeMemberEmail, requestMemberEmailVerification, updateMemberEmail, verifyCurrentMemberEmail } from '../../../services/firebase/memberEmail'
 
 const Profile: React.FC = () => {
   const { user, setUser } = useAuthStore()
@@ -45,7 +46,9 @@ const Profile: React.FC = () => {
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [clearingCache, setClearingCache] = useState(false)
   const [form] = Form.useForm()
-  const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
+  const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
+  const [emailBusy, setEmailBusy] = useState(false)
+  const [emailSyncError, setEmailSyncError] = useState('')
   const [activeTab, setActiveTab] = useState('basic')
   const pushStatus = usePushNotificationStore((state) => state.status)
   const pushBusy = usePushNotificationStore((state) => state.busy)
@@ -121,6 +124,14 @@ const Profile: React.FC = () => {
         await updateMemberPhone(user.id, phone)
       }
 
+      const newEmail = normalizeMemberEmail(values.email || '')
+      const emailChanged = newEmail !== normalizeMemberEmail(user.email || '')
+      if (emailChanged) {
+        if (!await verifyEmailChange({ memberName: user.displayName, email: newEmail })) return
+        await requestMemberEmailVerification(user.id, newEmail)
+        message.info(t('profile.emailSync.sent', { email: newEmail }))
+      }
+
       const updates: any = {
         displayName: values.displayName,
         'profile.gender': values.gender || null,
@@ -146,22 +157,10 @@ const Profile: React.FC = () => {
 
       const currentUser = auth.currentUser
 
-      if (values.email && values.email !== user.email) {
-        if (!currentUser) throw new Error('not logged in')
-        if (values.currentPassword) {
-          const credential = EmailAuthProvider.credential(user.email || '', values.currentPassword)
-          await reauthenticateWithCredential(currentUser, credential)
-          await updateEmail(currentUser, values.email)
-          updates.email = values.email
-        } else {
-          message.warning(t('profile.emailChangeRequiresPassword'))
-        }
-      }
-
       if (values.newPassword) {
         if (!currentUser) throw new Error('not logged in')
         if (values.currentPassword) {
-          const credential = EmailAuthProvider.credential(user.email || '', values.currentPassword)
+          const credential = EmailAuthProvider.credential(currentUser.email || '', values.currentPassword)
           await reauthenticateWithCredential(currentUser, credential)
           await updatePassword(currentUser, values.newPassword)
           message.success(t('profile.passwordUpdated'))
@@ -188,7 +187,9 @@ const Profile: React.FC = () => {
       message.success(t('profile.saveSuccess'))
       setEditing(false)
     } catch (err: any) {
-      if (err?.code === 'auth/wrong-password') {
+      if (err instanceof MemberEmailError) {
+        message.error(err.message)
+      } else if (err?.code === 'auth/wrong-password') {
         message.error(t('profile.incorrectPassword'))
       } else if (err?.code === 'auth/weak-password') {
         message.error(t('profile.weakPassword'))
@@ -201,6 +202,62 @@ const Profile: React.FC = () => {
       setSaving(false)
     }
   }
+
+  const handleEmailAction = async (action: 'send' | 'sync' | 'cancel' | 'verify') => {
+    if (!user || emailBusy) return
+    setEmailBusy(true)
+    try {
+      if (action === 'sync') {
+        await auth.currentUser?.reload()
+        await updateMemberEmail(user.id, 'sync')
+        setEmailSyncError('')
+        message.success(t('profile.emailSync.synced'))
+      } else {
+        const email = user.emailChange?.email || user.email
+        if (!await verifyEmailChange({ memberName: user.displayName, email })) return
+        if (action === 'send') {
+          await requestMemberEmailVerification(user.id, email)
+          message.info(t('profile.emailSync.sent', { email }))
+        } else if (action === 'verify') {
+          await verifyCurrentMemberEmail()
+          message.info(t('profile.emailSync.sent', { email: user.email }))
+        } else {
+          await updateMemberEmail(user.id, 'cancel')
+          message.success(t('profile.emailSync.cancelled'))
+        }
+      }
+      const latest = await getUserById(user.id)
+      if (latest) setUser(latest)
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : t('profile.emailSync.failed')
+      if (action === 'sync') setEmailSyncError(reason)
+      message.error(reason)
+    } finally { setEmailBusy(false) }
+  }
+
+  useEffect(() => {
+    if (!user?.id || !auth.currentUser) return
+    let cancelled = false
+    const synchronize = async () => {
+      try {
+        await auth.currentUser!.reload()
+        const account = auth.currentUser
+        if (!account || (normalizeMemberEmail(account.email || '') === normalizeMemberEmail(user.email || '')
+          && user.emailAuth?.verified === account.emailVerified && !window.location.search.includes('emailSync=1'))) return
+        await updateMemberEmail(user.id, 'sync')
+        const latest = await getUserById(user.id)
+        if (!cancelled && latest) { setUser(latest); setEmailSyncError('') }
+      } catch (error) {
+        if (!cancelled && !(error instanceof MemberEmailError && error.code === 'verification-pending')) {
+          setEmailSyncError(error instanceof Error ? error.message : t('profile.emailSync.failed'))
+        }
+      }
+    }
+    const onFocus = () => { if (document.visibilityState === 'visible') void synchronize() }
+    void synchronize()
+    window.addEventListener('focus', onFocus)
+    return () => { cancelled = true; window.removeEventListener('focus', onFocus) }
+  }, [user?.id, user?.email, user?.emailAuth?.verified])
 
   const handleLogout = async () => {
     try {
@@ -346,8 +403,7 @@ const Profile: React.FC = () => {
           { type: 'email', message: t('auth.emailInvalid') },
           {
             validator: async (_, value) => {
-              if (!!(user as any)?.providerData?.find((p: any) => p.providerId === 'google.com')) return Promise.resolve()
-              if (!value || value === user?.email) return Promise.resolve()
+              if (!value || normalizeMemberEmail(value) === normalizeMemberEmail(user?.email || '')) return Promise.resolve()
               const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
               if (!emailPattern.test(value)) return Promise.resolve()
               const { collection, query, where, getDocs, limit } = await import('firebase/firestore')
@@ -367,7 +423,6 @@ const Profile: React.FC = () => {
         <Input
           prefix={<MailOutlined />}
           type="email"
-          disabled={!!(user as any)?.providerData?.find((p: any) => p.providerId === 'google.com')}
           placeholder={t('auth.emailPlaceholder')}
         />
       </Form.Item>
@@ -780,6 +835,17 @@ const Profile: React.FC = () => {
     }}>
       {phoneVerificationModal}
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+        {(emailSyncError || ['requested', 'awaiting-verification', 'sync-pending'].includes(user?.emailChange?.status || '') || user?.emailAuth?.verified === false) && (
+          <Alert style={{ marginBottom: 16 }} type="warning" showIcon
+            message={emailSyncError || (user?.emailChange && ['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange.status)
+              ? t('profile.emailSync.requested', { email: user.emailChange.email }) : t('profile.emailSync.unverified'))}
+            action={<Space wrap>
+              {user?.emailChange && ['requested', 'awaiting-verification'].includes(user.emailChange.status) && <Button size="small" icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('send') }}>{t('profile.emailSync.send')}</Button>}
+              {user?.emailAuth?.verified === false && !['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange?.status || '') && <Button size="small" icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('verify') }}>{t('profile.emailSync.verifyCurrent')}</Button>}
+              <Button size="small" icon={<CloudDownloadOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('sync') }}>{t('profile.emailSync.retry')}</Button>
+              {user?.emailChange?.status === 'requested' && <Button size="small" disabled={emailBusy} onClick={() => { void handleEmailAction('cancel') }}>{t('profile.emailSync.cancel')}</Button>}
+            </Space>} />
+        )}
         {/* Header */}
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',

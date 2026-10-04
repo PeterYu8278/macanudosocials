@@ -9,6 +9,13 @@ export type Race = 'chinese' | 'indian' | 'malay' | 'other';
 export interface User {
   id: string;
   email: string;
+  authUid?: string;
+  emailAuth?: { uid: string; verified: boolean; syncedAt?: Date };
+  emailChange?: {
+    id: string; email: string; previousEmail: string; requestedBy: string; requestedAt: Date;
+    method: 'member-confirmation' | 'admin-correction';
+    status: 'requested' | 'awaiting-verification' | 'sync-pending' | 'completed' | 'cancelled';
+  } | null;
   displayName: string;
   role: UserRole;
   storeId?: string; // 所属门店 ID (仅针对 admin 角色)

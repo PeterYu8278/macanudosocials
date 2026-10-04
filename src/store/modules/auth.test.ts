@@ -5,9 +5,9 @@ import { canAccessRoute } from '../../config/permissions'
 
 vi.mock('../../services/firebase/auth', () => ({
   onAuthStateChange: vi.fn(), getUserData: vi.fn(), convertFirestoreTimestamps: vi.fn(),
-  findUserByEmail: vi.fn(), createMissingUserDocument: vi.fn(),
+  findUserByEmail: vi.fn(), findUserByAuthUid: vi.fn(), createMissingUserDocument: vi.fn(),
 }))
-vi.mock('../../config/firebase', () => ({ db: {} }))
+vi.mock('../../config/firebase', () => ({ db: {}, auth: {} }))
 
 import { useAuthStore } from './auth'
 

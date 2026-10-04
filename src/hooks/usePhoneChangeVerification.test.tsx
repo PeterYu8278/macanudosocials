@@ -10,8 +10,11 @@ vi.mock('firebase/auth', () => ({
 }))
 import { usePhoneChangeVerification } from './usePhoneChangeVerification'
 const Harness = () => {
-  const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
-  return <><button onClick={() => { void verifyPhoneChange({ memberName: 'Target Member', phone: '+60123456789' }).then(mocks.completed) }}>Request</button>{phoneVerificationModal}</>
+  const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
+  return <><button onClick={() => { void verifyPhoneChange({ memberName: 'Target Member', phone: '+60123456789' }).then(mocks.completed) }}>Request</button>
+    <button onClick={() => { void verifyEmailChange({ memberName: 'Target Member', email: 'new@example.com' }).then(mocks.completed) }}>Email</button>
+    <button onClick={() => { void verifyEmailChange({ memberName: 'Target Member', email: 'new@example.com', correction: true }).then(mocks.completed) }}>Correct</button>
+    {phoneVerificationModal}</>
 }
 describe('phone change verification', () => {
   beforeEach(() => {
@@ -61,5 +64,15 @@ describe('phone change verification', () => {
     fireEvent.click(screen.getByText('Request'))
     await act(async () => view.unmount())
     expect(mocks.completed).toHaveBeenCalledWith(false)
+  })
+  it.each([['Email', 'verifyTitle'], ['Correct', 'correctTitle']])('identifies the email operation for %s without saving the email itself', async (button, title) => {
+    render(<Harness />)
+    fireEvent.click(screen.getByText(button))
+    expect(await screen.findByText(`profile.emailSync.${title}`)).toBeTruthy()
+    expect(screen.getByText('new@example.com')).toBeTruthy()
+    expect(screen.getByText('member@example.com')).toBeTruthy()
+    fireEvent.click(screen.getByText('profile.phoneSync.verifyGoogle'))
+    await waitFor(() => expect(mocks.completed).toHaveBeenCalledWith(true))
+    expect(mocks.popup.mock.calls[0][0]).toBe(mocks.auth.currentUser)
   })
 })

@@ -107,10 +107,11 @@ service cloud.firestore {
     // ================================
     match /users/{userId} {
       // 用户只能读取自己；高级管理员权限统一跟随 users/{uid}.role。
-      allow get: if isOwner(userId) || isPointsOperator();
+      allow get: if isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid) || isPointsOperator();
       // 兼容旧账号按邮箱定位自己的用户文档；查询必须限定为当前 Auth 邮箱。
       allow list: if isPointsOperator()
                   || (isSignedIn() && resource.data.email == request.auth.token.email)
+                  || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid)
                   || (isSignedIn()
                       && resource.data.referral.referredByUserId == request.auth.uid);
 
@@ -118,12 +119,19 @@ service cloud.firestore {
       allow create: if isSignedIn()
                     && request.auth.uid == userId
                     && request.resource.data.email == request.auth.token.email
+                    && request.resource.data.get('authUid', request.auth.uid) == request.auth.uid
+                    && !request.resource.data.keys().hasAny(['emailAuth', 'emailChange'])
                     && request.resource.data.role == 'guest'
                     && request.resource.data.status == 'inactive'
                     && request.resource.data.membership.points == 0;
 
       // 用户可维护个人资料和消费积分，但不能提升角色、激活账户或自行增加积分。
-      allow update: if (isOwner(userId) &&
+      // Identity mappings and email audit state are written only by the trusted backend.
+      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'emailAuth', 'emailChange'])
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email'])
+                        || ((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid))
+                            && request.resource.data.email == request.auth.token.email))
+                    && (((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid)) &&
                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status'])
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['membership'])
                            || request.resource.data.membership.points <= resource.data.membership.points))
@@ -131,7 +139,7 @@ service cloud.firestore {
                     || (isStoreAdmin()
                         && request.resource.data.role == resource.data.role
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['membership', 'status', 'referral', 'updatedAt']));
+                             .hasOnly(['membership', 'status', 'referral', 'updatedAt'])));
 
       // 删除：仅管理员
       allow delete: if isAdmin();

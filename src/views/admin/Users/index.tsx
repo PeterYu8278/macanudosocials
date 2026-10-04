@@ -1,6 +1,6 @@
 // 用户管理页面
 import React, { useEffect, useMemo, useState } from 'react'
-import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber, Tooltip, Upload, Alert } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, Switch, Dropdown, Checkbox, Row, Col, Spin, App, InputNumber, Tooltip, Upload, Alert, Radio } from 'antd'
 import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined, ArrowLeftOutlined, CalendarOutlined, ShoppingOutlined, TrophyOutlined, KeyOutlined, MailOutlined, WhatsAppOutlined, SendOutlined, UploadOutlined } from '@ant-design/icons'
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
@@ -30,7 +30,7 @@ const ROLE_SORT_INDEX: Record<string, number> = {
   guest: 6,
 }
 
-import { getUsers, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
+import { getUsers, getUserById, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
@@ -43,6 +43,7 @@ import { getModalThemeStyles, getModalWidth, getResponsiveModalConfig, modalButt
 import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
 import { usePhoneChangeVerification } from '../../../hooks/usePhoneChangeVerification'
 import { updateMemberPhone } from '../../../services/firebase/memberPhone'
+import { MemberEmailError, normalizeMemberEmail, updateMemberEmail } from '../../../services/firebase/memberEmail'
 import { collection, query, where, getDocs, limit, doc, setDoc } from 'firebase/firestore'
 import { UserSkeletonList } from '../../../components/features/admin/UserSkeleton'
 import { auth, db } from '../../../config/firebase'
@@ -183,7 +184,7 @@ const AdminUsers: React.FC = () => {
   })()
 
   const { data: users = [], loading: usersLoading, refresh: refreshUsers } = useFirestoreQuery(getUsers)
-  const { item: editing, open: editingOpen, openDrawer: openEditing, closeDrawer: closeEditing } = useDetailDrawer<User>()
+  const { item: viewing, open: editingOpen, openDrawer: openEditing, closeDrawer: closeEditing } = useDetailDrawer<User>()
   const [closingProfile, setClosingProfile] = useState(false)
   const finishClosingProfile = () => {
     closeEditing()
@@ -191,7 +192,10 @@ const AdminUsers: React.FC = () => {
   }
   const { item: resettingPassword, open: resettingPasswordOpen, openDrawer: openResettingPassword, closeDrawer: closeResettingPassword } = useDetailDrawer<User>()
   const [actionLoading, setLoading] = useState(false)
-  const [creating, setCreating] = useState(false)
+  // Keep the edit target independent of the profile modal's closing lifecycle.
+  const [editor, setEditor] = useState<{ open: boolean; user: User | null }>({ open: false, user: null })
+  const creating = editor.open
+  const editing = editor.user
   const [bulkImportOpen, setBulkImportOpen] = useState(false)
   const [bulkImportRows, setBulkImportRows] = useState<BulkImportRow[]>([emptyBulkImportRow()])
   const [bulkImportLoading, setBulkImportLoading] = useState(false)
@@ -202,10 +206,13 @@ const AdminUsers: React.FC = () => {
   const [legacyMigrationBatchId, setLegacyMigrationBatchId] = useState('')
   const [legacyMigrationStageLoading, setLegacyMigrationStageLoading] = useState<LegacyMigrationStage | null>(null)
   const [legacyMigrationResults, setLegacyMigrationResults] = useState<Partial<Record<LegacyMigrationStage, LegacyMigrationStageResult>>>({})
-  const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
+  const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
   const [deleting, setDeleting] = useState<null | User>(null)
   const [resettingPasswordLoading, setResettingPasswordLoading] = useState(false)
   const [form] = Form.useForm()
+  const editorEmail = Form.useWatch('email', form)
+  const emailChangeMode = Form.useWatch('emailChangeMode', form) || 'request'
+  const emailChanged = !!editing && normalizeMemberEmail(editorEmail || '') !== normalizeMemberEmail(editing.email || '')
   const [keyword, setKeyword] = useState('')
   const [roleFilter, setRoleFilter] = useState<string | undefined>()
   const [levelFilter, setLevelFilter] = useState<string | undefined>()
@@ -248,12 +255,12 @@ const AdminUsers: React.FC = () => {
   }, [activeTab])
   const [showMemberCard, setShowMemberCard] = useState(false) // 控制头像/会员卡切换
   const { data: userOrders = [], loading: loadingOrders } = useFirestoreQuery(
-    () => editing?.id ? getOrdersByUser(editing.id) : Promise.resolve([]),
-    [editing?.id]
+    () => viewing?.id ? getOrdersByUser(viewing.id) : Promise.resolve([]),
+    [viewing?.id]
   )
   const { data: userEvents = [], loading: loadingEvents } = useFirestoreQuery(
-    () => editing?.id ? getEventsByUser(editing.id) : Promise.resolve([]),
-    [editing?.id]
+    () => viewing?.id ? getEventsByUser(viewing.id) : Promise.resolve([]),
+    [viewing?.id]
   )
   const loadingUserData = loadingOrders || loadingEvents
   const [activeIndex, setActiveIndex] = useState<string>('') // 当前高亮的字母
@@ -1028,7 +1035,7 @@ const AdminUsers: React.FC = () => {
                     {t('common.resetFilters')}
                   </Button>
                   <button
-                    onClick={() => { setCreating(true); form.resetFields() }}
+                    onClick={() => { setEditor({ open: true, user: null }); form.resetFields() }}
                     style={{
                       display: 'flex',
                       alignItems: 'center',
@@ -1078,7 +1085,7 @@ const AdminUsers: React.FC = () => {
 
             {isMobile && activeTab === 'list' && (
               <div
-                onClick={() => { setCreating(true); form.resetFields() }}
+                onClick={() => { setEditor({ open: true, user: null }); form.resetFields() }}
                 style={{
                   position: 'fixed',
                   right: 20,
@@ -1489,6 +1496,7 @@ const AdminUsers: React.FC = () => {
       <Modal
         title={null}
         open={editingOpen}
+        zIndex={2000}
         destroyOnHidden
         onCancel={() => setClosingProfile(true)}
         footer={null}
@@ -1510,7 +1518,7 @@ const AdminUsers: React.FC = () => {
         className="user-detail-modal"
         closable={false}
       >
-        {editingOpen && editing && (
+        {editingOpen && viewing && (
           <div style={{
             minHeight: isMobile ? '100vh' : 'auto',
             color: '#FFFFFF'
@@ -1553,11 +1561,14 @@ const AdminUsers: React.FC = () => {
                 closing={closingProfile}
                 onCloseComplete={finishClosingProfile}
                 detailDrawerWidth={480}
-                user={editing}
+                user={viewing}
                 readOnly={false}
                 showEditButton={true}
-                onEdit={(user) => {
-                  setCreating(true)
+                onEdit={async (user) => {
+                  const latest = await getUserById(user.id).catch(() => null)
+                  user = latest || user
+                  setEditor({ open: true, user })
+                  form.resetFields()
                   form.setFieldsValue({
                     displayName: user.displayName,
                     email: user.email,
@@ -1568,6 +1579,7 @@ const AdminUsers: React.FC = () => {
                     phone: (user as any)?.profile?.phone,
                     gender: user.profile?.gender,
                     race: user.profile?.race,
+                    emailChangeMode: 'request',
                   })
                 }}
               />
@@ -1580,9 +1592,9 @@ const AdminUsers: React.FC = () => {
       <Modal
         title={editing ? t('usersAdmin.editUser') : t('usersAdmin.addUser')}
         open={creating}
+        zIndex={2110}
         onCancel={() => {
-          setCreating(false)
-          closeEditing()
+          setEditor(previous => ({ ...previous, open: false }))
         }}
         onOk={() => form.submit()}
         confirmLoading={actionLoading}
@@ -1641,15 +1653,25 @@ const AdminUsers: React.FC = () => {
               ) : {}
 
               if (editing) {
+                const email = normalizeMemberEmail(values.email || '')
+                if (email !== normalizeMemberEmail(editing.email || '')) {
+                  if (!email) throw new Error(t('profile.emailSync.required'))
+                  const correction = values.emailChangeMode === 'correct'
+                  if (!await verifyEmailChange({ memberName: editing.displayName, email, correction })) return
+                  await updateMemberEmail(editing.id, correction ? 'correct' : 'request', email)
+                  if (!correction) message.info(t('profile.emailSync.requestSaved'))
+                }
                 if (normalizedPhone) {
-                  if (!await verifyPhoneChange({ memberName: editing.displayName || editing.email || '', phone: normalizedPhone })) return
-                  await updateMemberPhone(editing.id, normalizedPhone)
+                  const currentPhone = normalizePhoneNumber(editing.profile?.phone || '')
+                  if (normalizedPhone !== currentPhone) {
+                    if (!await verifyPhoneChange({ memberName: editing.displayName || editing.email || '', phone: normalizedPhone })) return
+                    await updateMemberPhone(editing.id, normalizedPhone)
+                  }
                 } else if (editing.profile?.phone) {
                   throw new Error(t('profile.phoneRequired'))
                 }
                 const res = await updateDocument<User>(COLLECTIONS.USERS, editing.id, {
                   displayName: values.displayName,
-                  email: values.email || undefined, // ✅ 允许email为空
                   role: values.role,
                   membership: { ...editing.membership, level: values.level },
                   'profile.gender': values.gender || null,
@@ -1694,9 +1716,13 @@ const AdminUsers: React.FC = () => {
                 }
               }
               await refreshUsers()
-              setCreating(false)
+              setEditor(previous => ({ ...previous, open: false }))
               closeEditing()
             } catch (error) {
+              if (error instanceof MemberEmailError && editing) {
+                const latest = await getUserById(editing.id).catch(() => null)
+                if (latest) setEditor(previous => ({ ...previous, user: latest }))
+              }
               message.error(error instanceof Error ? error.message : t('profile.phoneSync.failed'))
             } finally {
               setLoading(false)
@@ -1724,7 +1750,7 @@ const AdminUsers: React.FC = () => {
                   }
 
                   // ✅ 如果是编辑模式且邮箱没有改变，跳过验证
-                  if (editing && value === editing.email) {
+                  if (editing && normalizeMemberEmail(value) === normalizeMemberEmail(editing.email || '')) {
                     return Promise.resolve()
                   }
 
@@ -1763,6 +1789,38 @@ const AdminUsers: React.FC = () => {
           >
             <Input placeholder={t('auth.email')} />
           </Form.Item>
+
+          {editing && (emailChanged || ['requested', 'awaiting-verification', 'sync-pending'].includes(editing.emailChange?.status || '') || editing.emailAuth?.verified === false) && (
+            <div style={{ marginBottom: 20 }}>
+              {emailChanged && <Form.Item name="emailChangeMode" label={t('profile.emailSync.mode')} initialValue="request">
+                <Radio.Group options={[
+                  { label: t('profile.emailSync.requestMode'), value: 'request' },
+                  { label: t('profile.emailSync.correctMode'), value: 'correct' },
+                ]} />
+              </Form.Item>}
+              {emailChanged && emailChangeMode === 'correct' && <Alert type="warning" showIcon message={t('profile.emailSync.correctionWarning')} />}
+              {editing.emailAuth?.verified === false && <Tag color="warning">{t('profile.emailSync.unverified')}</Tag>}
+              {editing.emailChange && ['requested', 'awaiting-verification', 'sync-pending'].includes(editing.emailChange.status) && (
+                <Alert type="warning" showIcon message={editing.emailChange.status === 'sync-pending'
+                  ? t('profile.emailSync.syncFailed') : t('profile.emailSync.requested', { email: editing.emailChange.email })}
+                  action={editing.emailChange.status === 'sync-pending' && editing.emailChange.method === 'admin-correction' ? (
+                    <Button size="small" icon={<SendOutlined />} loading={actionLoading} onClick={async () => {
+                      if (!editing.emailChange || actionLoading) return
+                      setLoading(true)
+                      try {
+                        const email = editing.emailChange.email
+                        if (!await verifyEmailChange({ memberName: editing.displayName, email, correction: true })) return
+                        await updateMemberEmail(editing.id, 'correct', email)
+                        const latest = await getUserById(editing.id)
+                        if (latest) { setEditor(previous => ({ ...previous, user: latest })); form.setFieldValue('email', latest.email) }
+                        message.success(t('profile.emailSync.synced'))
+                      } catch (error) { message.error(error instanceof Error ? error.message : t('profile.emailSync.failed')) }
+                      finally { setLoading(false) }
+                    }}>{t('profile.emailSync.retry')}</Button>
+                  ) : undefined} />
+              )}
+            </div>
+          )}
 
           <Form.Item
             label={<span style={{ color: '#FFFFFF' }}>{t('auth.phone')}</span>}

@@ -260,6 +260,15 @@ export const loginWithEmailOrPhone = async (identifier: string, password: string
 };
 
 // ✅ 辅助函数：通过邮箱查找用户
+export const findUserByAuthUid = async (uid: string): Promise<{ id: string; data: User } | null> => {
+  const direct = await getUserData(uid)
+  if (direct) return { id: uid, data: direct }
+  const snapshot = await getDocs(query(collection(db, 'users'), where('authUid', '==', uid), limit(2)))
+  if (snapshot.docs.length !== 1) return null
+  const document = snapshot.docs[0]
+  return { id: document.id, data: { ...convertFirestoreTimestamps(document.data()), id: document.id } as User }
+}
+
 export const findUserByEmail = async (email: string): Promise<{ id: string; data: User } | null> => {
   try {
     const usersRef = collection(db, 'users');
@@ -349,7 +358,7 @@ export const loginWithGoogle = async () => {
     }
 
     // ✅ 场景 A：通过 Google 邮箱查询系统中是否已存在该邮箱的用户
-    const existingUser = await findUserByEmail(googleEmail);
+    const existingUser = await findUserByAuthUid(googleUser.uid) || await findUserByEmail(googleEmail);
     
     if (existingUser) {
       // ✅ 场景 1.a：邮箱存在系统数据中
@@ -444,7 +453,7 @@ export const handleGoogleRedirectResult = async () => {
         const googleEmail = currentUser.email;
         
         // ✅ 通过邮箱查询系统中是否已存在该用户
-        const existingUser = await findUserByEmail(googleEmail);
+        const existingUser = await findUserByAuthUid(currentUser.uid) || await findUserByEmail(googleEmail);
         
         if (existingUser) {
           // 邮箱存在，检查资料完整性
@@ -495,7 +504,7 @@ export const handleGoogleRedirectResult = async () => {
     }
 
     // ✅ 通过邮箱查询系统中是否已存在该用户
-    const existingUser = await findUserByEmail(googleEmail);
+    const existingUser = await findUserByAuthUid(googleUser.uid) || await findUserByEmail(googleEmail);
     
     if (existingUser) {
       // 邮箱存在，检查资料完整性

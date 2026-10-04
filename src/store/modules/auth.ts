@@ -1,6 +1,7 @@
 // 认证状态管理
 import { create } from 'zustand'
-import { onAuthStateChange, getUserData, convertFirestoreTimestamps, findUserByEmail, createMissingUserDocument } from '../../services/firebase/auth'
+import { onAuthStateChange, getUserData, convertFirestoreTimestamps, findUserByAuthUid, findUserByEmail, createMissingUserDocument } from '../../services/firebase/auth'
+import { normalizeMemberEmail, updateMemberEmail } from '../../services/firebase/memberEmail'
 import type { User, UserRole, Permission } from '../../types'
 import { hasPermission } from '../../config/permissions'
 import { doc, onSnapshot, Unsubscribe } from 'firebase/firestore'
@@ -247,6 +248,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
                 userData = await getUserData(firestoreUserId, true); // 使用缓存
 
                 if (!userData) {
+                  const linkedUser = await findUserByAuthUid(firebaseUser.uid)
+                  if (linkedUser) { firestoreUserId = linkedUser.id; userData = linkedUser.data }
+                }
+
+                if (!userData) {
                   // 新注册时 Auth 回调可能先于 users/{uid} 写入完成。
                   userData = await waitForNewUserDocument(firebaseUser);
                 }
@@ -281,6 +287,13 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
 
           if (userData) {
+            if (userData.authUid === firebaseUser.uid && firebaseUser.email
+              && normalizeMemberEmail(userData.email || '') !== normalizeMemberEmail(firebaseUser.email)) {
+              try {
+                const result = await updateMemberEmail(userData.id, 'sync')
+                if (result.email) userData = { ...userData, email: result.email, emailAuth: { uid: firebaseUser.uid, verified: result.verified === true } }
+              } catch { /* Profile provides the pending verification and synchronization retry controls. */ }
+            }
             setUser(userData, true)
             setFirebaseUser(firebaseUser)
             set({ 

@@ -3,6 +3,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
+import { MemberIdentityError, resolveMemberAccount } from './_shared/memberIdentity'
 
 const reply = (statusCode: number, code: string, extra = {}) => ({
   statusCode,
@@ -40,17 +41,7 @@ export const handler: Handler = async event => {
     const ref = db.collection('users').doc(input.userId)
     const member = (await ref.get()).data()
     if (!member) return reply(404, 'member-not-found')
-    // Legacy Firestore IDs can differ from Auth UIDs. Resolve from stored data,
-    // never from a caller-supplied email or UID mapping.
-    let account
-    try { account = await adminAuth.getUser(input.userId) } catch (error) {
-      if ((error as { code?: string }).code !== 'auth/user-not-found') throw error
-      if (!member.email) return reply(409, 'auth-account-missing')
-      try { account = await adminAuth.getUserByEmail(member.email) } catch (lookupError) {
-        if ((lookupError as { code?: string }).code === 'auth/user-not-found') return reply(409, 'auth-account-missing')
-        throw lookupError
-      }
-    }
+    const account = await resolveMemberAccount(adminAuth, input.userId, member)
     if (account.uid !== identity.uid) {
       const operator = (await db.collection('users').doc(identity.uid).get()).data()
       const linkedMember = account.uid === input.userId ? member : (await db.collection('users').doc(account.uid).get()).data()
@@ -65,12 +56,14 @@ export const handler: Handler = async event => {
     authUpdated = true
     // Auth is authoritative. Repeating this request repairs a failed profile sync.
     await ref.update({
+      authUid: account.uid,
       'profile.phone': phone,
       'profile.phoneAuth': { uid: account.uid, ownershipVerified: false, updatedBy: identity.uid, updatedAt: Timestamp.now() },
       updatedAt: Timestamp.now(),
     })
     return reply(200, 'phone-updated', { phone })
   } catch (error) {
+    if (error instanceof MemberIdentityError) return reply(error.status, error.code)
     const code = (error as { code?: string | number })?.code
     if (code === 'auth/phone-number-already-exists') return reply(409, 'phone-in-use')
     if (code === 'auth/invalid-phone-number') return reply(400, 'invalid-phone')
