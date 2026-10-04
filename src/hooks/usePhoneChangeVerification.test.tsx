@@ -11,7 +11,7 @@ vi.mock('firebase/auth', () => ({
 import { usePhoneChangeVerification } from './usePhoneChangeVerification'
 const Harness = () => {
   const { verifyPhoneChange, phoneVerificationModal } = usePhoneChangeVerification()
-  return <><button onClick={() => { void verifyPhoneChange().then(mocks.completed) }}>Request</button>{phoneVerificationModal}</>
+  return <><button onClick={() => { void verifyPhoneChange({ memberName: 'Target Member', phone: '+60123456789' }).then(mocks.completed) }}>Request</button>{phoneVerificationModal}</>
 }
 describe('phone change verification', () => {
   beforeEach(() => {
@@ -32,7 +32,7 @@ describe('phone change verification', () => {
   it('checks the current account password before resolving verification', async () => {
     render(<Harness />)
     fireEvent.click(screen.getByText('Request'))
-    const input = await screen.findByLabelText('profile.currentPassword')
+    const input = await screen.findByLabelText('profile.phoneSync.accountPassword')
     fireEvent.change(input, { target: { value: 'test-password' } })
     fireEvent.click(screen.getByText('profile.phoneSync.verifyPassword'))
     await waitFor(() => expect(mocks.completed).toHaveBeenCalledWith(true))
@@ -46,6 +46,15 @@ describe('phone change verification', () => {
     await waitFor(() => expect(mocks.completed).toHaveBeenCalledWith(false))
     expect(mocks.popup).not.toHaveBeenCalled()
     expect(mocks.password).not.toHaveBeenCalled()
+  })
+  it('identifies the target member, new phone and separate verification account, with a gold gradient action', async () => {
+    render(<Harness />)
+    fireEvent.click(screen.getByText('Request'))
+    expect(await screen.findByText('Target Member')).toBeTruthy()
+    expect(screen.getByText('+60123456789')).toBeTruthy()
+    expect(screen.getByText('member@example.com')).toBeTruthy()
+    const button = screen.getByRole('button', { name: /profile.phoneSync.verifyPassword/ })
+    expect(button.style.background).toContain('linear-gradient')
   })
   it('cancels an outstanding verification when the profile is unmounted', async () => {
     const view = render(<Harness />)

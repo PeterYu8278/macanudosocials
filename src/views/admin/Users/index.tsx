@@ -1642,7 +1642,7 @@ const AdminUsers: React.FC = () => {
 
               if (editing) {
                 if (normalizedPhone) {
-                  if (!await verifyPhoneChange()) return
+                  if (!await verifyPhoneChange({ memberName: editing.displayName || editing.email || '', phone: normalizedPhone })) return
                   await updateMemberPhone(editing.id, normalizedPhone)
                 } else if (editing.profile?.phone) {
                   throw new Error(t('profile.phoneRequired'))

@@ -117,7 +117,7 @@ const Profile: React.FC = () => {
       if (!phone) throw new Error(t('profile.phoneInvalidFormat'))
       // Re-save unchanged profile numbers too: older accounts may not have an Auth phone.
       if (auth.currentUser?.phoneNumber !== phone || normalizePhoneNumber(user.profile?.phone || '') !== phone) {
-        if (!await verifyPhoneChange()) return
+        if (!await verifyPhoneChange({ memberName: user.displayName || user.email || '', phone })) return
         await updateMemberPhone(user.id, phone)
       }
 

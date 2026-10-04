@@ -1919,7 +1919,11 @@
   },
   "profile": {
     "phoneSync": {
-      "verifyTitle": "验证账号身份",
+      "verifyTitle": "确认更新会员电话号码",
+      "member": "会员",
+      "newPhone": "新电话号码",
+      "verifyAs": "验证账号",
+      "accountPassword": "当前登录账号的密码",
       "verifyPassword": "验证并保存电话号码",
       "verifyGoogle": "使用 Google 验证",
       "verificationFailed": "验证失败，请检查密码或使用已关联的 Google 账号。",

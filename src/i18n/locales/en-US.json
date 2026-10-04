@@ -1919,7 +1919,11 @@
   },
   "profile": {
     "phoneSync": {
-      "verifyTitle": "Verify your account",
+      "verifyTitle": "Confirm phone number update",
+      "member": "Member",
+      "newPhone": "New phone",
+      "verifyAs": "Verify as",
+      "accountPassword": "Your account password",
       "verifyPassword": "Verify and save phone",
       "verifyGoogle": "Verify with Google",
       "verificationFailed": "Verification failed. Check your password or use the linked Google account.",
