@@ -8,7 +8,7 @@ import {
   ArrowLeftOutlined, MailOutlined, PhoneOutlined, BellOutlined,
   CalendarOutlined, WalletOutlined, ShoppingOutlined, GiftOutlined,
   SaveOutlined, LockOutlined, SettingOutlined, UserOutlined, LogoutOutlined,
-  CloudDownloadOutlined, ClearOutlined
+  CloudDownloadOutlined, ClearOutlined, CloseOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
 import { useNavigate } from 'react-router-dom'
@@ -49,6 +49,21 @@ const Profile: React.FC = () => {
   const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailSyncError, setEmailSyncError] = useState('')
+  const [emailConfirmation, setEmailConfirmation] = useState(() => {
+    const params = new URLSearchParams(window.location.hash.slice(1))
+    const changeId = params.get('email-change')
+    const confirmationToken = params.get('email-token')
+    return changeId && confirmationToken ? { changeId, confirmationToken } : null
+  })
+  useEffect(() => {
+    if (emailConfirmation) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search)
+  }, [])
+  const confirmationMatches = !!emailConfirmation && user?.emailChange?.id === emailConfirmation.changeId
+    && user.emailChange.proofVersion === 1 && ['awaiting-verification', 'sync-pending'].includes(user.emailChange.status)
+  const emailRequestPending = ['requested', 'awaiting-verification', 'sync-pending'].includes(user?.emailChange?.status || '')
+  const canCancelEmailRequest = user?.emailChange?.status === 'requested'
+    || (user?.emailChange?.status === 'awaiting-verification' && user.emailChange.proofVersion === 1)
+  const emailCancelReason = user?.emailChange?.status === 'sync-pending' ? 'profile.emailSync.cancelSyncPending' : 'profile.emailSync.legacyPending'
   const [activeTab, setActiveTab] = useState('basic')
   const pushStatus = usePushNotificationStore((state) => state.status)
   const pushBusy = usePushNotificationStore((state) => state.busy)
@@ -203,7 +218,7 @@ const Profile: React.FC = () => {
     }
   }
 
-  const handleEmailAction = async (action: 'send' | 'sync' | 'cancel' | 'verify') => {
+  const handleEmailAction = async (action: 'send' | 'sync' | 'cancel' | 'verify' | 'confirm') => {
     if (!user || emailBusy) return
     setEmailBusy(true)
     try {
@@ -221,6 +236,12 @@ const Profile: React.FC = () => {
         } else if (action === 'verify') {
           await verifyCurrentMemberEmail()
           message.info(t('profile.emailSync.sent', { email: user.email }))
+        } else if (action === 'confirm') {
+          if (!emailConfirmation) throw new MemberEmailError('confirmation-invalid')
+          await updateMemberEmail(user.id, 'confirm', undefined, emailConfirmation)
+          setEmailConfirmation(null)
+          await auth.currentUser?.reload()
+          message.success(t('profile.emailSync.synced'))
         } else {
           await updateMemberEmail(user.id, 'cancel')
           message.success(t('profile.emailSync.cancelled'))
@@ -835,16 +856,36 @@ const Profile: React.FC = () => {
     }}>
       {phoneVerificationModal}
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+        {emailConfirmation && <Alert style={{ marginBottom: 16, borderRadius: 8 }} type="info" showIcon
+          message={t('profile.emailSync.confirmLinkTitle')}
+          description={<div style={{ overflowWrap: 'anywhere' }}>
+            <div style={{ marginBottom: 12 }}>{confirmationMatches ? user?.emailChange?.email : t('profile.emailSync.invalidLink')}</div>
+            <Button icon={<MailOutlined />} disabled={emailBusy || !confirmationMatches}
+              onClick={() => { void handleEmailAction('confirm') }}>{t('profile.emailSync.confirmNewEmail')}</Button>
+          </div>} />}
         {(emailSyncError || ['requested', 'awaiting-verification', 'sync-pending'].includes(user?.emailChange?.status || '') || user?.emailAuth?.verified === false) && (
-          <Alert style={{ marginBottom: 16 }} type="warning" showIcon
-            message={emailSyncError || (user?.emailChange && ['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange.status)
-              ? t('profile.emailSync.requested', { email: user.emailChange.email }) : t('profile.emailSync.unverified'))}
-            action={<Space wrap>
-              {user?.emailChange && ['requested', 'awaiting-verification'].includes(user.emailChange.status) && <Button size="small" icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('send') }}>{t('profile.emailSync.send')}</Button>}
-              {user?.emailAuth?.verified === false && !['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange?.status || '') && <Button size="small" icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('verify') }}>{t('profile.emailSync.verifyCurrent')}</Button>}
-              <Button size="small" icon={<CloudDownloadOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('sync') }}>{t('profile.emailSync.retry')}</Button>
-              {user?.emailChange?.status === 'requested' && <Button size="small" disabled={emailBusy} onClick={() => { void handleEmailAction('cancel') }}>{t('profile.emailSync.cancel')}</Button>}
-            </Space>} />
+          <Alert style={{ marginBottom: 16, alignItems: 'flex-start', borderRadius: 8 }} type="warning" showIcon
+            message={<span style={{ fontWeight: 600 }}>{emailSyncError ? t('profile.emailSync.syncFailedTitle')
+              : t(`profile.emailSync.${user?.emailChange?.status === 'requested' ? 'requestTitle'
+                : user?.emailChange?.status === 'awaiting-verification' ? 'awaitingTitle'
+                : user?.emailChange?.status === 'sync-pending' ? 'syncTitle' : 'unverified'}`)}</span>}
+            description={<div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+              {user?.emailChange && ['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange.status) && (
+                <div style={{ marginBottom: 8, fontWeight: 500 }}>{user.emailChange.email}</div>
+              )}
+              {(emailSyncError || user?.emailChange?.status === 'awaiting-verification') && (
+                <div style={{ marginBottom: 12 }}>{emailSyncError || t(user?.emailChange?.proofVersion === 1 ? 'profile.emailSync.revocableNotice' : 'profile.emailSync.issuedLinkNotice')}</div>
+              )}
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
+                {user?.emailChange && (user.emailChange.status === 'requested' || (user.emailChange.status === 'awaiting-verification' && user.emailChange.proofVersion === 1)) && <Button icon={<MailOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal', background: 'linear-gradient(135deg, #ffe08a, #bd8937)', borderColor: '#bd8937', color: '#17140b' }} disabled={emailBusy} onClick={() => { void handleEmailAction('send') }}>{t(user.emailChange.status === 'requested' ? 'profile.emailSync.send' : 'profile.emailSync.resend')}</Button>}
+                {user?.emailAuth?.verified === false && !['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange?.status || '') && <Button icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('verify') }}>{t('profile.emailSync.verifyCurrent')}</Button>}
+                <Button icon={<CloudDownloadOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal' }} disabled={emailBusy} onClick={() => { void handleEmailAction('sync') }}>{t('profile.emailSync.retry')}</Button>
+                {emailRequestPending && <Button danger icon={<CloseOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal' }}
+                  disabled={emailBusy || !canCancelEmailRequest} aria-describedby={!canCancelEmailRequest ? 'email-cancel-reason' : undefined}
+                  onClick={() => { void handleEmailAction('cancel') }}>{t('profile.emailSync.cancel')}</Button>}
+              </div>
+              {emailRequestPending && !canCancelEmailRequest && <div id="email-cancel-reason" style={{ marginTop: 8, fontSize: 12 }}>{t(emailCancelReason)}</div>}
+            </div>} />
         )}
         {/* Header */}
         <div style={{

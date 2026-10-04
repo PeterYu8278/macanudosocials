@@ -13,7 +13,9 @@ export interface User {
   emailAuth?: { uid: string; verified: boolean; syncedAt?: Date };
   emailChange?: {
     id: string; email: string; previousEmail: string; requestedBy: string; requestedAt: Date;
-    method: 'member-confirmation' | 'admin-correction';
+      method: 'member-confirmation' | 'admin-correction';
+      proofVersion?: 1;
+      lastSentAtMs?: number;
     status: 'requested' | 'awaiting-verification' | 'sync-pending' | 'completed' | 'cancelled';
   } | null;
   displayName: string;

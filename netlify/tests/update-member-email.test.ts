@@ -4,7 +4,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({
   verify: vi.fn(), getUser: vi.fn(), getEmail: vi.fn(), updateAuth: vi.fn(), commit: vi.fn(),
   documents: new Map<string, any>(), accounts: new Map<string, any>(),
+  deliveryConfig: vi.fn(), deliver: vi.fn(),
 }))
+vi.mock('../functions/_shared/memberEmailDelivery', () => ({ emailDeliveryConfig: mocks.deliveryConfig, deliverMemberEmail: mocks.deliver }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], initializeApp: vi.fn(), cert: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: mocks.verify, getUser: mocks.getUser, getUserByEmail: mocks.getEmail, updateUser: mocks.updateAuth }) }))
 vi.mock('firebase-admin/firestore', () => {
@@ -71,6 +73,8 @@ describe('member email changes', () => {
       return account
     })
     mocks.commit.mockResolvedValue(undefined)
+    mocks.deliveryConfig.mockReturnValue({})
+    mocks.deliver.mockResolvedValue(undefined)
     vi.spyOn(console, 'error').mockImplementation(() => {})
   })
   afterEach(() => vi.restoreAllMocks())
@@ -206,7 +210,7 @@ describe('member email changes', () => {
     expect((await save('cancel')).statusCode).toBe(200)
     expect(profile().emailChange.status).toBe('cancelled')
     await save()
-    expect(JSON.parse((await save('cancel')).body).code).toBe('verification-pending')
+    expect(JSON.parse((await save('cancel')).body).code).toBe('legacy-verification-pending')
     mocks.accounts.get('member').email = 'new@example.com'
     expect(JSON.parse((await save('cancel')).body).code).toBe('sync-required')
   })
@@ -222,6 +226,105 @@ describe('member email changes', () => {
     expect((await save('prepare', 'new@example.com', 'users/member')).statusCode).toBe(400)
     expect((await save('unknown')).statusCode).toBe(400)
     expect((await invoke({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ userId: 'member', mode: 'sync' }) })).statusCode).toBe(401)
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+  })
+
+  const confirm = (id: string, token: string) => invoke({ httpMethod: 'POST', headers: { authorization: 'Bearer token' },
+    body: JSON.stringify({ userId: 'member', mode: 'confirm', changeId: id, confirmationToken: token }) })
+  const sent = () => ({ id: mocks.deliver.mock.calls.at(-1)![1], token: mocks.deliver.mock.calls.at(-1)![2] })
+
+  it('stores only a token digest and leaves Auth unchanged until mailbox confirmation', async () => {
+    expect((await save('send')).statusCode).toBe(200)
+    const { id, token } = sent()
+    expect(token).toMatch(/^[a-f0-9]{64}$/)
+    const proof = mocks.documents.get(`_memberEmailProofs/${id}`)
+    expect(proof.tokenHash).not.toBe(token)
+    expect(JSON.stringify([...mocks.documents])).not.toContain(token)
+    expect(profile().emailChange.proofVersion).toBe(1)
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+    expect((await confirm(id, token)).statusCode).toBe(200)
+    expect(mocks.updateAuth).toHaveBeenCalledWith('member', { email: 'new@example.com', emailVerified: true })
+    expect(profile().email).toBe('new@example.com')
+    expect(mocks.documents.get(`_memberEmailProofs/${id}`).status).toBe('used')
+    expect(JSON.parse((await confirm(id, token)).body).code).toBe('confirmation-invalid')
+  })
+
+  it('invalidates a sent link on cancellation and supports idempotent cancellation', async () => {
+    await save('send')
+    const { id, token } = sent()
+    expect((await save('cancel')).statusCode).toBe(200)
+    expect((await save('cancel')).statusCode).toBe(200)
+    expect(mocks.documents.get(`_memberEmailProofs/${id}`).status).toBe('cancelled')
+    expect(JSON.parse((await confirm(id, token)).body).code).toBe('confirmation-invalid')
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+    expect(profile().email).toBe('old@example.com')
+  })
+
+  it('rejects expired, incorrect and other-member proofs', async () => {
+    await save('send')
+    const { id, token } = sent()
+    expect(JSON.parse((await confirm(id, 'a'.repeat(64))).body).code).toBe('confirmation-invalid')
+    const proof = mocks.documents.get(`_memberEmailProofs/${id}`)
+    proof.authUid = 'other'
+    expect(JSON.parse((await confirm(id, token)).body).code).toBe('confirmation-invalid')
+    proof.authUid = 'member'
+    proof.expiresAtMs = Date.now() - 1
+    expect(JSON.parse((await confirm(id, token)).body).code).toBe('confirmation-expired')
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+  })
+
+  it('rotates the proof on resend and rate limits even after cancellation', async () => {
+    await save('send')
+    const old = sent()
+    expect((await save('send')).statusCode).toBe(429)
+    mocks.documents.get('_memberEmailSendLimits/member').lastSentAtMs -= 61000
+    await save('send')
+    const fresh = sent()
+    expect(JSON.parse((await confirm(old.id, old.token)).body).code).toBe('confirmation-invalid')
+    await save('cancel')
+    expect((await save('send')).statusCode).toBe(429)
+    expect(JSON.parse((await confirm(fresh.id, fresh.token)).body).code).toBe('confirmation-invalid')
+  })
+
+  it('does not bypass an old Firebase link through a new send or an unsent request', async () => {
+    await save('prepare')
+    expect(JSON.parse((await save('send')).body).code).toBe('legacy-verification-pending')
+    expect(JSON.parse((await save('request')).body).code).toBe('verification-pending')
+    expect(mocks.deliver).not.toHaveBeenCalled()
+  })
+
+  it('recovers a confirmed Auth update after a Firestore failure without permitting cancellation', async () => {
+    await save('send')
+    const { id, token } = sent()
+    mocks.commit.mockResolvedValueOnce(undefined).mockRejectedValueOnce({ code: 8 })
+    expect(JSON.parse((await confirm(id, token)).body).code).toBe('profile-sync-failed')
+    expect((await save('cancel')).statusCode).toBe(409)
+    expect((await save('request')).statusCode).toBe(409)
+    expect((await save('sync')).statusCode).toBe(200)
+    expect(profile().email).toBe('new@example.com')
+    expect(mocks.documents.get(`_memberEmailProofs/${id}`).status).toBe('used')
+  })
+
+  it('keeps an undelivered revocable request cancellable', async () => {
+    mocks.deliver.mockRejectedValue(new Error('delivery failed'))
+    expect((await save('send')).statusCode).toBe(503)
+    expect((await save('cancel')).statusCode).toBe(200)
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+  })
+
+  it('does not let an administrator confirm someone else\'s mailbox proof', async () => {
+    await save('send')
+    const { id, token } = sent()
+    operator()
+    expect((await confirm(id, token)).statusCode).toBe(403)
+    expect(mocks.updateAuth).not.toHaveBeenCalled()
+  })
+
+  it('requires fresh identity verification even with a valid mailbox proof', async () => {
+    await save('send')
+    const { id, token } = sent()
+    mocks.verify.mockResolvedValue({ uid: 'member', auth_time: 0, firebase: { sign_in_provider: 'password' } })
+    expect((await confirm(id, token)).statusCode).toBe(401)
     expect(mocks.updateAuth).not.toHaveBeenCalled()
   })
 })

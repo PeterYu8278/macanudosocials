@@ -96,4 +96,61 @@ describe('profile email save flow', () => {
     render(<Profile />)
     expect((await edit() as HTMLInputElement).disabled).toBe(false)
   })
+
+  it('shows an unsent request with cancellation and keeps actions below the email', async () => {
+    mocks.user.emailChange = { status: 'requested', email: 'new@example.com' }
+    render(<Profile />)
+    expect(screen.getByText('profile.emailSync.requestTitle')).toBeTruthy()
+    const email = screen.getByText('new@example.com')
+    const cancel = screen.getByRole('button', { name: /profile.emailSync.cancel$/ })
+    expect(email.closest('.ant-alert-description')?.contains(cancel)).toBe(true)
+    fireEvent.click(cancel)
+    await waitFor(() => expect(mocks.email).toHaveBeenCalledWith('member', 'cancel'))
+    expect(mocks.verifyEmail).toHaveBeenCalledWith({ memberName: 'Member', email: 'new@example.com' })
+  })
+
+  it('does not offer unsafe cancellation after a confirmation link was issued', () => {
+    mocks.user.emailChange = { status: 'awaiting-verification', email: 'new@example.com' }
+    render(<Profile />)
+    expect(screen.getByText('profile.emailSync.awaitingTitle')).toBeTruthy()
+    expect(screen.getByText('profile.emailSync.issuedLinkNotice')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /profile.emailSync.resend$/ })).toBeNull()
+    const cancel = screen.getByRole('button', { name: /profile.emailSync.cancel$/ }) as HTMLButtonElement
+    expect(cancel.disabled).toBe(true)
+    expect(cancel.getAttribute('aria-describedby')).toBe('email-cancel-reason')
+    expect(screen.getByText('profile.emailSync.legacyPending')).toBeTruthy()
+    fireEvent.click(cancel)
+    expect(mocks.verifyEmail).not.toHaveBeenCalled()
+    expect(mocks.email).not.toHaveBeenCalled()
+  })
+
+  it('shows synchronization pending without offering email delivery or cancellation', () => {
+    mocks.user.emailChange = { status: 'sync-pending', email: 'new@example.com' }
+    render(<Profile />)
+    expect(screen.getByText('profile.emailSync.syncTitle')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /profile.emailSync.retry$/ })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /profile.emailSync.send$/ })).toBeNull()
+    expect((screen.getByRole('button', { name: /profile.emailSync.cancel$/ }) as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText('profile.emailSync.cancelSyncPending')).toBeTruthy()
+  })
+
+  it('offers cancellation for a sent revocable request', async () => {
+    mocks.user.emailChange = { status: 'awaiting-verification', email: 'new@example.com', proofVersion: 1 }
+    render(<Profile />)
+    expect(screen.getByText('profile.emailSync.revocableNotice')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /profile.emailSync.resend$/ })).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: /profile.emailSync.cancel$/ }))
+    await waitFor(() => expect(mocks.email).toHaveBeenCalledWith('member', 'cancel'))
+  })
+
+  it('clears the proof from the address bar and requires an explicit verified confirmation', async () => {
+    window.history.replaceState(null, '', '/profile#email-change=request&email-token=secret')
+    mocks.user.emailChange = { id: 'request', status: 'awaiting-verification', email: 'new@example.com', proofVersion: 1 }
+    render(<Profile />)
+    expect(window.location.hash).toBe('')
+    expect(mocks.email).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /profile.emailSync.confirmNewEmail$/ }))
+    await waitFor(() => expect(mocks.email).toHaveBeenCalledWith('member', 'confirm', undefined, { changeId: 'request', confirmationToken: 'secret' }))
+    expect(mocks.verifyEmail).toHaveBeenCalled()
+  })
 })

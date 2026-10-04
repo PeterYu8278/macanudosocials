@@ -21,11 +21,10 @@ describe('member email service', () => {
     expect(mocks.token).toHaveBeenCalledWith(true)
     expect(mocks.fetch.mock.calls[0][1].headers.Authorization).toBe('Bearer fresh-token')
   })
-  it('persists the backend mapping before sending a Firebase verification link', async () => {
+  it('asks the backend to send a revocable confirmation without issuing a Firebase action link', async () => {
     await requestMemberEmailVerification('target', ' New@Example.com ')
-    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body).mode).toBe('prepare')
-    expect(mocks.verifyEmail).toHaveBeenCalledWith(mocks.auth.currentUser, 'new@example.com', { url: `${window.location.origin}/profile?emailSync=1` })
-    expect(mocks.fetch.mock.invocationCallOrder[0]).toBeLessThan(mocks.verifyEmail.mock.invocationCallOrder[0])
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({ userId: 'target', mode: 'send', email: 'new@example.com' })
+    expect(mocks.verifyEmail).not.toHaveBeenCalled()
   })
   it('does not send email if the mapping could not be saved', async () => {
     mocks.fetch.mockResolvedValue({ ok: false, json: async () => ({ code: 'service-unavailable' }) })
@@ -33,7 +32,7 @@ describe('member email service', () => {
     expect(mocks.verifyEmail).not.toHaveBeenCalled()
   })
   it('translates an SDK recent-login error when sending verification', async () => {
-    mocks.verifyEmail.mockRejectedValue({ code: 'auth/requires-recent-login' })
+    mocks.fetch.mockResolvedValue({ ok: false, json: async () => ({ code: 'reauth-required' }) })
     await expect(requestMemberEmailVerification('target', 'new@example.com')).rejects.toThrow('profile.emailSync.reauthRequired')
   })
   it('supports verification of an administrator-corrected email', async () => {
@@ -43,6 +42,11 @@ describe('member email service', () => {
   it('syncs without sending a new email value', async () => {
     await updateMemberEmail('target', 'sync')
     expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({ userId: 'target', mode: 'sync' })
+  })
+  it('submits the link proof only in a signed-in confirmation POST', async () => {
+    await updateMemberEmail('target', 'confirm', undefined, { changeId: 'request', confirmationToken: 'secret' })
+    expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({ userId: 'target', mode: 'confirm', changeId: 'request', confirmationToken: 'secret' })
+    expect(mocks.fetch.mock.calls[0][0]).not.toContain('secret')
   })
   it.each([
     ['email-in-use', 'inUse'], ['profile-sync-failed', 'syncFailed'], ['reauth-required', 'reauthRequired'],
