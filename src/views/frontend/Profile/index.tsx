@@ -11,6 +11,7 @@ import {
   CloudDownloadOutlined, ClearOutlined, CloseOutlined
 } from '@ant-design/icons'
 import dayjs from 'dayjs'
+import './profile.css'
 import { useNavigate } from 'react-router-dom'
 
 import { useAuthStore } from '../../../store/modules/auth'
@@ -46,6 +47,7 @@ const Profile: React.FC = () => {
   const [checkingForUpdate, setCheckingForUpdate] = useState(false)
   const [clearingCache, setClearingCache] = useState(false)
   const [form] = Form.useForm()
+  const accountNotificationsEnabled = Form.useWatch('notifications', form) === true
   const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
   const [emailBusy, setEmailBusy] = useState(false)
   const [emailSyncError, setEmailSyncError] = useState('')
@@ -315,25 +317,8 @@ const Profile: React.FC = () => {
     }
   }
 
-  const updateNotificationPreference = async (enabled: boolean) => {
-    if (!user) return
-    const result = await updateDocument('users', user.id, {
-      'preferences.notifications': enabled,
-    } as any)
-    if (!result.success) throw new Error('Failed to update notification preference')
-
-    form.setFieldValue('notifications', enabled)
-    setUser({
-      ...user,
-      preferences: {
-        ...user.preferences,
-        notifications: enabled,
-      },
-    })
-  }
-
   const handleEnablePush = async () => {
-    if (!user || pushBusy) return
+    if (!user || pushBusy || !accountNotificationsEnabled) return
     setPushBusy(true)
     try {
       const snapshot = await requestPushSubscription()
@@ -341,7 +326,6 @@ const Profile: React.FC = () => {
       await syncPushSubscriptionToFirestore(user, snapshot)
 
       if (snapshot.status === 'subscribed') {
-        await updateNotificationPreference(true)
         message.success(t('profile.pushNotifications.enabled'))
       } else if (snapshot.status === 'denied') {
         message.warning(t('profile.pushNotifications.permissionDeniedHint'))
@@ -362,11 +346,7 @@ const Profile: React.FC = () => {
     try {
       const snapshot = await disablePushSubscription()
       setPushSnapshot(snapshot)
-      await updateNotificationPreference(false)
-      await syncPushSubscriptionToFirestore({
-        ...user,
-        preferences: { ...user.preferences, notifications: false },
-      }, snapshot)
+      await syncPushSubscriptionToFirestore(user, snapshot)
       message.success(t('profile.pushNotifications.disabled'))
     } catch (error) {
       console.error('[Profile] Failed to disable push notifications:', error)
@@ -593,15 +573,6 @@ const Profile: React.FC = () => {
         labelWrap
       >
         <Form.Item
-          name="notifications"
-          valuePropName="checked"
-          style={{ marginBottom: 12 }}
-          label={<span style={{ color: '#fff' }}>{t('profile.notificationsToggle')}</span>}
-        >
-          <Switch className="gold-switch" />
-        </Form.Item>
-
-        <Form.Item
           name="language"
           label={<span style={{ color: '#fff' }}>{t('profile.language')}</span>}
           style={{ marginBottom: 0 }}
@@ -654,39 +625,42 @@ const Profile: React.FC = () => {
       <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
         <BellOutlined style={{ marginRight: 8, color: '#F4AF25' }} />
         <span style={{ color: '#fff', fontSize: 14, fontWeight: 600 }}>
-          {t('profile.pushNotifications.title')}
+          {t('profile.pushNotifications.sectionTitle')}
         </span>
       </div>
 
-      <div style={{
-        padding: 12,
-        borderRadius: 8,
-        background: 'rgba(255,255,255,0.03)',
-        border: '1px solid rgba(255,255,255,0.1)',
-        marginBottom: 12,
-      }}>
+      <Form form={form} component={false}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, padding: '12px 0' }}>
+          <Typography.Text style={{ color: '#fff', minWidth: 0 }}>{t('profile.pushNotifications.accountNotifications')}</Typography.Text>
+          <Form.Item name="notifications" valuePropName="checked" noStyle>
+            <Switch className="gold-switch" aria-label={t('profile.pushNotifications.accountNotifications')} />
+          </Form.Item>
+        </div>
+      </Form>
+      <div style={{ padding: '12px 0', borderTop: '1px solid rgba(255,255,255,0.1)', marginBottom: 12 }}>
         <div style={{
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
           gap: 12,
           marginBottom: pushStatus === 'denied' ? 8 : 0,
+          flexWrap: 'wrap',
         }}>
           <Space size={8} wrap>
             <Typography.Text style={{ color: 'rgba(255,255,255,0.82)', fontSize: 12 }}>
-              {t('profile.pushNotifications.currentDevice')}
+              {t('profile.pushNotifications.devicePush')}
             </Typography.Text>
             <Tag color={pushStatus === 'subscribed' ? 'green' : pushStatus === 'denied' ? 'red' : 'gold'}>
               {t(`profile.pushNotifications.status.${pushStatus}`)}
             </Tag>
           </Space>
           {pushStatus === 'subscribed' ? (
-            <Button size="small" danger loading={pushBusy} onClick={handleDisablePush}>
-              {t('profile.pushNotifications.disable')}
+            <Button size="small" icon={<CloseOutlined />} danger loading={pushBusy} onClick={handleDisablePush}>
+              {t('profile.pushNotifications.disableDevice')}
             </Button>
           ) : !['unsupported', 'loading', 'idle', 'denied'].includes(pushStatus) ? (
-            <Button size="small" type="primary" loading={pushBusy} onClick={handleEnablePush}>
-              {t('profile.pushNotifications.enable')}
+            <Button size="small" icon={<BellOutlined />} type="primary" disabled={!accountNotificationsEnabled} loading={pushBusy} onClick={handleEnablePush}>
+              {t('profile.pushNotifications.enableDevice')}
             </Button>
           ) : null}
         </div>
@@ -719,31 +693,29 @@ const Profile: React.FC = () => {
           shouldUpdate={(prev, cur) => prev.notifications !== cur.notifications}
         >
           {({ getFieldValue }) => {
-            const notificationsEnabled = getFieldValue('notifications') && pushStatus === 'subscribed'
+            const notificationsEnabled = getFieldValue('notifications') === true
             return (
               <>
                 <div style={{
-                  padding: 12, borderRadius: 8,
-                  background: 'rgba(255,255,255,0.03)',
-                  border: '1px solid rgba(255,255,255,0.1)',
+                  padding: '12px 0',
+                  borderTop: '1px solid rgba(255,255,255,0.1)',
                   marginBottom: 12,
                   opacity: notificationsEnabled ? 1 : 0.5,
-                  pointerEvents: notificationsEnabled ? 'auto' : 'none'
                 }}>
                   <Typography.Text style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600, display: 'block', marginBottom: 8 }}>
                     {t('profile.pushNotifications.notificationTypes')}
                   </Typography.Text>
                   <Form.Item name="pushActivity" valuePropName="checked" style={{ marginBottom: 8 }}>
-                    <Checkbox><CalendarOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.activity')}</Checkbox>
+                    <Checkbox disabled={!notificationsEnabled}><CalendarOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.activity')}</Checkbox>
                   </Form.Item>
                   <Form.Item name="pushPoints" valuePropName="checked" style={{ marginBottom: 8 }}>
-                    <Checkbox><WalletOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.points')}</Checkbox>
+                    <Checkbox disabled={!notificationsEnabled}><WalletOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.points')}</Checkbox>
                   </Form.Item>
                   <Form.Item name="pushOrder" valuePropName="checked" style={{ marginBottom: 8 }}>
-                    <Checkbox><ShoppingOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.order')}</Checkbox>
+                    <Checkbox disabled={!notificationsEnabled}><ShoppingOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.order')}</Checkbox>
                   </Form.Item>
                   <Form.Item name="pushMarketing" valuePropName="checked" style={{ marginBottom: 0 }}>
-                    <Checkbox><GiftOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.marketing')}</Checkbox>
+                    <Checkbox disabled={!notificationsEnabled}><GiftOutlined style={{ marginRight: 8, color: '#F4AF25' }} />{t('profile.pushNotifications.types.marketing')}</Checkbox>
                   </Form.Item>
                 </div>
 
@@ -856,35 +828,37 @@ const Profile: React.FC = () => {
     }}>
       {phoneVerificationModal}
       <div style={{ maxWidth: '640px', margin: '0 auto' }}>
-        {emailConfirmation && <Alert style={{ marginBottom: 16, borderRadius: 8 }} type="info" showIcon
+        {emailConfirmation && <Alert className="profile-email-status" type="info" showIcon
           message={t('profile.emailSync.confirmLinkTitle')}
-          description={<div style={{ overflowWrap: 'anywhere' }}>
-            <div style={{ marginBottom: 12 }}>{confirmationMatches ? user?.emailChange?.email : t('profile.emailSync.invalidLink')}</div>
+          description={<div>
+            <div className="profile-email-status__email">{confirmationMatches ? user?.emailChange?.email : t('profile.emailSync.invalidLink')}</div>
+            <div className="profile-email-status__actions">
             <Button icon={<MailOutlined />} disabled={emailBusy || !confirmationMatches}
               onClick={() => { void handleEmailAction('confirm') }}>{t('profile.emailSync.confirmNewEmail')}</Button>
+            </div>
           </div>} />}
         {(emailSyncError || ['requested', 'awaiting-verification', 'sync-pending'].includes(user?.emailChange?.status || '') || user?.emailAuth?.verified === false) && (
-          <Alert style={{ marginBottom: 16, alignItems: 'flex-start', borderRadius: 8 }} type="warning" showIcon
+          <Alert className="profile-email-status" type="warning" showIcon
             message={<span style={{ fontWeight: 600 }}>{emailSyncError ? t('profile.emailSync.syncFailedTitle')
               : t(`profile.emailSync.${user?.emailChange?.status === 'requested' ? 'requestTitle'
                 : user?.emailChange?.status === 'awaiting-verification' ? 'awaitingTitle'
                 : user?.emailChange?.status === 'sync-pending' ? 'syncTitle' : 'unverified'}`)}</span>}
-            description={<div style={{ minWidth: 0, overflowWrap: 'anywhere' }}>
+            description={<div>
               {user?.emailChange && ['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange.status) && (
-                <div style={{ marginBottom: 8, fontWeight: 500 }}>{user.emailChange.email}</div>
+                <div className="profile-email-status__email">{user.emailChange.email}</div>
               )}
               {(emailSyncError || user?.emailChange?.status === 'awaiting-verification') && (
-                <div style={{ marginBottom: 12 }}>{emailSyncError || t(user?.emailChange?.proofVersion === 1 ? 'profile.emailSync.revocableNotice' : 'profile.emailSync.issuedLinkNotice')}</div>
+                <div className="profile-email-status__notice">{emailSyncError || t(user?.emailChange?.proofVersion === 1 ? 'profile.emailSync.revocableNotice' : 'profile.emailSync.issuedLinkNotice')}</div>
               )}
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 12 }}>
-                {user?.emailChange && (user.emailChange.status === 'requested' || (user.emailChange.status === 'awaiting-verification' && user.emailChange.proofVersion === 1)) && <Button icon={<MailOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal', background: 'linear-gradient(135deg, #ffe08a, #bd8937)', borderColor: '#bd8937', color: '#17140b' }} disabled={emailBusy} onClick={() => { void handleEmailAction('send') }}>{t(user.emailChange.status === 'requested' ? 'profile.emailSync.send' : 'profile.emailSync.resend')}</Button>}
+              <div className="profile-email-status__actions">
+                {user?.emailChange && (user.emailChange.status === 'requested' || (user.emailChange.status === 'awaiting-verification' && user.emailChange.proofVersion === 1)) && <Button className="profile-email-status__send" icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('send') }}>{t(user.emailChange.status === 'requested' ? 'profile.emailSync.send' : 'profile.emailSync.resend')}</Button>}
                 {user?.emailAuth?.verified === false && !['requested', 'awaiting-verification', 'sync-pending'].includes(user.emailChange?.status || '') && <Button icon={<MailOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('verify') }}>{t('profile.emailSync.verifyCurrent')}</Button>}
-                <Button icon={<CloudDownloadOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal' }} disabled={emailBusy} onClick={() => { void handleEmailAction('sync') }}>{t('profile.emailSync.retry')}</Button>
-                {emailRequestPending && <Button danger icon={<CloseOutlined />} style={{ maxWidth: '100%', height: 'auto', minHeight: 36, whiteSpace: 'normal' }}
+                <Button icon={<CloudDownloadOutlined />} disabled={emailBusy} onClick={() => { void handleEmailAction('sync') }}>{t('profile.emailSync.retry')}</Button>
+                {emailRequestPending && <Button danger icon={<CloseOutlined />}
                   disabled={emailBusy || !canCancelEmailRequest} aria-describedby={!canCancelEmailRequest ? 'email-cancel-reason' : undefined}
                   onClick={() => { void handleEmailAction('cancel') }}>{t('profile.emailSync.cancel')}</Button>}
               </div>
-              {emailRequestPending && !canCancelEmailRequest && <div id="email-cancel-reason" style={{ marginTop: 8, fontSize: 12 }}>{t(emailCancelReason)}</div>}
+              {emailRequestPending && !canCancelEmailRequest && <div id="email-cancel-reason" className="profile-email-status__reason">{t(emailCancelReason)}</div>}
             </div>} />
         )}
         {/* Header */}

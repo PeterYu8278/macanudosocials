@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   user: null as any, authUser: null as any,
   updateProfile: vi.fn(), getUser: vi.fn(), setUser: vi.fn(), verifyPhone: vi.fn(), verifyEmail: vi.fn(),
   phone: vi.fn(), requestEmail: vi.fn(), email: vi.fn(), verifyCurrent: vi.fn(),
+  pushStatus: 'unsupported', enablePush: vi.fn(), disablePush: vi.fn(), syncPush: vi.fn(),
 }))
 vi.mock('../../../config/firebase', () => ({ auth: { get currentUser() { return mocks.authUser } }, db: {} }))
 vi.mock('../../../store/modules/auth', () => ({ useAuthStore: () => ({ user: mocks.user, setUser: mocks.setUser }) }))
@@ -24,8 +25,8 @@ vi.mock('../../../components/common/ImageUpload', () => ({ default: () => null }
 vi.mock('../../../components/common/LanguageSelect', () => ({ default: () => null }))
 vi.mock('../../../utils/pwa', () => ({ usePWA: () => ({ checkForUpdates: vi.fn() }) }))
 vi.mock('../../../utils/clearApplicationCache', () => ({ clearApplicationCache: vi.fn() }))
-vi.mock('../../../services/oneSignal', () => ({ disablePushSubscription: vi.fn(), requestPushSubscription: vi.fn(), syncPushSubscriptionToFirestore: vi.fn() }))
-vi.mock('../../../store/modules/pushNotifications', () => ({ usePushNotificationStore: (selector: any) => selector({ status: 'unsupported', busy: false, setBusy: vi.fn(), setSnapshot: vi.fn() }) }))
+vi.mock('../../../services/oneSignal', () => ({ disablePushSubscription: mocks.disablePush, requestPushSubscription: mocks.enablePush, syncPushSubscriptionToFirestore: mocks.syncPush }))
+vi.mock('../../../store/modules/pushNotifications', () => ({ usePushNotificationStore: (selector: any) => selector({ status: mocks.pushStatus, busy: false, setBusy: vi.fn(), setSnapshot: vi.fn() }) }))
 vi.mock('firebase/firestore', () => ({ collection: vi.fn(), query: vi.fn(), where: vi.fn(), limit: vi.fn(), getDocs: async () => ({ empty: true }) }))
 import Profile from './index'
 
@@ -36,9 +37,13 @@ async function edit() {
   return input
 }
 
-describe('profile email save flow', () => {
+describe('profile settings and email save flow', () => {
   beforeEach(() => {
     vi.resetAllMocks()
+    mocks.pushStatus = 'unsupported'
+    mocks.enablePush.mockResolvedValue({ status: 'subscribed', supported: true, permission: 'granted', optedIn: true })
+    mocks.disablePush.mockResolvedValue({ status: 'unsubscribed', supported: true, permission: 'granted', optedIn: false })
+    mocks.syncPush.mockResolvedValue(undefined)
     mocks.user = { id: 'member', displayName: 'Member', email: 'old@example.com', role: 'member', profile: { phone: '+60123456789' }, preferences: { locale: 'en-US', notifications: true }, emailAuth: { uid: 'member', verified: true } }
     mocks.authUser = { uid: 'member', email: 'old@example.com', emailVerified: true, phoneNumber: '+60123456789', reload: vi.fn().mockResolvedValue(undefined) }
     mocks.getUser.mockImplementation(async () => mocks.user)
@@ -49,6 +54,52 @@ describe('profile email save flow', () => {
     Object.defineProperty(window, 'matchMedia', { writable: true, value: vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }) })
   })
   afterEach(() => cleanup())
+
+  async function settings() {
+    await edit()
+    fireEvent.click(screen.getByText('profile.settings'))
+    return screen.findByLabelText('profile.pushNotifications.accountNotifications')
+  }
+
+  it('allows account notification preferences on an unsupported device', async () => {
+    render(<Profile />)
+    const toggle = await settings()
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(screen.queryByText('profile.notificationsToggle')).toBeNull()
+    expect((screen.getByLabelText(/profile.pushNotifications.types.activity/) as HTMLInputElement).disabled).toBe(false)
+  })
+
+  it('disables device activation and notification types when account notifications are off', async () => {
+    mocks.pushStatus = 'prompt'
+    render(<Profile />)
+    fireEvent.click(await settings())
+    await waitFor(() => expect(screen.getByText('profile.pushNotifications.enableDevice').closest('button')?.disabled).toBe(true))
+    expect((screen.getByLabelText(/profile.pushNotifications.types.activity/) as HTMLInputElement).disabled).toBe(true)
+    fireEvent.click(screen.getByText('common.save'))
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalled())
+    expect(mocks.updateProfile.mock.calls[0][2]['preferences.notifications']).toBe(false)
+  })
+
+  it('enables only the current device without writing the account preference', async () => {
+    mocks.pushStatus = 'prompt'
+    render(<Profile />)
+    await settings()
+    fireEvent.click(screen.getByText('profile.pushNotifications.enableDevice'))
+    await waitFor(() => expect(mocks.syncPush).toHaveBeenCalledWith(mocks.user, expect.objectContaining({ optedIn: true })))
+    expect(mocks.updateProfile).not.toHaveBeenCalled()
+  })
+
+  it('disables only the current device and leaves account notifications enabled', async () => {
+    mocks.pushStatus = 'subscribed'
+    render(<Profile />)
+    const toggle = await settings()
+    fireEvent.click(screen.getByText('profile.pushNotifications.disableDevice'))
+    await waitFor(() => expect(mocks.syncPush).toHaveBeenCalledWith(mocks.user, expect.objectContaining({ optedIn: false })))
+    expect(mocks.disablePush).toHaveBeenCalledOnce()
+    expect(mocks.updateProfile).not.toHaveBeenCalled()
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(mocks.user.preferences.notifications).toBe(true)
+  })
 
   it('does not verify or send a confirmation when the email is unchanged', async () => {
     render(<Profile />)

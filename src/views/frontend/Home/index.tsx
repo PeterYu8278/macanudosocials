@@ -7,6 +7,8 @@ import {
   ShoppingOutlined,
   TeamOutlined,
   CrownOutlined,
+  BellOutlined,
+  SettingOutlined,
   DownloadOutlined,
   StarOutlined,
   TrophyOutlined
@@ -38,6 +40,7 @@ import { hasPermission } from '../../../config/permissions'
 import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
 import { requestPushSubscription, syncPushSubscriptionToFirestore } from '../../../services/oneSignal'
 import { usePWA } from '../../../utils/pwa'
+import './home.css'
 
 const usePrefersReducedMotion = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false)
@@ -144,10 +147,13 @@ const Home: React.FC = () => {
 
     if (isIOS) {
       modal.info({
+        className: 'home-install-instructions',
+        width: 420,
+        style: { maxWidth: 'calc(100vw - 32px)' },
         title: t('home.installPrompt.iosTitle'),
         content: (
-          <ol style={{ margin: '12px 0 0', paddingLeft: 20 }}>
-            <li style={{ marginBottom: 8 }}>{t('home.installPrompt.iosStep1')}</li>
+          <ol>
+            <li>{t('home.installPrompt.iosStep1')}</li>
             <li>{t('home.installPrompt.iosStep2')}</li>
           </ol>
         ),
@@ -429,25 +435,22 @@ const Home: React.FC = () => {
       `}</style>
       {showPWAInstallPrompt && (
         <Alert
+          className="home-device-prompt home-install-prompt"
           type="info"
           showIcon
           icon={<DownloadOutlined />}
           message={t('home.installPrompt.title')}
           description={t('home.installPrompt.description')}
           action={(
-            <Button size="small" type="primary" onClick={handleInstallPWA}>
+            <Button size="small" type="primary" icon={<DownloadOutlined />} onClick={handleInstallPWA}>
               {t('home.installPrompt.install')}
             </Button>
           )}
-          style={{
-            marginBottom: 16,
-            border: '1px solid rgba(244,175,37,0.55)',
-            background: 'rgba(36,31,20,0.96)',
-          }}
         />
       )}
       {showPushPrompt && (
         <Alert
+          className="home-device-prompt home-push-prompt"
           type={pushStatus === 'denied' ? 'warning' : 'info'}
           showIcon
           message={t('home.pushPrompt.title')}
@@ -458,6 +461,7 @@ const Home: React.FC = () => {
             <Button
               size="small"
               type="primary"
+              icon={pushStatus === 'denied' ? <SettingOutlined /> : <BellOutlined />}
               loading={pushBusy}
               onClick={handleEnablePush}
             >
@@ -466,11 +470,6 @@ const Home: React.FC = () => {
                 : t('home.pushPrompt.enable')}
             </Button>
           )}
-          style={{
-            marginBottom: 16,
-            border: '1px solid rgba(244,175,37,0.55)',
-            background: 'rgba(36,31,20,0.96)',
-          }}
         />
       )}
       {/* 顶部标题栏 */}
