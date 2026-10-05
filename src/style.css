@@ -1652,7 +1652,7 @@ a:hover {
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 8px 12px;
   margin-bottom: 12px;
 }
 
@@ -1667,19 +1667,32 @@ a:hover {
 
 .dashboard-current-visits-heading h2 > span:last-child {
   color: #fde08d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: rgba(244, 175, 37, 0.12);
+  font-size: 13px;
 }
 
 .dashboard-current-visits-heading a {
   font-size: 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
 }
 
 .dashboard-current-visit {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 120px 100px minmax(200px, 1.6fr);
-  gap: 16px;
-  padding: 14px 8px;
+  grid-template-columns: minmax(140px, 1fr) 150px 100px minmax(180px, 1.4fr);
+  gap: 12px;
+  padding: 10px 8px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-  align-items: start;
+  align-items: center;
   font-size: 13px;
   overflow-wrap: anywhere;
 }
@@ -1688,12 +1701,14 @@ a:hover {
   color: #aaa;
   background: rgba(255, 255, 255, 0.03);
   font-size: 12px;
+  padding-top: 8px;
+  padding-bottom: 8px;
 }
 
 .dashboard-current-member, .dashboard-current-time, .dashboard-current-redemptions {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
@@ -1704,6 +1719,23 @@ a:hover {
 
 .dashboard-current-duration {
   color: #fde08d;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.dashboard-current-time {
+  flex-direction: row;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.dashboard-current-time > span {
   white-space: nowrap;
 }
 
@@ -1734,30 +1766,43 @@ a:hover {
 
 @media (max-width: 1000px) {
   .dashboard-current-visit {
-    grid-template-columns: minmax(0, 1fr) 120px 100px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 12px;
+    padding: 12px 0;
   }
   .dashboard-current-visit-header {
     display: none;
   }
   .dashboard-current-redemptions {
-    grid-column: 1 / -1;
-    padding-top: 4px;
+    grid-column: 2;
+    grid-row: 2;
+    text-align: right;
+    font-size: 12px;
   }
-}
-
-@media (max-width: 600px) {
-  .dashboard-current-visit {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 10px;
+  .dashboard-current-visit--has-redemptions .dashboard-current-redemptions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    text-align: left;
+    padding-top: 4px;
   }
   .dashboard-current-duration {
     grid-column: 2;
     grid-row: 1;
+    justify-self: end;
+    align-self: start;
   }
   .dashboard-current-time {
-    grid-column: 1 / -1;
-    flex-direction: row;
+    grid-column: 1;
+    grid-row: 2;
     color: #aaa;
+  }
+}
+
+@media (max-width: 420px) {
+  .dashboard-current-redemptions {
+    grid-column: 1 / -1;
+    grid-row: 3;
+    text-align: left;
   }
 }
 .profile-basic-form .ant-form-item {

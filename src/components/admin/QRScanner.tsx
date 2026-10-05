@@ -191,7 +191,7 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
   const configuredRedemptions = displayedRedemptions.filter(redemption => Boolean(redemption.cigarId?.trim()));
   const pendingRedemption = redemptionRecords.find(redemption => redemption.status === 'pending' || !redemption.cigarId?.trim());
   const canSetVisitCigar = Boolean(
-    scannedMember?.pendingSession && (pendingRedemption || configuredRedemptions.length === 0)
+    scannedMember?.pendingSession && pendingRedemption && !redemptionsLoading
   );
 
   const saveVisitCigar = async () => {

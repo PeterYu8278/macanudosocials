@@ -38,7 +38,7 @@ describe('current lounge visits', () => {
     })
     window.matchMedia = vi.fn().mockImplementation(() => ({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }))
   })
-  afterEach(cleanup)
+  afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
   it('scopes the listener and updates members and cigar records as visits change', async () => {
     render(<MemoryRouter><CurrentVisits users={[]} cigars={[{ id: 'cigar-a', name: 'Robusto' } as any]} /></MemoryRouter>)
@@ -58,5 +58,16 @@ describe('current lounge visits', () => {
     mocks.auth.user.storeId = ''
     render(<MemoryRouter><CurrentVisits users={[]} cigars={[]} /></MemoryRouter>)
     expect(mocks.listen).not.toHaveBeenCalled()
+  })
+
+  it('uses the compact empty-redemption layout and minute-only duration for short visits', async () => {
+    const now = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(now)
+    mocks.readRecords.mockResolvedValue([])
+    render(<MemoryRouter><CurrentVisits users={[]} cigars={[]} /></MemoryRouter>)
+    act(() => mocks.listen.mock.calls[0][1]([{ id: 'visit', userName: 'Alice', checkInAt: new Date(now - 4 * 60000) }]))
+    const empty = await screen.findByText('visitSessions.noRedemptionRecords')
+    expect(empty.closest('.dashboard-current-visit')?.classList.contains('dashboard-current-visit--has-redemptions')).toBe(false)
+    expect(screen.getByText('4m')).toBeTruthy()
   })
 })

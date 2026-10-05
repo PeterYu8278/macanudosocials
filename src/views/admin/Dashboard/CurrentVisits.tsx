@@ -55,7 +55,7 @@ const CurrentVisitRow = ({ session, users, cigars, storeName, now }: {
   const minutes = Math.max(0, Math.floor((now - session.checkInAt.getTime()) / 60000))
 
   return (
-    <div className="dashboard-current-visit" role="row">
+    <div className={`dashboard-current-visit${loading || error || records.length > 0 ? ' dashboard-current-visit--has-redemptions' : ''}`} role="row">
       <div role="cell" className="dashboard-current-member">
         <strong>{member?.displayName || session.userName || t('dashboard.unknownUser')}</strong>
         <span>{storeName || session.storeName || '-'}</span>
@@ -65,7 +65,7 @@ const CurrentVisitRow = ({ session, users, cigars, storeName, now }: {
         <span>{dayjs(session.checkInAt).format('HH:mm')}</span>
       </div>
       <div role="cell" className="dashboard-current-duration">
-        <ClockCircleOutlined /> {Math.floor(minutes / 60)} H {minutes % 60}m
+        <ClockCircleOutlined /> {minutes >= 60 ? `${Math.floor(minutes / 60)} H ${minutes % 60}m` : `${minutes}m`}
       </div>
       <div role="cell" className="dashboard-current-redemptions">
         {loading ? <Spin size="small" /> : error ? (
