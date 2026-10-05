@@ -1,4 +1,30 @@
 {
+  "systemSettings": {
+    "title": "系统设置",
+    "categories": "设置分类",
+    "sections": {
+      "appearance": "品牌与外观",
+      "login": "登录方式",
+      "communication": "通信管理",
+      "payment": "支付管理",
+      "ai": "AI 服务",
+      "environment": "环境与部署"
+    },
+    "environmentConfiguration": "环境配置",
+    "saveAppearance": "保存外观设置",
+    "saveLogin": "保存登录方式",
+    "saveAi": "保存 AI 设置"
+  },
+  "communications": {
+    "title": "通讯管理",
+    "push": "推送通知",
+    "emailProviders": "电邮发送服务",
+    "passwordReset": "重置密码电邮",
+    "emailChange": "更换电邮确认",
+    "emailChangeConstraint": "Resend 保留可撤销的确认链接。此应用无法撤销 Firebase 的更换电邮链接。",
+    "saved": "已保存电邮发送服务选择",
+    "saveFailed": "无法保存电邮发送服务"
+  },
   "common": {
     "loading": "加载中...",
     "pageLoading": "页面加载中...",

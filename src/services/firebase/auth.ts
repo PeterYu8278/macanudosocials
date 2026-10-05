@@ -11,14 +11,14 @@ import {
   getRedirectResult,
   updatePassword,
   EmailAuthProvider,
-  linkWithCredential,
-  sendPasswordResetEmail
+  linkWithCredential
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
 import { doc, setDoc, getDoc, getDocFromCache, getDocFromServer, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc, waitForPendingWrites } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
+import { sendRecoveryEmail } from './passwordResetEmail';
 import { loginPhoneWithPassword } from './phoneLogin';
 import { normalizePhoneNumber, identifyInputType } from '../../utils/phoneNormalization';
 import { generateMemberId, getUserByMemberId } from '../../utils/memberId';
@@ -982,7 +982,8 @@ export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Pro
 // 管理员触发密码重置邮件
 export const sendPasswordResetEmailFor = async (email: string) => {
   try {
-    await sendPasswordResetEmail(auth, email)
+    const provider = await sendRecoveryEmail(email)
+    if (provider === 'resend') return { success: true }
 
     // Anonymous recovery must not query protected member records.
     if (!auth.currentUser) return { success: true }

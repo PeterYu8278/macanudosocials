@@ -183,6 +183,7 @@ const fetchAppConfig = async (): Promise<AppConfig | null> => {
       invoiceTemplate: data.invoiceTemplate ?? undefined,
       whapi: whapiConfig,
       whapiTemplates,
+      emailProviders: { passwordReset: data.emailProviders?.passwordReset === 'resend' ? 'resend' : 'firebase', emailChange: 'resend' },
       auth: data.auth ? {
         disableGoogleLogin: data.auth.disableGoogleLogin ?? true,
         disableEmailLogin: data.auth.disableEmailLogin ?? true,
@@ -288,6 +289,7 @@ const fetchAppConfig = async (): Promise<AppConfig | null> => {
             invoiceTemplate: data.invoiceTemplate ?? undefined,
             whapi: whapiConfig,
             whapiTemplates,
+            emailProviders: { passwordReset: data.emailProviders?.passwordReset === 'resend' ? 'resend' : 'firebase', emailChange: 'resend' },
             auth: data.auth ? {
               disableGoogleLogin: data.auth.disableGoogleLogin ?? true,
               disableEmailLogin: data.auth.disableEmailLogin ?? true,
@@ -363,7 +365,7 @@ export const getAppConfig = (): Promise<AppConfig | null> => {
  * 更新应用配置
  */
 export const updateAppConfig = async (
-  updates: Partial<Pick<AppConfig, 'logoUrl' | 'appName' | 'hideFooter' | 'colorTheme' | 'invoice' | 'invoiceTemplate' | 'whapi' | 'whapiTemplates' | 'auth' | 'gemini' | 'aiCigar' | 'subscription' | 'payment' | 'paymentPlatform'>>,
+  updates: Partial<Pick<AppConfig, 'logoUrl' | 'appName' | 'hideFooter' | 'colorTheme' | 'invoice' | 'invoiceTemplate' | 'whapi' | 'whapiTemplates' | 'emailProviders' | 'auth' | 'gemini' | 'aiCigar' | 'subscription' | 'payment' | 'paymentPlatform'>>,
   updatedBy: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {

@@ -1,4 +1,30 @@
 {
+  "systemSettings": {
+    "title": "System Settings",
+    "categories": "Settings category",
+    "sections": {
+      "appearance": "Brand & Appearance",
+      "login": "Login Methods",
+      "communication": "Communications",
+      "payment": "Payments",
+      "ai": "AI Services",
+      "environment": "Environment & Deployment"
+    },
+    "environmentConfiguration": "Environment Configuration",
+    "saveAppearance": "Save Appearance",
+    "saveLogin": "Save Login Methods",
+    "saveAi": "Save AI Settings"
+  },
+  "communications": {
+    "title": "Communications",
+    "push": "Push Notifications",
+    "emailProviders": "Email Providers",
+    "passwordReset": "Password reset email",
+    "emailChange": "Email change confirmation",
+    "emailChangeConstraint": "Resend preserves cancellable confirmation links. Firebase email change links cannot be revoked by this application.",
+    "saved": "Email provider selection saved",
+    "saveFailed": "Unable to save email providers"
+  },
   "common": {
     "loading": "Loading...",
     "pageLoading": "Page loading...",

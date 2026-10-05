@@ -1,5 +1,5 @@
 // 功能管理页面
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { Card, Switch, Button, Space, Typography, App, Spin, Tabs, Input, Checkbox, Form, Divider, Alert, Select, Modal, Table } from 'antd';
 const { TextArea } = Input;
@@ -20,28 +20,26 @@ import WhapiMessageTester from '../../../components/admin/WhapiMessageTester';
 import PaymentTester from '../../../components/admin/PaymentTester';
 import CigarDatabase from '../CigarDatabase';
 import NotificationManagement from '../NotificationManagement';
+import EmailProviders from './EmailProviders';
+import SystemSettingsNav from './SystemSettingsNav';
+import { getSettingsSection, getSectionTab, readSettingsNavigation, writeSettingsNavigation, type ContentTab } from './settingsNavigation';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
 
-type FeatureManagementTab = 'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'whapi' | 'payment' | 'notifications' | 'env';
+type FeatureManagementTab = ContentTab;
 
-const FEATURE_MANAGEMENT_TABS: FeatureManagementTab[] = [
+const FEATURE_MANAGEMENT_TABS = [
   'frontend',
   'admin',
   'cigar-database',
   'tools',
-  'app',
-  'whapi',
-  'payment',
-  'notifications',
-  'env',
-];
+  'system',
+] as const;
 
 const getInitialTab = (): FeatureManagementTab => {
   if (typeof window === 'undefined') return 'frontend';
-  const requestedTab = new URLSearchParams(window.location.search).get('tab') as FeatureManagementTab | null;
-  return requestedTab && FEATURE_MANAGEMENT_TABS.includes(requestedTab) ? requestedTab : 'frontend';
+  return readSettingsNavigation(window.location.search).tab;
 };
 
 // Firestore 索引预览数据
@@ -114,6 +112,32 @@ const FeatureManagement: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [searchText, setSearchText] = useState('');
   const [activeTab, setActiveTab] = useState<FeatureManagementTab>(getInitialTab);
+  const settingsSection = getSettingsSection(activeTab);
+  const isSystemSettings = settingsSection !== null;
+  const isAppSection = activeTab === 'app' || activeTab === 'login' || activeTab === 'ai';
+  const activeTabButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!loading && window.matchMedia('(max-width: 768px)').matches) {
+      activeTabButton.current?.scrollIntoView({ block: 'nearest', inline: 'center' });
+    }
+  }, [activeTab, loading]);
+  const [communicationView, setCommunicationView] = useState<'whatsapp' | 'push' | 'email'>(() => {
+    return readSettingsNavigation(window.location.search).channel;
+  });
+  const navigateTo = (tab: FeatureManagementTab, channel = communicationView) => {
+    setActiveTab(tab);
+    setCommunicationView(channel);
+    window.history.replaceState({}, '', writeSettingsNavigation(new URL(window.location.href), tab, channel));
+  };
+  useEffect(() => {
+    const onPopState = () => {
+      const next = readSettingsNavigation(window.location.search);
+      setActiveTab(next.tab);
+      setCommunicationView(next.channel);
+    };
+    window.addEventListener('popstate', onPopState);
+    return () => window.removeEventListener('popstate', onPopState);
+  }, []);
   const [whapiForm] = Form.useForm();
   const whapiEnabled = Form.useWatch('whapiEnabled', whapiForm) ?? false;
   const [paymentForm] = Form.useForm();
@@ -202,7 +226,7 @@ const FeatureManagement: React.FC = () => {
 
   // 当 appConfig 加载完成且切换到应用配置标签页时，设置表单值
   useEffect(() => {
-    if (activeTab === 'app' && appConfig) {
+    if (appConfig) {
       try {
         appConfigForm.setFieldsValue({
           logoUrl: appConfig.logoUrl,
@@ -216,7 +240,7 @@ const FeatureManagement: React.FC = () => {
         // Form 可能还未渲染，忽略错误
       }
     }
-  }, [activeTab, appConfig, appConfigForm]);
+  }, [appConfig, appConfigForm]);
 
   // 加载 AI识茄 配置
   useEffect(() => {
@@ -229,7 +253,7 @@ const FeatureManagement: React.FC = () => {
 
   // 当切换到 whapi 标签页时，设置表单值
   useEffect(() => {
-    if (activeTab === 'whapi' && appConfig) {
+    if (activeTab === 'communications' && communicationView === 'whatsapp' && appConfig) {
       whapiForm.setFieldsValue({
         whapiApiToken: appConfig.whapi?.apiToken || '',
         whapiChannelId: appConfig.whapi?.channelId || '',
@@ -240,7 +264,7 @@ const FeatureManagement: React.FC = () => {
         whapiPasswordReset: appConfig.whapi?.features?.passwordReset ?? true,
       });
     }
-  }, [activeTab, appConfig, whapiForm]);
+  }, [activeTab, communicationView, appConfig, whapiForm]);
 
   // 当切换到 payment 标签页时，设置表单值
   useEffect(() => {
@@ -359,7 +383,9 @@ const FeatureManagement: React.FC = () => {
 
     setSavingAppConfig(true);
     try {
-      const values = await appConfigForm.validateFields();
+      const fields = activeTab === 'login' ? ['disableGoogleLogin', 'disableEmailLogin']
+        : activeTab === 'ai' ? ['geminiModels'] : ['logoUrl', 'appName', 'hideFooter'];
+      const values = await appConfigForm.validateFields(fields);
       // 合并待保存的颜色更改
       const finalColorTheme = appConfig?.colorTheme
         ? {
@@ -373,36 +399,27 @@ const FeatureManagement: React.FC = () => {
         disableEmailLogin: Boolean(values.disableEmailLogin),
       };
 
-      const geminiConfig = values.geminiModels && values.geminiModels.length > 0
-        ? { models: values.geminiModels }
-        : undefined;
-
-      const result = await updateAppConfig(
-        {
+      const changes: Partial<AppConfig> = activeTab === 'login' ? { auth: authConfig }
+        : activeTab === 'ai' ? { gemini: { models: values.geminiModels || [] } } : {
           logoUrl: values.logoUrl,
           appName: values.appName,
           hideFooter: values.hideFooter ?? false,
           colorTheme: finalColorTheme, // 使用合并后的颜色主题
-          auth: authConfig,
-          gemini: geminiConfig,
-        },
+        };
+      const result = await updateAppConfig(
+        changes,
         user.id
       );
 
       if (result.success) {
         message.success(t('featureManagement.appConfigSaved'));
-        setPendingColorChanges({}); // 清空待保存的更改
+        if (activeTab === 'app') setPendingColorChanges({});
 
         // 直接更新本地 appConfig 状态，保留其他字段（如 aiCigar、whapi）
         if (appConfig) {
           setAppConfig({
             ...appConfig,
-            logoUrl: values.logoUrl,
-            appName: values.appName,
-            hideFooter: values.hideFooter ?? false,
-            colorTheme: finalColorTheme,
-            auth: authConfig,
-            gemini: geminiConfig,
+            ...changes,
           });
         }
       } else {
@@ -1036,14 +1053,17 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       <div style={{ marginBottom: 16 }}>
         <div style={{
           display: 'flex',
+          overflowX: 'auto',
+          maxWidth: '100%',
           borderBottom: '1px solid rgba(244,175,37,0.2)',
           marginBottom: 16
         }}>
           {FEATURE_MANAGEMENT_TABS.map((tabKey) => {
-            const isActive = activeTab === tabKey;
+            const isActive = tabKey === 'system' ? isSystemSettings : activeTab === tabKey;
             const baseStyle: React.CSSProperties = {
-              flex: 1,
-              padding: '10px 0',
+              flex: isMobile ? '0 0 116px' : 1,
+              minWidth: 0,
+              padding: '10px 4px',
               fontWeight: 800,
               fontSize: 12,
               outline: 'none',
@@ -1071,15 +1091,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                   ? t('featureManagement.cigarDatabase', { defaultValue: '雪茄数据库' })
                   : tabKey === 'tools'
                     ? t('featureManagement.tools', { defaultValue: '工具' })
-                    : tabKey === 'app'
-                      ? t('featureManagement.appSettings', { defaultValue: '应用配置' })
-                      : tabKey === 'whapi'
-                        ? t('featureManagement.whapiSettings', { defaultValue: 'WhatsApp 管理' })
-                       : tabKey === 'payment'
-                           ? t('featureManagement.paymentSettings', { defaultValue: '支付网关' })
-                           : tabKey === 'notifications'
-                             ? t('featureManagement.notificationsSettings', { defaultValue: '通知管理' })
-                             : t('featureManagement.envSettings', { defaultValue: '环境配置' });
+                    : t('systemSettings.title');
             const words = label.trim().split(/\s+/);
             const labelLines = words.length > 1
               ? [
@@ -1090,16 +1102,16 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
 
             return (
               <button
+                type="button"
+                aria-pressed={isActive}
                 key={tabKey}
+                ref={isActive ? activeTabButton : undefined}
                 style={{
                   ...baseStyle,
                   ...(isActive ? activeStyle : inactiveStyle),
                 }}
                 onClick={() => {
-                  setActiveTab(tabKey);
-                  const url = new URL(window.location.href);
-                  url.searchParams.set('tab', tabKey);
-                  window.history.replaceState({}, '', `${url.pathname}${url.search}${url.hash}`);
+                  navigateTo(tabKey === 'system' ? getSectionTab(settingsSection ?? 'appearance') : tabKey);
                 }}
               >
                 <span style={{ display: 'block', lineHeight: 1.25 }}>{labelLines[0]}</span>
@@ -1111,7 +1123,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       </div>
 
       {/* 搜索和批量操作（仅功能标签页显示） */}
-      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'payment' && activeTab !== 'notifications' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
+      {!isSystemSettings && activeTab !== 'cigar-database' && (
         <div style={{ marginBottom: 16, display: 'flex', gap: 12, alignItems: 'center' }}>
           <Search
             placeholder={t('featureManagement.searchPlaceholder', { defaultValue: '搜索功能...' })}
@@ -1140,7 +1152,11 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       )}
 
       {/* 功能列表或应用配置 */}
-      {activeTab === 'app' ? (
+      <div className={isSystemSettings ? 'system-settings-layout' : undefined}>
+      {settingsSection && <SystemSettingsNav section={settingsSection} onChange={section => navigateTo(getSectionTab(section))} />}
+      <div className={isSystemSettings ? 'system-settings-content' : undefined}>
+      {settingsSection && <Title level={4} className="system-settings-heading">{t(`systemSettings.sections.${settingsSection}`)}</Title>}
+      {isAppSection ? (
         <Card style={{
           background: 'rgba(255, 255, 255, 0.05)',
           borderRadius: 12,
@@ -1152,10 +1168,11 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
             layout="vertical"
             onFinish={handleSaveAppConfig}
           >
+            <div hidden={activeTab !== 'app'}>
             <Form.Item
               label={<span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.appLogo')}</span>}
               name="logoUrl"
-              rules={[{ required: true, message: t('featureManagement.appLogoRequired') }]}
+              rules={[{ required: activeTab === 'app', message: t('featureManagement.appLogoRequired') }]}
             >
               <ImageUpload
                 folder="app-config"
@@ -1171,7 +1188,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
             <Form.Item
               label={<span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.appName')}</span>}
               name="appName"
-              rules={[{ required: true, message: t('featureManagement.appNameRequired') }]}
+              rules={[{ required: activeTab === 'app', message: t('featureManagement.appNameRequired') }]}
             >
               <Input
                 placeholder="例如：MS"
@@ -1197,7 +1214,8 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               />
             </Form.Item>
 
-            <Divider style={{ borderColor: 'rgba(244, 175, 37, 0.2)', margin: '24px 0' }} />
+            </div>
+            <div hidden={activeTab !== 'login'}>
 
             <div style={{ marginBottom: 16 }}>
               <Text style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>
@@ -1231,7 +1249,8 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               />
             </Form.Item>
 
-            <Divider style={{ borderColor: 'rgba(244, 175, 37, 0.2)', margin: '24px 0' }} />
+            </div>
+            <div hidden={activeTab !== 'ai'}>
 
             {/* Gemini API 模型设定 */}
             <div style={{ marginBottom: 24 }}>
@@ -1364,7 +1383,10 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               </div>
             </div>
 
+            <Button icon={<SettingOutlined />} onClick={() => navigateTo('env')}>{t('systemSettings.environmentConfiguration')}</Button>
+            </div>
             {/* 颜色主题管理 */}
+            <div hidden={activeTab !== 'app'}>
             <div style={{ marginTop: 32 }}>
               <div style={{
                 marginBottom: 16,
@@ -1385,14 +1407,16 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
               />
             </div>
 
-            <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+            </div>
+            <div className="system-settings-actions">
+              {activeTab === 'app' &&
               <Button
                 icon={<ReloadOutlined />}
                 onClick={handleResetAppConfig}
                 disabled={savingAppConfig}
               >
                 {t('featureManagement.resetToDefault', { defaultValue: '重置为默认' })}
-              </Button>
+              </Button>}
               <Button
                 type="primary"
                 icon={<SaveOutlined />}
@@ -1403,7 +1427,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                   border: 'none',
                 }}
               >
-                {t('featureManagement.saveChanges', { defaultValue: '保存更改' })}
+                {t(activeTab === 'login' ? 'systemSettings.saveLogin' : activeTab === 'ai' ? 'systemSettings.saveAi' : 'systemSettings.saveAppearance')}
               </Button>
             </div>
           </Form>
@@ -1411,7 +1435,15 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       ) : null}
 
       {/* WhatsApp 管理标签页 */}
-      {activeTab === 'whapi' ? (
+      {activeTab === 'communications' && <Tabs activeKey={communicationView} onChange={key => {
+        navigateTo('communications', key as typeof communicationView);
+      }} items={[
+        { key: 'whatsapp', label: 'WhatsApp' },
+        { key: 'push', label: t('communications.push') },
+        { key: 'email', label: t('communications.emailProviders') },
+      ]} />}
+      {activeTab === 'communications' && communicationView === 'email' && <EmailProviders config={appConfig} userId={user?.id} onSaved={() => { refreshAppConfig(); }} />}
+      {activeTab === 'communications' && communicationView === 'whatsapp' ? (
         <>
           <Card style={{
             background: 'rgba(255, 255, 255, 0.05)',
@@ -2657,11 +2689,11 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       ) : null}
 
       {/* 通知管理标签页 */}
-      {activeTab === 'notifications' ? (
+      {activeTab === 'communications' && communicationView === 'push' ? (
         <NotificationManagement embedded />
       ) : null}
 
-      {activeTab !== 'app' && activeTab !== 'whapi' && activeTab !== 'payment' && activeTab !== 'notifications' && activeTab !== 'env' && activeTab !== 'cigar-database' && (
+      {!isSystemSettings && activeTab !== 'cigar-database' && (
         <>
           <Card style={{
             background: 'rgba(255, 255, 255, 0.05)',
@@ -2960,6 +2992,8 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
           </div>
         </>
       )}
+      </div>
+      </div>
     </div>
   );
 };

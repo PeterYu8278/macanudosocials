@@ -504,6 +504,7 @@ export interface AppConfig {
   invoiceTemplate?: InvoiceTemplateConfig | null;
   whapi?: import('./whapi').WhapiConfig;  // Whapi.Cloud WhatsApp 配置
   whapiTemplates?: import('./whapi').MessageTemplate[];  // 消息模板
+  emailProviders?: { passwordReset: 'firebase' | 'resend'; emailChange: 'resend' };
   auth?: {
     disableGoogleLogin?: boolean;  // 禁用 Google 登录
     disableEmailLogin?: boolean;   // 禁用电邮登录
