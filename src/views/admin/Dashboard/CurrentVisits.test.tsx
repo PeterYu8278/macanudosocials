@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { VisitSession } from '../../../types'
+import type { User, VisitSession } from '../../../types'
 import CurrentVisits from './CurrentVisits'
 
 const mocks = vi.hoisted(() => ({
@@ -58,6 +58,39 @@ describe('current lounge visits', () => {
     mocks.auth.user.storeId = ''
     render(<MemoryRouter><CurrentVisits users={[]} cigars={[]} /></MemoryRouter>)
     expect(mocks.listen).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    [{ phone: '+60111111111', profile: { phone: ' +60222222222 ' } }, '+60222222222'],
+    [{ phone: '+60111111111', profile: { phone: ' ' } }, '+60111111111'],
+  ])('displays the member phone with a telephone link', async (fields, expected) => {
+    mocks.readRecords.mockResolvedValue([])
+    render(<MemoryRouter><CurrentVisits users={[{ id: 'member-a', displayName: 'Alice', ...fields } as User]} cigars={[]} /></MemoryRouter>)
+    act(() => mocks.listen.mock.calls[0][1]([{ id: 'visit', userId: 'member-a', storeId: 'lounge-a', checkInAt: new Date() }]))
+    await screen.findByText('visitSessions.noRedemptionRecords')
+    expect(screen.getByText(expected).getAttribute('href')).toBe(`tel:${expected}`)
+  })
+
+  it('groups visits by lounge ID with separate counts and preserves unknown lounges', async () => {
+    mocks.auth.isSuperAdmin = true
+    mocks.readRecords.mockResolvedValue([])
+    render(<MemoryRouter><CurrentVisits users={[]} cigars={[]} /></MemoryRouter>)
+    expect(mocks.listen.mock.calls[0][0]).toBeUndefined()
+    act(() => mocks.listen.mock.calls[0][1]([
+      { id: 'one', userName: 'Alice', storeId: 'lounge-a', checkInAt: new Date() },
+      { id: 'two', userName: 'Bob', storeId: 'lounge-b', storeName: 'Lounge B', checkInAt: new Date() },
+      { id: 'three', userName: 'Carol', storeId: 'lounge-a', checkInAt: new Date() },
+      { id: 'four', userName: 'Dan', checkInAt: new Date() },
+    ]))
+    await waitFor(() => expect(screen.getAllByText('visitSessions.noRedemptionRecords')).toHaveLength(4))
+    const groups = document.querySelectorAll('.dashboard-current-lounge')
+    expect(groups).toHaveLength(3)
+    expect(groups[0].querySelector('h3')?.textContent).toBe('Lounge A2')
+    expect(groups[0].textContent).toContain('Alice')
+    expect(groups[0].textContent).toContain('Carol')
+    expect(groups[0].textContent).not.toContain('Bob')
+    expect(groups[1].querySelector('h3')?.textContent).toBe('Lounge B1')
+    expect(groups[2].textContent).toContain('Dan')
   })
 
   it('uses the compact empty-redemption layout and minute-only duration for short visits', async () => {

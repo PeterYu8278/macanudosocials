@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Alert, Empty, Spin, Tag } from 'antd'
-import { ArrowRightOutlined, ClockCircleOutlined, TeamOutlined } from '@ant-design/icons'
+import { ArrowRightOutlined, ClockCircleOutlined, PhoneOutlined } from '@ant-design/icons'
 import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -12,11 +12,10 @@ import { getRedemptionRecordsBySession, subscribeToRedemptionRecordsBySession } 
 import type { Cigar, RedemptionRecord, User, VisitSession } from '../../../types'
 import { canAccessRoute } from '../../../config/permissions'
 
-const CurrentVisitRow = ({ session, users, cigars, storeName, now }: {
+const CurrentVisitRow = ({ session, users, cigars, now }: {
   session: VisitSession
   users: User[]
   cigars: Cigar[]
-  storeName: string
   now: number
 }) => {
   const { t } = useTranslation()
@@ -52,13 +51,16 @@ const CurrentVisitRow = ({ session, users, cigars, storeName, now }: {
   }, [session.id])
 
   const member = users.find(entry => entry.id === session.userId)
+  const phone = member?.profile?.phone?.trim() || member?.phone?.trim()
   const minutes = Math.max(0, Math.floor((now - session.checkInAt.getTime()) / 60000))
 
   return (
     <div className={`dashboard-current-visit${loading || error || records.length > 0 ? ' dashboard-current-visit--has-redemptions' : ''}`} role="row">
       <div role="cell" className="dashboard-current-member">
         <strong>{member?.displayName || session.userName || t('dashboard.unknownUser')}</strong>
-        <span>{storeName || session.storeName || '-'}</span>
+        <span className="dashboard-current-phone">
+          <PhoneOutlined /> {phone ? <a href={`tel:${phone}`}>{phone}</a> : '-'}
+        </span>
       </div>
       <div role="cell" className="dashboard-current-time">
         <span>{dayjs(session.checkInAt).format('D MMM YYYY')}</span>
@@ -120,25 +122,38 @@ export default function CurrentVisits({ users, cigars }: { users: User[]; cigars
     return () => window.clearInterval(timer)
   }, [])
 
+  const loungeGroups = new Map<string, { name: string; sessions: VisitSession[] }>()
+  sessions.forEach(session => {
+    const key = session.storeId || session.storeName || ''
+    const group = loungeGroups.get(key)
+    if (group) group.sessions.push(session)
+    else loungeGroups.set(key, {
+      name: stores.find(store => store.id === session.storeId)?.name || session.storeName || '-',
+      sessions: [session],
+    })
+  })
+
   return (
     <section className="dashboard-current-visits" aria-label={t('dashboard.currentVisits')}>
       <div className="dashboard-current-visits-heading">
-        <h2><TeamOutlined /> {t('dashboard.currentVisits')} <span>{sessions.length}</span></h2>
+        <h2>{t('dashboard.currentVisits')} <span>{sessions.length}</span></h2>
         {user && canAccessRoute(user.role, '/admin/visit-sessions') && <Link to="/admin/visit-sessions">{t('dashboard.manageVisits')} <ArrowRightOutlined /></Link>}
       </div>
       {loading ? <div className="dashboard-current-visits-empty"><Spin /></div>
         : error ? <Alert type="error" showIcon message={t('dashboard.currentVisitsLoadFailed')} />
         : sessions.length === 0 ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('dashboard.noCurrentVisits')} />
-        : <div role="table" aria-label={t('dashboard.currentVisits')}>
+        : Array.from(loungeGroups, ([key, group]) => <section key={key} className="dashboard-current-lounge" aria-label={group.name}>
+          <h3>{group.name}<span>{group.sessions.length}</span></h3>
+          <div role="table" aria-label={group.name}>
           <div role="row" className="dashboard-current-visit dashboard-current-visit-header">
             <span role="columnheader">{t('visitSessions.user')}</span>
             <span role="columnheader">{t('visitSessions.checkInTime')}</span>
             <span role="columnheader">{t('visitSessions.duration')}</span>
             <span role="columnheader">{t('visitSessions.redemptionRecords')}</span>
           </div>
-          {sessions.map(session => <CurrentVisitRow key={session.id} session={session} users={users} cigars={cigars}
-            storeName={stores.find(store => store.id === session.storeId)?.name || ''} now={now} />)}
-        </div>}
+          {group.sessions.map(session => <CurrentVisitRow key={session.id} session={session} users={users} cigars={cigars} now={now} />)}
+          </div>
+        </section>)}
     </section>
   )
 }

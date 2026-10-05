@@ -3,7 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { Typography, Button, App, Spin, Modal, Form, Select, Input, Alert, Drawer } from 'antd'
-import { ReloadOutlined, PlusOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons'
+import { PlusOutlined, CloseOutlined, HomeOutlined } from '@ant-design/icons'
 import { Link, useNavigate } from 'react-router-dom'
 import RoleSimulator from '../../../components/common/RoleSimulator'
 import dayjs from 'dayjs'
@@ -28,6 +28,7 @@ import { getAllReloadRecords } from '../../../services/firebase/reload'
 import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import OrderDetails from '../Orders/OrderDetails'
 import CurrentVisits from './CurrentVisits'
+import { getRevenueTotals } from './revenue'
 import { canAccessRoute } from '../../../config/permissions'
 
 const { Title } = Typography
@@ -471,6 +472,8 @@ type OrdersRevenueTrendPoint = {
 const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMobile: boolean }> = ({ data, isMobile }) => {
   const { t } = useTranslation()
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const [showOrders, setShowOrders] = useState(true)
+  const [showRevenue, setShowRevenue] = useState(true)
   const width = 500
   const height = 220
   const paddingLeft = 35
@@ -507,14 +510,14 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
   return (
     <div style={{ position: 'relative', height: isMobile ? 250 : 286, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', padding: 16, border: '1px solid rgba(244,175,37,0.15)', borderRadius: 12, background: 'rgba(255,255,255,0.02)' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 8, flexWrap: 'wrap' }}>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+        <button type="button" aria-pressed={showOrders} onClick={() => setShowOrders(value => !value)} className="dashboard-chart-legend">
           <span style={{ width: 18, height: 3, borderRadius: 2, background: '#38bdf8' }} />
           {t('dashboard.orders')}
-        </span>
-        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'rgba(255,255,255,0.72)', fontSize: 12 }}>
+        </button>
+        <button type="button" aria-pressed={showRevenue} onClick={() => setShowRevenue(value => !value)} className="dashboard-chart-legend">
           <span style={{ width: 18, height: 3, borderRadius: 2, background: '#34d399' }} />
           {t('dashboard.revenue')}
-        </span>
+        </button>
       </div>
 
       <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ overflow: 'visible', flex: 1, minHeight: 0 }}>
@@ -524,12 +527,12 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
           return (
             <g key={index}>
               <line x1={paddingLeft} y1={y} x2={width - paddingRight} y2={y} stroke="rgba(255,255,255,0.08)" strokeDasharray="4 4" />
-              <text x={paddingLeft - 8} y={y + 4} fill="#38bdf8" fontSize="9" textAnchor="end" fontFamily="monospace">
+              {showOrders && <text x={paddingLeft - 8} y={y + 4} fill="#38bdf8" fontSize="9" textAnchor="end" fontFamily="monospace">
                 {Math.round(ratio * maxOrders)}
-              </text>
-              <text x={width - paddingRight + 8} y={y + 4} fill="#34d399" fontSize="9" textAnchor="start" fontFamily="monospace">
+              </text>}
+              {showRevenue && <text x={width - paddingRight + 8} y={y + 4} fill="#34d399" fontSize="9" textAnchor="start" fontFamily="monospace">
                 {compactMoney(ratio * maxRevenue)}
-              </text>
+              </text>}
             </g>
           )
         })}
@@ -545,8 +548,8 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
           )
         })}
 
-        <path d={pathFor(orderPoints)} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />
-        <path d={pathFor(revenuePoints)} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />
+        {showOrders && <path d={pathFor(orderPoints)} fill="none" stroke="#38bdf8" strokeWidth="3" strokeLinecap="round" />}
+        {showRevenue && <path d={pathFor(revenuePoints)} fill="none" stroke="#34d399" strokeWidth="3" strokeLinecap="round" />}
 
         {data.map((point, index) => {
           const x = orderPoints[index].x
@@ -554,18 +557,18 @@ const OrdersRevenueTrendChart: React.FC<{ data: OrdersRevenueTrendPoint[]; isMob
           return (
             <g key={`${point.label}-${index}`}>
               <rect x={x - targetWidth / 2} y={paddingTop} width={targetWidth} height={chartHeight} fill="transparent" style={{ cursor: 'pointer' }} onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(null)} />
-              <circle cx={x} cy={orderPoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#38bdf8" strokeWidth="2" />
-              <circle cx={x} cy={revenuePoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#34d399" strokeWidth="2" />
+              {showOrders && <circle cx={x} cy={orderPoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#38bdf8" strokeWidth="2" />}
+              {showRevenue && <circle cx={x} cy={revenuePoints[index].y} r={hoveredIndex === index ? 5 : 3.5} fill="#1a160d" stroke="#34d399" strokeWidth="2" />}
             </g>
           )
         })}
       </svg>
 
-      {hoveredIndex !== null && (
+      {hoveredIndex !== null && (showOrders || showRevenue) && (
         <div style={{ position: 'absolute', left: `${Math.min(Math.max((orderPoints[hoveredIndex].x / width) * 100, 15), 82)}%`, top: 44, transform: 'translateX(-50%)', padding: '7px 10px', border: '1px solid rgba(52,211,153,0.5)', borderRadius: 6, background: 'rgba(26,22,13,0.96)', color: '#fff', fontSize: 11, pointerEvents: 'none', whiteSpace: 'nowrap', zIndex: 2 }}>
           <div style={{ color: 'rgba(255,255,255,0.5)', fontSize: 9, marginBottom: 3 }}>{data[hoveredIndex].label}</div>
-          <div style={{ color: '#38bdf8' }}>{t('dashboard.orders')}: {data[hoveredIndex].orders}</div>
-          <div style={{ color: '#34d399' }}>{t('dashboard.revenue')}: RM{data[hoveredIndex].revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+          {showOrders && <div style={{ color: '#38bdf8' }}>{t('dashboard.orders')}: {data[hoveredIndex].orders}</div>}
+          {showRevenue && <div style={{ color: '#34d399' }}>{t('dashboard.revenue')}: RM{data[hoveredIndex].revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>}
         </div>
       )}
     </div>
@@ -1132,7 +1135,6 @@ const AdminDashboard: React.FC = () => {
 
   const ordersRevenueTrendData = useMemo(() => {
     const orderTotals = new Map<string, number>()
-    const revenueTotals = new Map<string, number>()
     const toDate = (value: any): Date | null => {
       if (!value) return null
       const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
@@ -1150,13 +1152,7 @@ const AdminDashboard: React.FC = () => {
       orderTotals.set(key, (orderTotals.get(key) || 0) + 1)
     })
 
-    trendTransactions.forEach(transaction => {
-      if (Number(transaction.amount || 0) <= 0) return
-      const createdAt = toDate(transaction.createdAt)
-      if (!createdAt) return
-      const key = dateKey(createdAt)
-      revenueTotals.set(key, (revenueTotals.get(key) || 0) + Number(transaction.amount || 0))
-    })
+    const revenueTotals = getRevenueTotals(trendTransactions, reloadRecords, dateKey, isSuperAdmin ? undefined : user?.storeId)
 
     if (ordersRevenueTrendPeriod === 'days30') {
       return Array.from({ length: 30 }, (_, index) => {
@@ -1179,7 +1175,7 @@ const AdminDashboard: React.FC = () => {
         revenue: revenueTotals.get(key) || 0
       }
     })
-  }, [trendOrders, trendTransactions, ordersRevenueTrendPeriod])
+  }, [trendOrders, trendTransactions, reloadRecords, ordersRevenueTrendPeriod, isSuperAdmin, user?.storeId])
 
   // 安全日期转换函数
   const getOrderDate = (order: any) => {
@@ -1494,7 +1490,6 @@ const AdminDashboard: React.FC = () => {
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 10, flexWrap: 'wrap' }}>
           <div>
             <h2 style={{ display: 'flex', alignItems: 'center', gap: 8, margin: 0, fontSize: 16, fontWeight: 800, color: '#EAEAEA' }}>
-              <ReloadOutlined style={{ color: '#E7B54A' }} />
               {t('dashboard.reloadTrend')}
             </h2>
             <div style={{ marginTop: 3, color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>
@@ -1680,7 +1675,7 @@ const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {trendOrdersLoading || trendTransactionsLoading ? (
+        {trendOrdersLoading || trendTransactionsLoading || reloadRecordsLoading ? (
           <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
         ) : (
           <OrdersRevenueTrendChart data={ordersRevenueTrendData} isMobile={isMobile} />

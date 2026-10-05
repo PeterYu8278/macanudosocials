@@ -56,7 +56,7 @@ const getDisplayedPointsDeducted = (session: VisitSession): number | undefined =
 };
 
 const VisitSessionsPage: React.FC = () => {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, isSuperAdmin } = useAuthStore();
   const { modal, message } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const [form] = Form.useForm();
@@ -881,12 +881,15 @@ const VisitSessionsPage: React.FC = () => {
                               }}
                             >
                               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                                <div style={{ flex: 1 }}>
-                                  <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
-                                    {record.userName || record.userId.substring(0, 20)}
+                                <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
+                                  <div style={{ display: 'flex', alignItems: 'baseline', flexWrap: 'wrap', gap: '4px 6px', fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
+                                    <span style={{ whiteSpace: 'nowrap' }}>{dayjs(checkInDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}</span>
+                                    <span style={{ color: '#f4cf72', fontWeight: 600, overflowWrap: 'anywhere' }}>
+                                      {record.userName || record.userId.substring(0, 20)}
+                                    </span>
                                   </div>
                                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
-                                    {t("visitSessions.checkIn")}: {dayjs(checkInDate).format('YYYY-MM-DD HH:mm')}
+                                    {memberPhones?.[record.userId] || '-'}
                                   </div>
                                   {checkOutDate && (
                                     <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
@@ -896,18 +899,23 @@ const VisitSessionsPage: React.FC = () => {
                                   <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
                                     {t('visitSessions.duration')}: {calculateDuration()}
                                   </div>
-                                  {getDisplayedPointsDeducted(record) !== undefined && (
-                                    <div style={{ fontSize: 12, color: '#ff7875', marginBottom: 4 }}>
-                                      {t('visitSessions.pointsDeducted')}: -{getDisplayedPointsDeducted(record)}
-                                    </div>
-                                  )}
                                   {(record.rebatePoints || 0) > 0 && (
                                     <div style={{ fontSize: 12, color: '#52c41a' }}>
                                       {t('visitSessions.rebatePoints')}: +{record.rebatePoints}
                                     </div>
                                   )}
                                 </div>
-                                <div style={{ textAlign: 'right', marginLeft: 12 }}>
+                                <div style={{ textAlign: 'right', marginLeft: 12, flexShrink: 0, maxWidth: '42%' }}>
+                                  {getDisplayedPointsDeducted(record) !== undefined && (
+                                    <div style={{ marginBottom: 8 }}>
+                                      <div style={{ fontSize: 18, fontWeight: 700, color: '#ff4d4f', fontVariantNumeric: 'tabular-nums' }}>
+                                        -{getDisplayedPointsDeducted(record)}
+                                      </div>
+                                      <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
+                                        {t('visitSessions.pointsDeducted')}
+                                      </div>
+                                    </div>
+                                  )}
                                   <div style={{
                                     fontSize: 11,
                                     padding: '2px 8px',
@@ -942,7 +950,10 @@ const VisitSessionsPage: React.FC = () => {
                                     style={{
                                       color: '#FFD700',
                                       padding: 0,
-                                      fontSize: 11
+                                      fontSize: 11,
+                                      whiteSpace: 'normal',
+                                      height: 'auto',
+                                      minHeight: 28
                                     }}
                                   >
                                     {expanded ? t('visitSessions.collapse') : `${t('visitSessions.redemptionRecords')}${allRedemptionRecords.length > 0 ? ` (${allRedemptionRecords.length})` : ''}`}
