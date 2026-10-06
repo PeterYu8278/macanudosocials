@@ -33,7 +33,7 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const text = messageText(message)
   const command = text.toLowerCase()
   const whapiToken = (await loadWhatsApp(db)).token
-  if (!token) {
+  if (!whapiToken) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
     return
   }
