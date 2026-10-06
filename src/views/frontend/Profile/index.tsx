@@ -97,6 +97,7 @@ const Profile: React.FC = () => {
       gender: userData.profile?.gender,
       race: userData.profile?.race,
       notifications: (userData as any)?.preferences?.notifications ?? true,
+      whatsapp: userData.preferences?.whatsapp === true,
       language: (() => {
         const raw = (userData as any)?.preferences?.locale || i18n.language || 'zh-CN'
         if (raw === 'zh' || raw.startsWith('zh')) return 'zh-CN'
@@ -154,6 +155,8 @@ const Profile: React.FC = () => {
         'profile.gender': values.gender || null,
         'profile.race': values.race || null,
         'preferences.notifications': values.notifications,
+        'preferences.whatsapp': values.whatsapp === true,
+        ...(values.whatsapp !== user?.preferences?.whatsapp ? { 'preferences.whatsappConsentUpdatedAt': new Date() } : {}),
         ...(values.language ? { 'preferences.locale': values.language } : {}),
         'preferences.pushNotifications.types.activity': values.pushActivity === true,
         'preferences.pushNotifications.types.points': values.pushPoints === true,
@@ -191,10 +194,10 @@ const Profile: React.FC = () => {
         if (latestUser) {
           setUser(latestUser as any)
         } else {
-          setUser({ ...user, displayName: values.displayName, email: updates.email || user.email, profile: { ...(user as any)?.profile, phone: normalizePhoneNumber(values.phone), gender: values.gender, race: values.race }, preferences: { ...(user as any)?.preferences, notifications: values.notifications, locale: values.language || (user as any)?.preferences?.locale, pushNotifications: { types: { activity: values.pushActivity, points: values.pushPoints, order: values.pushOrder, marketing: values.pushMarketing }, quietHours: { enabled: values.quietHoursEnabled, start: values.quietHoursStart ? values.quietHoursStart.format('HH:mm') : undefined, end: values.quietHoursEnd ? values.quietHoursEnd.format('HH:mm') : undefined } } } } as any)
+          setUser({ ...user, displayName: values.displayName, email: updates.email || user.email, profile: { ...(user as any)?.profile, phone: normalizePhoneNumber(values.phone), gender: values.gender, race: values.race }, preferences: { ...(user as any)?.preferences, notifications: values.notifications, whatsapp: values.whatsapp === true, locale: values.language || (user as any)?.preferences?.locale, pushNotifications: { types: { activity: values.pushActivity, points: values.pushPoints, order: values.pushOrder, marketing: values.pushMarketing }, quietHours: { enabled: values.quietHoursEnabled, start: values.quietHoursStart ? values.quietHoursStart.format('HH:mm') : undefined, end: values.quietHoursEnd ? values.quietHoursEnd.format('HH:mm') : undefined } } } } as any)
         }
       } catch {
-        setUser({ ...user, displayName: values.displayName, email: updates.email || user.email, profile: { ...(user as any)?.profile, phone: normalizePhoneNumber(values.phone), gender: values.gender, race: values.race }, preferences: { ...(user as any)?.preferences, notifications: values.notifications, locale: values.language || (user as any)?.preferences?.locale, pushNotifications: { types: { activity: values.pushActivity, points: values.pushPoints, order: values.pushOrder, marketing: values.pushMarketing }, quietHours: { enabled: values.quietHoursEnabled, start: values.quietHoursStart ? values.quietHoursStart.format('HH:mm') : undefined, end: values.quietHoursEnd ? values.quietHoursEnd.format('HH:mm') : undefined } } } } as any)
+        setUser({ ...user, displayName: values.displayName, email: updates.email || user.email, profile: { ...(user as any)?.profile, phone: normalizePhoneNumber(values.phone), gender: values.gender, race: values.race }, preferences: { ...(user as any)?.preferences, notifications: values.notifications, whatsapp: values.whatsapp === true, locale: values.language || (user as any)?.preferences?.locale, pushNotifications: { types: { activity: values.pushActivity, points: values.pushPoints, order: values.pushOrder, marketing: values.pushMarketing }, quietHours: { enabled: values.quietHoursEnabled, start: values.quietHoursStart ? values.quietHoursStart.format('HH:mm') : undefined, end: values.quietHoursEnd ? values.quietHoursEnd.format('HH:mm') : undefined } } } } as any)
       }
 
       if (values.language && values.language !== i18n.language) {
@@ -578,6 +581,9 @@ const Profile: React.FC = () => {
           style={{ marginBottom: 0 }}
         >
           <LanguageSelect />
+        </Form.Item>
+        <Form.Item name="whatsapp" valuePropName="checked" label={t('whatsappManagement.consentLabel')} style={{ marginTop: 16, marginBottom: 0 }}>
+          <Switch />
         </Form.Item>
       </Form>
 

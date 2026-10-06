@@ -2,8 +2,9 @@ import type { Handler } from '@netlify/functions'
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { initializeFirestore } from 'firebase-admin/firestore'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
+import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
 
 const reply = (statusCode: number, code?: string) => ({
   statusCode,
@@ -27,12 +28,9 @@ export const handler: Handler = async event => {
       if (!credentials) throw new Error('missing-config')
       initializeApp({ credential: cert(JSON.parse(credentials)) })
     }
-    const db = getFirestore()
-    const config = (await db.collection('app_config').doc('default').get()).data()?.whapi
-    // Only send to the configured provider, never a client-supplied destination.
-    if (!config?.enabled || !config.apiToken) return reply(503, 'service-unavailable')
-    const base = new URL(config.baseUrl || 'https://gate.whapi.cloud')
-    if (base.protocol !== 'https:' || base.hostname !== 'gate.whapi.cloud') return reply(503, 'service-unavailable')
+    const db = initializeFirestore(getApps()[0], { preferRest: true })
+    const { config, token, verified } = await loadWhatsApp(db)
+    if (!config.enabled || !config.features.passwordReset || config.defaultProvider !== 'whapi' || !token || !verified) return reply(503, 'service-unavailable')
     const keys = [`ip:${event.headers['x-nf-client-connection-ip'] || 'local'}`, `phone:${phone}`]
       .map(value => createHash('sha256').update(value).digest('hex'))
     const now = Date.now()
@@ -60,13 +58,8 @@ export const handler: Handler = async event => {
       if (error.code === 'auth/user-not-found') return reply(200)
       throw error
     }
-    const response = await fetch(new URL('/messages/text', base), {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${config.apiToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: phone.replace(/^\+/, ''), body: `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.` }),
-      signal: AbortSignal.timeout(10000),
-    })
-    if (!response.ok) return reply(503, 'service-unavailable')
+    const response = await submitWhapi(token, phone, `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.`)
+    if (response.status !== 'accepted') return reply(503, 'service-unavailable')
     return reply(200)
   } catch {
     // Do not log phone numbers, provider credentials or recovery links.

@@ -69,6 +69,20 @@ describe('profile settings and email save flow', () => {
     expect((screen.getByLabelText(/profile.pushNotifications.types.activity/) as HTMLInputElement).disabled).toBe(false)
   })
 
+  it('requires separate opt-in for WhatsApp and records the consent change', async () => {
+    render(<Profile />)
+    await settings()
+    const toggle = screen.getByLabelText('whatsappManagement.consentLabel')
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(toggle)
+    fireEvent.click(screen.getByText('common.save'))
+    await waitFor(() => expect(mocks.updateProfile).toHaveBeenCalled())
+    const updates = mocks.updateProfile.mock.calls[0][2]
+    expect(updates['preferences.whatsapp']).toBe(true)
+    expect(updates['preferences.whatsappConsentUpdatedAt']).toBeInstanceOf(Date)
+    expect(updates['preferences.notifications']).toBe(true)
+  })
+
   it('disables device activation and notification types when account notifications are off', async () => {
     mocks.pushStatus = 'prompt'
     render(<Profile />)

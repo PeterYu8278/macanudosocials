@@ -16,7 +16,7 @@ import type { FeatureVisibilityConfig, AppConfig, ColorThemeConfig } from '../..
 import { getAppConfig, updateAppConfig, resetAppConfig } from '../../../services/firebase/appConfig';
 import ImageUpload from '../../../components/common/ImageUpload';
 import MockAppInterface from '../../../components/admin/MockAppInterface';
-import WhapiMessageTester from '../../../components/admin/WhapiMessageTester';
+import WhatsAppManagement from '../../../components/admin/WhatsAppManagement';
 import PaymentTester from '../../../components/admin/PaymentTester';
 import CigarDatabase from '../CigarDatabase';
 import NotificationManagement from '../NotificationManagement';
@@ -139,8 +139,6 @@ const FeatureManagement: React.FC = () => {
     window.addEventListener('popstate', onPopState);
     return () => window.removeEventListener('popstate', onPopState);
   }, []);
-  const [whapiForm] = Form.useForm();
-  const whapiEnabled = Form.useWatch('whapiEnabled', whapiForm) ?? false;
   const [paymentForm] = Form.useForm();
   const [envForm] = Form.useForm();
   const [localFeatures, setLocalFeatures] = useState<Record<string, boolean>>({});
@@ -252,20 +250,6 @@ const FeatureManagement: React.FC = () => {
     }
   }, [appConfig]);
 
-  // 当切换到 whapi 标签页时，设置表单值
-  useEffect(() => {
-    if (activeTab === 'communications' && communicationView === 'whatsapp' && appConfig) {
-      whapiForm.setFieldsValue({
-        whapiApiToken: appConfig.whapi?.apiToken || '',
-        whapiChannelId: appConfig.whapi?.channelId || '',
-        whapiBaseUrl: appConfig.whapi?.baseUrl || 'https://gate.whapi.cloud',
-        whapiEnabled: appConfig.whapi?.enabled ?? false,
-        whapiEventReminder: appConfig.whapi?.features?.eventReminder ?? true,
-        whapiVipExpiry: appConfig.whapi?.features?.vipExpiry ?? true,
-        whapiPasswordReset: appConfig.whapi?.features?.passwordReset ?? true,
-      });
-    }
-  }, [activeTab, communicationView, appConfig, whapiForm]);
 
   // 当切换到 payment 标签页时，设置表单值
   useEffect(() => {
@@ -1444,215 +1428,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
         { key: 'email', label: t('communications.emailProviders') },
       ]} />}
       {activeTab === 'communications' && communicationView === 'email' && <EmailProviders config={appConfig} userId={user?.id} onSaved={() => { refreshAppConfig(); }} />}
-      {activeTab === 'communications' && communicationView === 'whatsapp' ? (
-        <>
-          <Card style={{
-            background: 'rgba(255, 255, 255, 0.05)',
-            borderRadius: 12,
-            border: '1px solid rgba(244, 175, 37, 0.6)',
-            backdropFilter: 'blur(10px)',
-            marginBottom: 16,
-          }}>
-            <Form
-              form={whapiForm}
-              layout="vertical"
-              onFinish={async () => {
-                if (!user?.id) {
-                  message.error(t('auth.notLoggedIn'));
-                  return;
-                }
-
-                setSavingAppConfig(true);
-                try {
-                  const values = await whapiForm.validateFields();
-                  const whapiConfig = {
-                    apiToken: values.whapiApiToken,
-                    channelId: values.whapiChannelId,
-                    baseUrl: values.whapiBaseUrl || 'https://gate.whapi.cloud',
-                    enabled: values.whapiEnabled ?? false,
-                    features: {
-                      eventReminder: values.whapiEventReminder ?? true,
-                      vipExpiry: values.whapiVipExpiry ?? true,
-                      passwordReset: values.whapiPasswordReset ?? true,
-                    },
-                  };
-
-                  const result = await updateAppConfig(
-                    { whapi: whapiConfig },
-                    user.id
-                  );
-
-                  if (result.success) {
-                    message.success(t('featureManagement.whapiConfigSaved'));
-
-                    // 直接更新本地 appConfig 状态，避免重新加载导致其他字段被重置
-                    if (appConfig) {
-                      setAppConfig({
-                        ...appConfig,
-                        whapi: whapiConfig,
-                      });
-                    }
-
-                    // 重新初始化 Whapi 客户端
-                    const { initWhapiClient } = await import('../../../services/whapi');
-                    await initWhapiClient(whapiConfig);
-                  } else {
-                    message.error(result.error || t('common.saveFailed'));
-                  }
-                } catch (error) {
-                  message.error(t('common.saveFailed'));
-                } finally {
-                  setSavingAppConfig(false);
-                }
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                <span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.enableWhatsapp')}</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ color: whapiEnabled ? '#f4cf72' : 'rgba(255,255,255,0.55)', fontSize: 12, fontWeight: 600 }}>
-                    {whapiEnabled ? t('featureManagement.enable') : t('featureManagement.disable')}
-                  </span>
-                  <Form.Item name="whapiEnabled" valuePropName="checked" noStyle>
-                  <Switch
-                      className="whapi-gold-switch"
-                      aria-label={t('featureManagement.enableWhatsapp')}
-                  />
-                  </Form.Item>
-                </div>
-              </div>
-
-              <Form.Item
-                label={<span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.apiConfig')}</span>}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>API Token</span>}
-                    name="whapiApiToken"
-                    rules={[{ required: true, message: t('featureManagement.apiTokenRequired') }]}
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Input.Password
-                      placeholder={t('featureManagement.whapiApiTokenPlaceholder')}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: '#f8f8f8',
-                      }}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>Channel ID</span>}
-                    name="whapiChannelId"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Input
-                      placeholder={t('featureManagement.channelIdPlaceholder')}
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: '#f8f8f8',
-                      }}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>Base URL</span>}
-                    name="whapiBaseUrl"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Input
-                      placeholder="https://gate.whapi.cloud"
-                      style={{
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        border: '1px solid rgba(255, 255, 255, 0.1)',
-                        color: '#f8f8f8',
-                      }}
-                    />
-                  </Form.Item>
-                </div>
-              </Form.Item>
-
-              <Divider style={{ margin: '24px 0', borderColor: 'rgba(255, 255, 255, 0.1)' }} />
-
-              <div style={{ marginBottom: 16 }}>
-                <Text style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600, display: 'block', marginBottom: 16 }}>
-                  {t('featureManagement.featureToggles')}
-                </Text>
-                <Text style={{ color: '#c0c0c0', fontSize: '14px', display: 'block', marginBottom: 16 }}>
-                  {t('featureManagement.featureTogglesDesc')}
-                </Text>
-              </div>
-
-              <Form.Item
-                label={<span style={{ color: '#f8f8f8', fontSize: '16px', fontWeight: 600 }}>{t('featureManagement.featureToggles')}</span>}
-              >
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>{t('featureManagement.eventReminder')}</span>}
-                    name="whapiEventReminder"
-                    valuePropName="checked"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Switch
-                      className="whapi-gold-switch"
-                      checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
-                      unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>{t('featureManagement.vipExpiryReminder')}</span>}
-                    name="whapiVipExpiry"
-                    valuePropName="checked"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Switch
-                      className="whapi-gold-switch"
-                      checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
-                      unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
-                    />
-                  </Form.Item>
-
-                  <Form.Item
-                    label={<span style={{ color: '#f8f8f8', fontSize: '14px', fontWeight: 600 }}>{t('common.resetPassword')}</span>}
-                    name="whapiPasswordReset"
-                    valuePropName="checked"
-                    style={{ marginBottom: 0 }}
-                  >
-                    <Switch
-                      className="whapi-gold-switch"
-                      checkedChildren={<span style={{ color: '#000' }}>{t('featureManagement.enable')}</span>}
-                      unCheckedChildren={<span style={{ color: '#000' }}>{t('featureManagement.disable')}</span>}
-                    />
-                  </Form.Item>
-                </div>
-              </Form.Item>
-
-              <Form.Item>
-                <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                  <Button
-                    type="primary"
-                    icon={<SaveOutlined />}
-                    htmlType="submit"
-                    loading={savingAppConfig}
-                    style={{
-                      background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-                      border: 'none',
-                      color: '#000',
-                    }}
-                  >
-                    {t('featureManagement.saveChanges', { defaultValue: '保存配置' })}
-                  </Button>
-                </div>
-              </Form.Item>
-            </Form>
-          </Card>
-
-          {/* 消息发送测试 */}
-          <WhapiMessageTester whapiConfig={appConfig?.whapi} />
-        </>
-      ) : null}
+      {activeTab === 'communications' && communicationView === 'whatsapp' && <WhatsAppManagement />}
 
       {/* 支付网关标签页 */}
       {activeTab === 'payment' ? (

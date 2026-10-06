@@ -1,152 +1,32 @@
 /**
  * Whapi.Cloud WhatsApp API 服务
  */
-import axios, { AxiosInstance } from 'axios';
+import { whatsappRequest } from '../api/whatsapp';
 import { doc, collection, addDoc, Timestamp } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { WhapiConfig, SendMessageRequest, SendMessageResponse, MessageRecord, MessageTemplate } from '../../types/whapi';
 import { getAppConfig } from '../firebase/appConfig';
 
-// 默认配置
-const DEFAULT_BASE_URL = 'https://gate.whapi.cloud';
-
-// 创建 axios 实例
-let axiosInstance: AxiosInstance | null = null;
-
-/**
- * 初始化 Whapi 客户端
- */
-export const initWhapiClient = async (config?: WhapiConfig): Promise<AxiosInstance | null> => {
-  const appConfig = await getAppConfig();
-  const whapiConfig = config || appConfig?.whapi;
-
-  if (!whapiConfig?.apiToken || !whapiConfig?.enabled) {
-    return null;
-  }
-
-  const baseURL = whapiConfig.baseUrl || DEFAULT_BASE_URL;
-  const token = whapiConfig.apiToken;
-
-  axiosInstance = axios.create({
-    baseURL,
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-    },
-    timeout: 30000,
-  });
-
-  return axiosInstance;
-};
-
-/**
- * 获取 Whapi 客户端实例
- */
-export const getWhapiClient = async (): Promise<AxiosInstance | null> => {
-  if (axiosInstance) {
-    return axiosInstance;
-  }
-  return await initWhapiClient();
-};
-
-/**
- * 检查 Whapi 配置和连接状态
- */
 export const checkWhapiHealth = async (): Promise<{ success: boolean; error?: string; data?: any }> => {
-  try {
-    const client = await getWhapiClient();
-    if (!client) {
-      return { success: false, error: 'Whapi 未配置或未启用' };
-    }
-
-    const response = await client.get('/health');
-    return { success: true, data: response.data };
-  } catch (error: any) {
-    return {
-      success: false,
-      error: error.response?.data?.message || error.message || '连接失败',
-    };
-  }
+  try { return { success: true, data: await whatsappRequest('health') } }
+  catch (error) { return { success: false, error: error instanceof Error ? error.message : 'request-failed' } }
 };
 
-/**
- * 发送文本消息
- */
 export const sendTextMessage = async (
-  to: string,
-  text: string,
-  userId?: string,
-  userName?: string
+  to: string, text: string, userId?: string, _userName?: string,
+  kind: 'custom' | 'event_reminder' | 'vip_expiry' | 'password_reset' = 'custom'
 ): Promise<SendMessageResponse> => {
   try {
-    const client = await getWhapiClient();
-    if (!client) {
-      return { success: false, error: 'Whapi 未配置或未启用' };
-    }
-
-    // 格式化电话号码（确保格式正确）
-    const formattedPhone = formatPhoneNumber(to);
-
-    const request: SendMessageRequest = {
-      to: formattedPhone,
-      type: 'text',
-      text,
-    };
-
-    // 根据 Whapi.Cloud API 规范，发送文本消息使用 /messages/text 端点
-    const response = await client.post('/messages/text', {
-      to: formattedPhone,
-      body: text,
+    const key = userId ? Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',
+      new TextEncoder().encode(JSON.stringify([userId, kind, to, text]))))).map(byte => byte.toString(16).padStart(2, '0')).join('') : crypto.randomUUID();
+    const result = await whatsappRequest(userId ? 'send' : 'test', {
+      phone: to, text, userId, kind, requestId: key,
     });
-    const messageId = response.data?.id || response.data?.message_id;
-
-    // 记录消息到 Firestore
-    if (userId) {
-      const messageRecord: Omit<MessageRecord, 'id' | 'createdAt'> = {
-        userId,
-        userName,
-        phone: formattedPhone,
-        type: 'custom',
-        message: text,
-        status: 'sent',
-        createdBy: userId,
-      };
-      
-      // 只有当 messageId 是有效字符串时才添加
-      if (messageId && typeof messageId === 'string' && messageId.trim() !== '') {
-        messageRecord.messageId = messageId;
-      }
-      
-      await recordMessage(messageRecord);
-    }
-
-    return {
-      success: true,
-      ...(messageId && typeof messageId === 'string' && messageId.trim() !== '' ? { messageId } : {}),
-      data: response.data,
-    };
-  } catch (error: any) {
-    const errorMessage = error.response?.data?.message || error.message || '发送失败';
-
-    // 记录失败消息
-    if (userId) {
-      await recordMessage({
-        userId,
-        userName,
-        phone: to,
-        type: 'custom',
-        message: text,
-        status: 'failed',
-        error: errorMessage,
-        createdBy: userId,
-      });
-    }
-
-    return {
-      success: false,
-      error: errorMessage,
-    };
+    return { success: result.status === 'accepted', messageId: result.messageId || undefined,
+      ...(result.status !== 'accepted' ? { error: result.status } : {}) };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : 'request-failed' };
   }
 };
 
@@ -203,10 +83,10 @@ export const sendEventReminder = async (
 时间: ${timeStr}` : ''}
 地点: ${eventLocation}`;
     
-    return await sendTextMessage(phone, message, userId, userName);
+    return await sendTextMessage(phone, message, userId, userName, 'event_reminder');
   }
 
-  return await sendTextMessage(phone, template, userId, userName);
+  return await sendTextMessage(phone, template, userId, userName, 'event_reminder');
 };
 
 /**
@@ -229,10 +109,10 @@ export const sendVipExpiryReminder = async (
 您好 ${userName}，您的VIP会员资格将于 ${expiryDate} 到期。
 请及时续费以继续享受会员权益。`;
 
-    return await sendTextMessage(phone, message, userId, userName);
+    return await sendTextMessage(phone, message, userId, userName, 'vip_expiry');
   }
 
-  return await sendTextMessage(phone, template, userId, userName);
+  return await sendTextMessage(phone, template, userId, userName, 'vip_expiry');
 };
 
 /**
@@ -271,10 +151,10 @@ export const sendPasswordReset = async (
 请尽快登录并修改密码。如非本人操作，请立即联系管理员。`;
     }
 
-    return await sendTextMessage(phone, message, userId, userName);
+    return await sendTextMessage(phone, message, userId, userName, 'password_reset');
   }
 
-  return await sendTextMessage(phone, template, userId, userName);
+  return await sendTextMessage(phone, template, userId, userName, 'password_reset');
 };
 
 /**

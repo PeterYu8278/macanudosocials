@@ -166,6 +166,7 @@ const AdminUsers: React.FC = () => {
   const { t, i18n } = useTranslation()
   const { modal, message } = App.useApp() // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const { user: currentUser } = useAuthStore()
+  const canBatchDelete = currentUser?.role === 'developer' || currentUser?.role === 'superAdmin'
   const canManageDiscount = currentUser?.role === 'developer' || currentUser?.role === 'superAdmin'
 
   const assignableRoles = (() => {
@@ -817,7 +818,7 @@ const AdminUsers: React.FC = () => {
       flexDirection: 'column',
       overflow: isMobile ? 'hidden' : 'visible',
       paddingRight: isMobile && activeTab === 'list' ? '32px' : '0',
-      paddingBottom: isMobile ? '46px' : '0'
+      paddingBottom: selectedRowKeys.length > 0 && activeTab === 'list' ? '140px' : isMobile ? '46px' : '0'
     }}>
       {phoneVerificationModal}
       {/* 标签页 */}
@@ -893,13 +894,21 @@ const AdminUsers: React.FC = () => {
       {
         activeTab === 'list' && (
           <>
-            {/* 桌面端：标题和批量操作 */}
-            {!isMobile && (
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <Space>
+            {selectedRowKeys.length > 0 && (
+              <div role="toolbar" aria-label={t('common.itemsSelected', { count: selectedRowKeys.length })} style={{
+                position: 'fixed', bottom: isMobile ? 'calc(84px + env(safe-area-inset-bottom))' : 24,
+                right: isMobile ? 16 : 24, width: isMobile ? 'calc(100% - 32px)' : 'max-content',
+                maxWidth: isMobile ? 'calc(100% - 32px)' : 'calc(100% - 112px)',
+                display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center',
+                padding: '12px 16px', background: '#191919', border: '1px solid #C48D3A',
+                borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.35)', zIndex: 1000,
+              }}>
+                <Text style={{ color: '#FDE08D' }}>{t('common.itemsSelected', { count: selectedRowKeys.length })}</Text>
+                <Space wrap>
                   {selectedRowKeys.length > 0 && (
                     <>
                       <Button
+                        loading={actionLoading}
                         onClick={async () => {
                           setLoading(true)
                           try {
@@ -920,20 +929,39 @@ const AdminUsers: React.FC = () => {
                       >
                         {t('usersAdmin.batchDisable')}
                       </Button>
-                      <Button
+                      {canBatchDelete && <Button
+                        danger
+                        icon={<DeleteOutlined />}
+                        disabled={actionLoading}
                         onClick={async () => {
+                          if (!['superAdmin', 'developer'].includes(useAuthStore.getState().user?.role || '')) return
                           modal.confirm({
                             title: t('usersAdmin.batchDeleteConfirm'),
                             content: t('usersAdmin.batchDeleteContent', { count: selectedRowKeys.length }),
                             okButtonProps: { danger: true },
                             onOk: async () => {
+                              if (!['superAdmin', 'developer'].includes(useAuthStore.getState().user?.role || '')) return
                               setLoading(true)
                               try {
-                                const results = await Promise.all(selectedRowKeys.map(id => deleteDocument(COLLECTIONS.USERS, String(id))))
-                                if (results.every(r => r.success)) message.success(t('usersAdmin.batchDeleted'))
+                                const token = await auth.currentUser?.getIdToken()
+                                if (!token) throw new Error('auth-required')
+                                const failed: React.Key[] = []
+                                for (const id of selectedRowKeys) {
+                                  try {
+                                    const response = await fetch('/.netlify/functions/delete-member', {
+                                      method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                                      body: JSON.stringify({ userId: String(id) }),
+                                    })
+                                    const result = await response.json()
+                                    if (!response.ok || !result.success) failed.push(id)
+                                  } catch { failed.push(id) }
+                                }
+                                if (!failed.length) message.success(t('usersAdmin.batchDeleted'))
                                 else message.error(t('usersAdmin.batchDeleteFailed'))
+                                setSelectedRowKeys(failed)
                                 await refreshUsers()
-                                setSelectedRowKeys([])
+                              } catch {
+                                message.error(t('usersAdmin.batchDeleteFailed'))
                               } finally {
                                 setLoading(false)
                               }
@@ -943,7 +971,8 @@ const AdminUsers: React.FC = () => {
                         style={{ background: 'rgba(255, 77, 79, 0.8)', border: 'none', color: '#FFFFFF', fontWeight: 700 }}
                       >
                         {t('usersAdmin.batchDelete')}
-                      </Button>
+                      </Button>}
+                      <Button disabled={actionLoading} onClick={() => setSelectedRowKeys([])}>{t('common.cancel')}</Button>
                     </>
                   )}
                 </Space>
@@ -1088,7 +1117,7 @@ const AdminUsers: React.FC = () => {
                 style={{
                   position: 'fixed',
                   right: 20,
-                  bottom: 80,
+                  bottom: selectedRowKeys.length > 0 ? 210 : 80,
                   width: 56,
                   height: 56,
                   borderRadius: '28px',
@@ -1270,7 +1299,7 @@ const AdminUsers: React.FC = () => {
                     flex: 1,
                     overflowY: 'auto',
                     overflowX: 'hidden',
-                    paddingBottom: '16px',
+                    paddingBottom: selectedRowKeys.length > 0 ? '140px' : '16px',
                     position: 'relative',
                     zIndex: 1
                   }}
@@ -1290,6 +1319,12 @@ const AdminUsers: React.FC = () => {
                             return (
                               <div key={u.id} style={{ borderRadius: 12, border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(255,255,255,0.05)', padding: 12, marginBottom: 8, backdropFilter: 'blur(6px)' }}>
                                 <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+                                  <Checkbox
+                                    aria-label={u.displayName || u.email || u.id}
+                                    checked={selectedRowKeys.includes(u.id)}
+                                    disabled={actionLoading}
+                                    onChange={event => setSelectedRowKeys(keys => event.target.checked ? [...keys, u.id] : keys.filter(key => key !== u.id))}
+                                  />
                                   <div style={{ flex: 1, minWidth: 0 }}>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
                                       <Tag color={getRoleColor(role)} style={{ margin: 0, width: 108, flexShrink: 0, paddingInline: 4, textAlign: 'center', whiteSpace: 'nowrap' }}>

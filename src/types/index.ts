@@ -107,6 +107,8 @@ export interface User {
     preferences?: {
     locale?: string;              // 语言设置（'zh' | 'en' | 'zh-CN' | 'en-US'）
     notifications?: boolean;      // 主开关：开启通知
+    whatsapp?: boolean;
+    whatsappConsentUpdatedAt?: Date;
     pushNotifications?: {
       types?: {
         activity?: boolean;      // 活动提醒

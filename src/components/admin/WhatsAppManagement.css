@@ -1,0 +1,22 @@
+.whatsapp-management { min-width: 0; padding-bottom: 24px; }
+.whatsapp-management-heading, .whatsapp-channel-heading, .whatsapp-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.whatsapp-management-heading .ant-form-item { margin-bottom: 0; }
+.whatsapp-management .ant-tabs-nav-list { flex-wrap: nowrap; }
+.whatsapp-channel-list { display: grid; gap: 12px; }
+.whatsapp-channel { padding: 16px; border: 1px solid rgba(255,255,255,.18); border-radius: 8px; background: rgba(255,255,255,.025); min-width: 0; }
+.whatsapp-channel-heading { margin-bottom: 12px; flex-wrap: wrap; }
+.whatsapp-channel-heading .ant-tag { margin: 0; white-space: normal; }
+.whatsapp-settings-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 16px; }
+.whatsapp-channel .ant-form-item { margin-bottom: 12px; }
+.whatsapp-rule { padding: 16px 0; border-bottom: 1px solid rgba(255,255,255,.12); }
+.whatsapp-rule:last-of-type { margin-bottom: 16px; }
+.whatsapp-save { display: flex; justify-content: flex-end; padding: 16px 0; }
+.whatsapp-result { margin-top: 16px; }
+.whatsapp-management .ant-table-wrapper { margin-top: 12px; }
+@media (max-width: 767px) {
+  .whatsapp-management { padding-bottom: 90px; }
+  .whatsapp-channel { padding: 12px; }
+  .whatsapp-management-heading .ant-typography { font-size: 18px; }
+  .whatsapp-management .ant-btn { min-height: 40px; max-width: 100%; white-space: normal; height: auto; }
+  .whatsapp-management .ant-form-item-label label { height: auto; white-space: normal; }
+}

@@ -50,6 +50,9 @@ export const GLOBAL_COLLECTIONS = {
   APP_CONFIG: 'app_config',
   /** Whapi 消息记录集合 */
   WHAPI_MESSAGES: 'whapi_messages',
+  WHATSAPP_CONFIG: '_whatsappConfig',
+  WHATSAPP_TASKS: '_whatsappTasks',
+  WHATSAPP_ATTEMPTS: '_whatsappAttempts',
   /** 订阅激活请求 */
   SUBSCRIPTION_REQUESTS: 'subscription_requests',
   /** 交易记录（财务） */

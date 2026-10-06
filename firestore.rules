@@ -133,7 +133,7 @@ service cloud.firestore {
                              .hasOnly(['membership', 'status', 'referral', 'updatedAt'])));
 
       // 删除：仅管理员
-      allow delete: if isAdmin();
+      allow delete: if hasRole('superAdmin') || hasRole('developer');
 
       match /referrals/{referralId} {
         allow read: if isOwner(userId) || isSignedIn();
@@ -427,6 +427,17 @@ service cloud.firestore {
                         || request.resource.data.get('dayPass', {}).get('enabled', true)
                            == resource.data.get('dayPass', {}).get('enabled', true));
       allow delete: if isPointsOperator() && configId != 'points';
+    }
+
+    // WhatsApp configuration, credentials, tasks and rate limits are server-owned.
+    match /_whatsappConfig/{documentId} {
+      allow read, write: if false;
+    }
+    match /_whatsappTasks/{documentId} {
+      allow read, write: if false;
+    }
+    match /_whatsappAttempts/{documentId} {
+      allow read, write: if false;
     }
 
     // ================================

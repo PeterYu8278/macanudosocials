@@ -1,7 +1,7 @@
 // @vitest-environment node
 import { afterAll, beforeEach, describe, expect, it } from 'vitest'
 import { deleteApp, initializeApp } from 'firebase/app'
-import { collection, connectFirestoreEmulator, doc, getDoc, getDocs, getFirestore, query, setDoc, terminate, updateDoc, where } from 'firebase/firestore'
+import { collection, connectFirestoreEmulator, deleteDoc, doc, getDoc, getDocs, getFirestore, query, setDoc, terminate, updateDoc, where } from 'firebase/firestore'
 
 // Opt in only against the isolated local emulator; never accept a production host.
 const enabled = process.env.FIRESTORE_RULES_TEST_HOST === '127.0.0.1:8089'
@@ -47,6 +47,18 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
     await expect(updateDoc(doc(db, 'users/member'), { email: 'unverified@example.com' })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(updateDoc(doc(db, 'users/member'), { authUid: 'operator' })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(updateDoc(doc(db, 'users/member'), { 'profile.phone': '+60123456789' })).rejects.toMatchObject({ code: 'permission-denied' })
+  })
+  it('allows user deletion only for superAdmin and developer', async () => {
+    for (const role of ['member', 'storeAdmin', 'admin', 'superAdmin', 'developer']) {
+      await seed(`delete-${role}`, { role: text(role) })
+      await seed(`target-${role}`, { role: text('member') })
+      const operation = deleteDoc(doc(client(`delete-${role}`), `users/target-${role}`))
+      if (role === 'superAdmin' || role === 'developer') {
+        await expect(operation).resolves.toBeUndefined()
+      } else {
+        await expect(operation).rejects.toMatchObject({ code: 'permission-denied' })
+      }
+    }
   })
   it('allows only the authenticated email to be written by a member', async () => {
     const db = client('member')
