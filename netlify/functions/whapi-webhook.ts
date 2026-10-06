@@ -4,10 +4,18 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
-import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
+import { loadWhatsApp, submitWhapi, submitWhapiButtons, submitWhapiUrlButton } from './_shared/whatsapp'
 import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, registrationTokenHash, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
+function emailInboxUrl(email: string) {
+  const encoded = encodeURIComponent(email)
+  const domain = email.split('@')[1]?.toLowerCase()
+  if (domain === 'gmail.com' || domain === 'googlemail.com') return `https://mail.google.com/mail/u/0/#search/to%3A${encoded}`
+  if (['outlook.com', 'hotmail.com', 'live.com', 'msn.com'].includes(domain || '')) return `https://outlook.live.com/mail/0/search?q=${encoded}`
+  if (domain === 'yahoo.com' || domain === 'yahoo.com.my') return `https://mail.yahoo.com/d/search/keyword=${encoded}`
+  return `mailto:${email}`
+}
 async function handleRegistrationMessage(db: any, payload: any) {
   if (process.env.WHATSAPP_REGISTRATION_ENABLED !== 'true') {
     console.info('whatsapp-registration', { stage: 'disabled' })
@@ -90,9 +98,13 @@ async function handleRegistrationMessage(db: any, payload: any) {
   if (command !== 'confirm') { await send('请点击 Confirm，或回复 CONFIRM 确认；也可以点击 Cancel 取消。'); return }
   try {
     const result = await createWhatsAppMember(db, session)
-    await send(result.passwordSetupEmail === 'sent'
-      ? '注册成功。请检查 Email 并使用安全链接设置登录密码。'
-      : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
+    const successText = result.passwordSetupEmail === 'sent'
+      ? '注册成功。请点击 Open Email 检查邮箱，并使用安全链接设置登录密码。'
+      : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。'
+    if (result.passwordSetupEmail === 'sent') {
+      const button = await submitWhapiUrlButton(token, phone, successText, 'Open Email', emailInboxUrl(session.email || ''))
+      if (button.status !== 'accepted') await send(successText)
+    } else await send(successText)
   } catch (error) {
     const code = (error as { code?: string })?.code
     if (code === 'email-and-phone-in-use') await send('该 Email 和电话号码都已经注册，请使用其他 Email 和电话号码。')

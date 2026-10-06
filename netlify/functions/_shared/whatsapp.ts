@@ -48,3 +48,17 @@ export async function submitWhapiButtons(token: string, phone: string, text: str
   const id = body?.id || body?.message_id || body?.message?.id
   return { status: 'accepted', messageId: typeof id === 'string' ? id : '' }
 }
+
+export async function submitWhapiUrlButton(token: string, phone: string, text: string, title: string, url: string) {
+  const response = await fetch('https://gate.whapi.cloud/messages/interactive', {
+    method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'button', to: phone.replace(/^\+/, ''), body: { text },
+      action: { buttons: [{ type: 'url', title: title.slice(0, 25), id: 'open_email', url }] },
+    }), signal: AbortSignal.timeout(10000),
+  })
+  if (!response.ok) return { status: response.status >= 500 ? 'unknown' : 'failed', messageId: '' }
+  const body = await response.json()
+  const id = body?.id || body?.message_id || body?.message?.id
+  return { status: 'accepted', messageId: typeof id === 'string' ? id : '' }
+}
