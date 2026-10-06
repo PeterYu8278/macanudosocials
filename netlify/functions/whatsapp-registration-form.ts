@@ -48,7 +48,12 @@ export const eventHandler: EventHandler = async event => {
     const confirmation = `欢迎注册 Macanudo Socials。请确认注册资料：\n姓名：${name}\n电话：${session.data.phone}\nEmail：${email}`
     const result = await submitWhapiButtons(whatsapp.token, session.data.phone, confirmation)
     if (result.status !== 'accepted') await submitWhapi(whatsapp.token, session.data.phone, `${confirmation}\n\n请回复 CONFIRM 确认，或 CANCEL 取消。`)
-    return response(200, page('资料已提交', `<h1>资料已提交</h1><p>请回到 WhatsApp 点击 Confirm 确认。</p><p>已提交 Email：${escapeHtml(maskEmail(email))}</p>`))
+    const whatsappPhone = session.data.phone.replace(/\D/g, '')
+    const returnText = encodeURIComponent('资料已提交，请回到此聊天点击 Confirm 确认。')
+    const appUrl = `whatsapp://send?phone=${whatsappPhone}&text=${returnText}`
+    const webUrl = `https://wa.me/${whatsappPhone}?text=${returnText}`
+    const returnPage = `<h1>资料已提交</h1><p>确认资料已发送到 WhatsApp，请点击 Confirm 完成注册。</p><p>已提交 Email：${escapeHtml(maskEmail(email))}</p><a id="return-whatsapp" href="${escapeHtml(webUrl)}"><button type="button">返回 WhatsApp</button></a><script>setTimeout(function(){window.location.href=${JSON.stringify(appUrl)};setTimeout(function(){window.location.href=${JSON.stringify(webUrl)}},1200)},150)</script>`
+    return response(200, page('资料已提交', returnPage))
   } catch {
     return response(503, page('暂时无法注册', '<h1>暂时无法处理</h1><p>请稍后重新发送 /register。</p>'))
   }
