@@ -11,6 +11,16 @@ import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/member
 const reply = (statusCode: number, code: string) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify({ success: statusCode === 200, code }) })
 
+// Only use this deadline for reads. A timed-out mutation may still commit.
+async function readinessRead<T>(work: () => Promise<T>): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race([Promise.resolve().then(work), new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(Object.assign(new Error('Registration readiness timed out'), { code: 'readiness-timeout' })), 5000)
+    })])
+  } finally { clearTimeout(timer) }
+}
+
 export const handler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   if (!event.body || event.body.length > 4096) return reply(400, 'invalid-request')
@@ -46,15 +56,28 @@ export const handler: Handler = async event => {
   try {
     if (!getApps().length) {
       if (!process.env.FIREBASE_SERVICE_ACCOUNT) return reply(503, 'service-unavailable')
-      initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) })
+      const serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)
+      initializeApp({ projectId: serviceAccount.project_id, credential: cert(serviceAccount) })
     }
+    const app = getApps()[0]
+    const expectedProject = process.env.VITE_FIREBASE_PROJECT_ID
+    if (expectedProject && app.options?.projectId && app.options.projectId !== expectedProject) {
+      throw new MemberIdentityError('firebase-project-mismatch', 503)
+    }
+    await step('credential-check', () => readinessRead(() => {
+      if (!app.options?.credential) throw new MemberIdentityError('firebase-credential-missing', 503)
+      return app.options.credential.getAccessToken()
+    }))
     // Registration needs unary requests only. REST avoids cold-start gRPC connection stalls.
-    db = initializeFirestore(getApps()[0], { preferRest: true })
+    db = initializeFirestore(app, { preferRest: true })
     const registrationDb = db
     const ip = event.headers['x-nf-client-connection-ip'] || event.headers['client-ip'] || 'unknown'
     const attempt = db.collection(GLOBAL_COLLECTIONS.REGISTRATION_ATTEMPTS).doc(createHash('sha256').update(ip).digest('hex'))
+    await step('firestore-check', () => readinessRead(() => attempt.get()))
     await step('rate-limit', () => registrationDb.runTransaction(async transaction => {
+      console.info('register-member', { requestId, stage: 'rate-limit-read', status: 'started' })
       const data = (await transaction.get(attempt)).data()
+      console.info('register-member', { requestId, stage: 'rate-limit-read', status: 'completed' })
       const count = data?.expiresAtMs > Date.now() ? Number(data.count) || 0 : 0
       if (count >= 10) throw new MemberIdentityError('too-many-requests', 429)
       transaction.set(attempt, { count: count + 1, expiresAtMs: data?.expiresAtMs > Date.now() ? data.expiresAtMs : Date.now() + 900000 })

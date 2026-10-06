@@ -1,12 +1,33 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-const m = vi.hoisted(() => ({ create: vi.fn(), remove: vi.fn(), documents: new Map<string, any>(), failWrite: false, failRead: false, lostAcknowledgement: false }))
-vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }))
+const m = vi.hoisted(() => {
+  const credential = { getAccessToken: vi.fn() }
+  return {
+    apps: [{ options: { projectId: 'macanudosocial', credential } }],
+    credential,
+    create: vi.fn(),
+    remove: vi.fn(),
+    documents: new Map<string, any>(),
+    failWrite: false,
+    failRead: false as boolean | 'stall',
+    lostAcknowledgement: false,
+  }
+})
+vi.mock('firebase-admin/app', () => ({
+  getApps: () => m.apps,
+  cert: vi.fn(() => m.credential),
+  initializeApp: vi.fn(options => {
+    const app = { options }
+    m.apps.push(app)
+    return app
+  }),
+}))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ createUser: m.create, deleteUser: m.remove }) }))
 vi.mock('firebase-admin/firestore', () => {
   const snapshot = (path: string) => ({ id: path.split('/')[1], exists: m.documents.has(path), ref: reference(path), data: () => m.documents.get(path) })
   const reference = (path: string): any => ({ path, get: async () => {
+    if (m.failRead === 'stall') return new Promise(() => {})
     if (m.failRead) throw Object.assign(new Error('private member@example.com password123 +60123456789'), { code: 4 })
     return snapshot(path)
   } })
@@ -43,11 +64,24 @@ describe('backend member registration', () => {
   beforeEach(() => {
     vi.clearAllMocks(); m.create.mockReset(); m.remove.mockReset()
     m.documents.clear(); m.failWrite = false; m.failRead = false; m.lostAcknowledgement = false
+    m.apps = [{ options: { projectId: 'macanudosocial', credential: m.credential } }]
+    m.credential.getAccessToken.mockResolvedValue({ access_token: 'token', expires_in: 3600 })
+    process.env.VITE_FIREBASE_PROJECT_ID = 'macanudosocial'
+    process.env.FIREBASE_SERVICE_ACCOUNT = JSON.stringify({ project_id: 'macanudosocial', client_email: 'service@example.com', private_key: 'private-key' })
     vi.spyOn(console, 'info').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
     m.create.mockResolvedValue({ uid: 'new-member' })
   })
-  afterEach(() => vi.restoreAllMocks())
+  afterEach(() => {
+    vi.useRealTimers()
+    vi.restoreAllMocks()
+  })
+  it('initializes Firebase Admin with the service account project id on cold starts', async () => {
+    m.apps = []
+    expect((await request()).statusCode).toBe(200)
+    const { initializeApp } = await import('firebase-admin/app')
+    expect(initializeApp).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'macanudosocial' }))
+  })
   it('uses REST Firestore for cold and warm registrations', async () => {
     await request()
     await request({ ...input, email: 'second@example.com', phone: '0123456790' })
@@ -58,14 +92,37 @@ describe('backend member registration', () => {
     m.failRead = true
     expect((await request()).statusCode).toBe(503)
     expect(m.create).not.toHaveBeenCalled()
-    expect(console.error).toHaveBeenCalledWith('register-member', expect.objectContaining({ stage: 'rate-limit', status: 'failed', code: 4 }))
+    expect(console.error).toHaveBeenCalledWith('register-member', expect.objectContaining({ stage: 'firestore-check', status: 'failed', code: 4 }))
     const logs = JSON.stringify([vi.mocked(console.info).mock.calls, vi.mocked(console.error).mock.calls])
     for (const value of [input.email, 'member@example.com', input.password, '+60123456789']) expect(logs).not.toContain(value)
+  })
+  it('fails fast before Auth creation if credential token retrieval stalls', async () => {
+    vi.useFakeTimers()
+    m.credential.getAccessToken.mockReturnValue(new Promise(() => {}))
+    const result = request()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect((await result).statusCode).toBe(503)
+    expect(m.create).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith('register-member', expect.objectContaining({ stage: 'credential-check', status: 'failed', code: 'readiness-timeout' }))
+  })
+  it('fails fast before Auth creation if the Firestore readiness read stalls', async () => {
+    vi.useFakeTimers()
+    m.failRead = 'stall'
+    const result = request()
+    await vi.advanceTimersByTimeAsync(5000)
+    expect((await result).statusCode).toBe(503)
+    expect(m.create).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith('register-member', expect.objectContaining({ stage: 'firestore-check', status: 'failed', code: 'readiness-timeout' }))
+  })
+  it('rejects a Firebase service account for the wrong project before Auth creation', async () => {
+    m.apps = [{ options: { projectId: 'wrong-project', credential: m.credential } }]
+    expect((await request()).statusCode).toBe(503)
+    expect(m.create).not.toHaveBeenCalled()
   })
   it('logs each successful registration stage including lease release', async () => {
     expect((await request()).statusCode).toBe(200)
     const completed = vi.mocked(console.info).mock.calls.map(call => call[1]).filter(value => value.status === 'completed')
-    expect(completed.map(value => value.stage)).toEqual(['rate-limit', 'identity-lock', 'identity-check', 'auth-create', 'profile-create', 'identity-unlock'])
+    expect(completed.map(value => value.stage)).toEqual(['credential-check', 'firestore-check', 'rate-limit-read', 'rate-limit', 'identity-lock', 'identity-check', 'auth-create', 'profile-create', 'identity-unlock'])
     expect(m.documents.size).toBe(3)
   })
   it('creates matching Auth and Firestore contacts, with no password in the member document', async () => {
