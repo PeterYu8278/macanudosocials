@@ -1,11 +1,11 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
 import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
-import { createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, registrationTokenHash, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
 async function handleRegistrationMessage(db: any, payload: any) {
@@ -64,7 +64,15 @@ async function handleRegistrationMessage(db: any, payload: any) {
     return
   }
   if (command === '/register') {
-    await send('格式不正确，请使用：/register 姓名 email@example.com')
+    if (existing && !expired && existing.step === 'completed') {
+      await send('这个 WhatsApp 号码已经注册过账号。如需恢复账号，请使用网站的密码重置功能。')
+      return
+    }
+    const token = createRegistrationToken()
+    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(token))
+    const baseUrl = process.env.URL || 'https://macanudosocials.com'
+    const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(token)}`
+    await send(`欢迎注册 Macanudo Socials。请点击链接填写姓名和 Email：\n${formUrl}\n\n链接 15 分钟内有效。`)
     return
   }
   if (command === 'cancel' || command === '/cancel') {

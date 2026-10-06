@@ -1,13 +1,13 @@
 import { getAuth } from 'firebase-admin/auth'
 import { type Firestore, Timestamp } from 'firebase-admin/firestore'
-import { randomBytes, randomInt } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './memberIdentity'
 import { lockMemberIdentity } from './memberIdentityLock'
 import { sendMemberPasswordSetup } from './memberPasswordSetup'
 
-export type RegistrationStep = 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
+export type RegistrationStep = 'awaiting-form' | 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
 
 export interface WhatsAppRegistrationSession {
   phone: string
@@ -15,6 +15,7 @@ export interface WhatsAppRegistrationSession {
   step: RegistrationStep
   displayName?: string
   email?: string
+  registrationTokenHash?: string
   expiresAtMs: number
   attempts: number
   createdAt: Timestamp
@@ -23,6 +24,8 @@ export interface WhatsAppRegistrationSession {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sessionId = (phone: string) => Buffer.from(phone).toString('base64url')
+export const createRegistrationToken = () => randomBytes(32).toString('hex')
+export const registrationTokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
 
 export function registrationSessionRef(db: Firestore, phone: string) {
   return db.collection(C.WHATSAPP_REGISTRATION_SESSIONS).doc(sessionId(phone))
@@ -42,11 +45,12 @@ export function messageText(message: any) {
   return typeof button?.title === 'string' ? button.title.trim().slice(0, 100) : ''
 }
 
-export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string) {
+export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string) {
   const now = Timestamp.now()
   const session: WhatsAppRegistrationSession = {
-    phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : 'awaiting-confirmation',
+    phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : tokenHash ? 'awaiting-form' : 'awaiting-confirmation',
     ...(displayName ? { displayName } : {}), ...(email ? { email } : {}), expiresAtMs: Date.now() + 15 * 60_000,
+    ...(tokenHash ? { registrationTokenHash: tokenHash } : {}),
     attempts: 0, createdAt: now, updatedAt: now,
   }
   await registrationSessionRef(db, phone).set(session)
