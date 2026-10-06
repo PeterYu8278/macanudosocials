@@ -4,8 +4,104 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
+import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
+import { createWhatsAppMember, maskEmail, messageText, normalizeWhatsAppSender, registrationSessionRef, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
+async function handleRegistrationMessage(db: any, payload: any) {
+  if (process.env.WHATSAPP_REGISTRATION_ENABLED !== 'true') {
+    console.info('whatsapp-registration', { stage: 'disabled' })
+    return
+  }
+  const message = Array.isArray(payload.messages) ? payload.messages[0] : null
+  if (!message || message.from_me === true || typeof message.chat_id !== 'string' || !message.chat_id.endsWith('@s.whatsapp.net')) {
+    console.info('whatsapp-registration', { stage: 'ignored-sender' })
+    return
+  }
+  const phone = normalizeWhatsAppSender(message.chat_id, message.from)
+  if (!phone) {
+    console.info('whatsapp-registration', { stage: 'invalid-sender' })
+    return
+  }
+  const allowlist = (process.env.WHATSAPP_REGISTRATION_ALLOWLIST || '').split(',')
+    .map(value => normalizeWhatsAppSender(value.trim(), value.trim()) || value.trim())
+    .filter(Boolean)
+  if (!allowlist.includes(phone)) {
+    console.info('whatsapp-registration', { stage: 'not-allowlisted' })
+    return
+  }
+  const text = messageText(message)
+  const command = text.toLowerCase()
+  const token = (await loadWhatsApp(db)).token
+  if (!token) {
+    console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
+    return
+  }
+  const send = async (body: string) => { await submitWhapi(token, phone, body) }
+  const ref = registrationSessionRef(db, phone)
+  const existing = (await ref.get()).data() as WhatsAppRegistrationSession | undefined
+  const expired = existing && existing.expiresAtMs <= Date.now()
+  if (expired) await ref.set({ step: 'expired', expiredAt: Timestamp.now() }, { merge: true })
+
+  if (command === '/register') {
+    if (existing && !expired && existing.step === 'completed') {
+      await send('这个 WhatsApp 号码已经注册过账号。如需恢复账号，请使用网站的密码重置功能。')
+      return
+    }
+    await startRegistration(db, phone, message.chat_id)
+    await send('欢迎注册 Macanudo Socials。我们将使用此 WhatsApp 号码作为账户电话。回复 1 继续，回复 CANCEL 取消。')
+    return
+  }
+  if (command === 'cancel' || command === '/cancel') {
+    if (existing) await ref.set({ step: 'cancelled', cancelledAt: Timestamp.now() }, { merge: true })
+    await send('注册流程已取消。如需重新开始，请发送 /register。')
+    return
+  }
+  if (!existing || expired || !['awaiting-confirmation', 'awaiting-name', 'awaiting-email', 'awaiting-final-confirm'].includes(existing.step)) return
+  const session = { ...existing, attempts: (existing.attempts || 0) + 1, updatedAt: Timestamp.now() } as WhatsAppRegistrationSession
+  if (session.attempts > 12) {
+    await ref.set({ step: 'locked', updatedAt: Timestamp.now() }, { merge: true })
+    await send('输入次数过多，注册流程已暂停。请稍后重新发送 /register。')
+    return
+  }
+  if (session.step === 'awaiting-confirmation') {
+    if (text !== '1') { await send('请回复 1 继续，或回复 CANCEL 取消。'); return }
+    session.step = 'awaiting-name'
+    await ref.set(session)
+    await send('请输入您的姓名。')
+    return
+  }
+  if (session.step === 'awaiting-name') {
+    if (text.length < 2 || text.length > 128) { await send('姓名长度需要为 2 至 128 个字符，请重新输入。'); return }
+    session.displayName = text
+    session.step = 'awaiting-email'
+    await ref.set(session)
+    await send('请输入您的 Email。')
+    return
+  }
+  if (session.step === 'awaiting-email') {
+    const email = validateRegistrationEmail(text)
+    if (!email) { await send('Email 格式不正确，请重新输入。'); return }
+    session.email = email
+    session.step = 'awaiting-final-confirm'
+    await ref.set(session)
+    await send(`请确认注册资料：\n姓名：${session.displayName}\n电话：${phone}\nEmail：${maskEmail(email)}\n\n回复 CONFIRM 确认，或 CANCEL 取消。`)
+    return
+  }
+  if (session.step === 'awaiting-final-confirm') {
+    if (command !== 'confirm') { await send('请回复 CONFIRM 确认，或 CANCEL 取消。'); return }
+    try {
+      const result = await createWhatsAppMember(db, session)
+      await send(result.passwordSetupEmail === 'sent'
+        ? '注册成功。请检查 Email 并使用安全链接设置登录密码。'
+        : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
+    } catch (error) {
+      const code = (error as { code?: string })?.code
+      if (code === 'email-in-use' || code === 'phone-in-use') await send('该 Email 或电话号码已经注册，请使用其他资料。')
+      else await send('注册暂时无法完成，请稍后再试或联系管理员。')
+    }
+  }
+}
 export const eventHandler: EventHandler = async event => {
   if (event.httpMethod !== 'POST') return reply(405)
   const secret = process.env.WHAPI_WEBHOOK_SECRET
@@ -27,8 +123,23 @@ export const eventHandler: EventHandler = async event => {
     const settings = db.collection(C.WHATSAPP_CONFIG).doc('settings')
     const channelId = (await settings.get()).data()?.config?.whapi?.channelId
     if (!channelId || payload.channel_id !== channelId) return reply(403)
-    const method = payload.event?.method || payload.event?.event
-    if (payload.event?.type !== 'statuses' || !['post', 'put'].includes(method)) return reply(200)
+    const rawEvent = payload.event || {}
+    const method = rawEvent.method || rawEvent.event
+    const eventType = rawEvent.type || (typeof rawEvent.event === 'string' ? rawEvent.event.split('.')[0] : '')
+    const eventMethod = typeof method === 'string' ? method.split('.').at(-1) : method
+    if (eventType === 'messages' && ['post', 'put'].includes(eventMethod)) {
+      const message = Array.isArray(payload.messages) ? payload.messages[0] : null
+      const messageId = typeof message?.id === 'string' ? message.id : ''
+      if (messageId) {
+        const inboxRef = db.collection(C.WHATSAPP_INBOX).doc(createHash('sha256').update(`${channelId}:${messageId}`).digest('hex'))
+        if ((await inboxRef.get()).exists) return reply(200)
+        await inboxRef.set({ messageId, channelId, receivedAt: Timestamp.now() })
+      }
+      await handleRegistrationMessage(db, payload)
+      await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
+      return reply(200)
+    }
+    if (eventType !== 'statuses' || !['post', 'put'].includes(eventMethod)) return reply(200)
     if (!Array.isArray(payload.statuses) || payload.statuses.length > 100) return reply(400)
     const receipts: Array<{ id: string; status: DeliveryStatus; statusAtMs: number }> = []
     for (const status of payload.statuses) {
