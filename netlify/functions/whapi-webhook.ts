@@ -32,14 +32,14 @@ async function handleRegistrationMessage(db: any, payload: any) {
   }
   const text = messageText(message)
   const command = text.toLowerCase()
-  const token = (await loadWhatsApp(db)).token
+  const whapiToken = (await loadWhatsApp(db)).token
   if (!token) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
     return
   }
-  const send = async (body: string) => { await submitWhapi(token, phone, body) }
+  const send = async (body: string) => { await submitWhapi(whapiToken, phone, body) }
   const sendConfirmation = async (body: string) => {
-    const result = await submitWhapiButtons(token, phone, body)
+    const result = await submitWhapiButtons(whapiToken, phone, body)
     if (result.status !== 'accepted') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
   }
   const ref = registrationSessionRef(db, phone)
@@ -58,13 +58,13 @@ async function handleRegistrationMessage(db: any, payload: any) {
       await send('This WhatsApp number is already registered. To recover the account, use the password reset option on the website.')
       return
     }
-    const token = createRegistrationToken()
-    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(token), referralCode)
+    const registrationToken = createRegistrationToken()
+    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode)
     const baseUrl = process.env.URL || 'https://macanudosocials.com'
     const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
-    const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(token)}${referralQuery}`
+    const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
     const formMessage = 'Welcome to Macanudo Socials. Tap Open Registration to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
-    const button = await submitWhapiUrlButton(token, phone, formMessage, 'Open Registration', formUrl)
+    const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Open Registration', formUrl)
     if (button.status !== 'accepted') await send(`${formMessage}\n${formUrl}`)
     return
   }
@@ -88,7 +88,7 @@ async function handleRegistrationMessage(db: any, payload: any) {
   try {
     const result = await createWhatsAppMember(db, session)
     const successText = '注册成功。请点击 Open App 打开 Macanudo Socials。'
-    const button = await submitWhapiUrlButton(token, phone, successText, 'Open App', process.env.URL || 'https://macanudosocials.com')
+    const button = await submitWhapiUrlButton(whapiToken, phone, successText, 'Open App', process.env.URL || 'https://macanudosocials.com')
     if (button.status !== 'accepted') await send(successText)
   } catch (error) {
     const code = (error as { code?: string })?.code
