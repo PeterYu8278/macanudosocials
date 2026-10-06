@@ -264,6 +264,7 @@
     "noData": "No data"
   },
   "auth": {
+    "registrationPhoneSyncFailed": "Your email account was created, but phone synchronization failed: {{reason}} Sign in with your email and password, then update your phone in Profile.",
     "phoneLoginInvalidCredentials": "Incorrect phone number or password",
     "phoneLoginTooManyAttempts": "Too many attempts. Please try again in 5 minutes.",
     "phoneLoginUnavailable": "Phone login is temporarily unavailable. Please try again later.",
@@ -1162,6 +1163,13 @@
     "createEvent": "Create Event"
   },
   "usersAdmin": {
+    "initialPassword": "Initial password",
+    "initialPasswordExisting": "Initial password (only if no login account exists)",
+    "missingAccountPassword": "This member has no login account. Enter an initial password and save again.",
+    "accountIdentityRequired": "The saved member profile needs a valid email and phone number before a login account can be created.",
+    "accountIdentityConflict": "This member is linked to a different login identity. Resolve the account link before saving.",
+    "initialPasswordLength": "Password must be 6 to 128 characters",
+    "createAccountFailed": "Could not create the login account. Check your permissions and try again.",
     "userList": "User List",
     "referralTree": "Referral Tree",
     "addUser": "Add User",

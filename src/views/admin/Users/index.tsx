@@ -30,7 +30,7 @@ const ROLE_SORT_INDEX: Record<string, number> = {
   guest: 6,
 }
 
-import { getUsers, getUserById, createDocument, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
+import { getUsers, getUserById, updateDocument, deleteDocument, COLLECTIONS, getEventsByUser, getOrdersByUser } from '../../../services/firebase/firestore'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
@@ -47,7 +47,6 @@ import { MemberEmailError, normalizeMemberEmail, updateMemberEmail } from '../..
 import { collection, query, where, getDocs, limit, doc, setDoc } from 'firebase/firestore'
 import { UserSkeletonList } from '../../../components/features/admin/UserSkeleton'
 import { auth, db } from '../../../config/firebase'
-import { generateMemberId } from '../../../utils/memberId'
 import {
   prepareLegacyMigrationWorkbook,
   type LegacyMigrationPayload,
@@ -1653,8 +1652,28 @@ const AdminUsers: React.FC = () => {
               ) : {}
 
               if (editing) {
+                const token = await auth.currentUser?.getIdToken()
+                if (!token) throw new Error(t('usersAdmin.createAccountFailed'))
+                const response = await fetch('/.netlify/functions/create-member', {
+                  method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({ userId: editing.id, password: values.initialPassword,
+                    email: normalizeMemberEmail(values.email || ''), phone: normalizedPhone }),
+                })
+                const result = await response.json()
+                if (!response.ok || !result.success) {
+                  if (result.code === 'initial-password-required') {
+                    form.setFields([{ name: 'initialPassword', errors: [t('usersAdmin.missingAccountPassword')] }])
+                    return
+                  }
+                  const key = result.code === 'identity-required' ? 'usersAdmin.accountIdentityRequired'
+                    : result.code === 'identity-conflict' ? 'usersAdmin.accountIdentityConflict'
+                    : result.code === 'email-in-use' ? 'usersAdmin.emailInUseError'
+                    : result.code === 'phone-in-use' ? 'usersAdmin.phoneInUseError' : 'usersAdmin.createAccountFailed'
+                  throw new Error(t(key))
+                }
+                form.setFieldValue('initialPassword', undefined)
                 const email = normalizeMemberEmail(values.email || '')
-                if (email !== normalizeMemberEmail(editing.email || '')) {
+                if (email !== normalizeMemberEmail(result.code === 'member-created' ? result.email : editing.email || '')) {
                   if (!email) throw new Error(t('profile.emailSync.required'))
                   const correction = values.emailChangeMode === 'correct'
                   if (!await verifyEmailChange({ memberName: editing.displayName, email, correction })) return
@@ -1662,7 +1681,7 @@ const AdminUsers: React.FC = () => {
                   if (!correction) message.info(t('profile.emailSync.requestSaved'))
                 }
                 if (normalizedPhone) {
-                  const currentPhone = normalizePhoneNumber(editing.profile?.phone || '')
+                  const currentPhone = normalizePhoneNumber(result.code === 'member-created' ? result.phone : editing.profile?.phone || '')
                   if (normalizedPhone !== currentPhone) {
                     if (!await verifyPhoneChange({ memberName: editing.displayName || editing.email || '', phone: normalizedPhone })) return
                     await updateMemberPhone(editing.id, normalizedPhone)
@@ -1680,40 +1699,31 @@ const AdminUsers: React.FC = () => {
                 } as any)
                 if (res.success) message.success(t('usersAdmin.saved'))
               } else {
-                // 创建新用户时，先创建文档获取ID，然后生成会员ID并更新
-                const userData: Omit<User, 'id'> = {
+                const token = await auth.currentUser?.getIdToken()
+                if (!token) throw new Error(t('usersAdmin.createAccountFailed'))
+                const response = await fetch('/.netlify/functions/create-member', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+                  body: JSON.stringify({
                   displayName: values.displayName,
-                  email: values.email || undefined, // ✅ 允许email为空
+                  email: normalizeMemberEmail(values.email || ''),
+                  password: values.initialPassword,
+                  phone: normalizedPhone,
                   role: values.role,
-                  status: 'inactive',  // ✅ 默认状态为非活跃
-                  profile: { phone: normalizedPhone, gender: values.gender || null, race: values.race || null },
-                  preferences: {
-                    locale: 'zh',
-                    notifications: true,
-                  },
-                  membership: { level: values.level, joinDate: new Date(), lastActive: new Date() },
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
+                  level: values.level,
+                  gender: values.gender,
+                  race: values.race,
                   ...(discountPayload.discount ? { discount: discountPayload.discount } : {}),
-                } as any
-
-                const res = await createDocument<User>(COLLECTIONS.USERS, userData)
-
-                if ((res as any).success) {
-                  const newUserId = (res as any).id
-
-                  // 生成会员ID并更新用户文档
-                  try {
-                    const memberId = await generateMemberId(newUserId)
-                    await updateDocument<User>(COLLECTIONS.USERS, newUserId, { memberId } as any)
-                    message.success(t('usersAdmin.created'))
-                  } catch (error) {
-                    console.error('生成会员ID失败:', error)
-                    message.warning(t('usersAdmin.created') + '，' + t('usersAdmin.memberIdGenerationFailed'))
-                  }
-                } else {
-                  message.error(t('messages.dataLoadFailed'))
+                  }),
+                })
+                const result = await response.json()
+                if (!response.ok || !result.success) {
+                  const errorKey = result.code === 'email-in-use' ? 'usersAdmin.emailInUseError'
+                    : result.code === 'phone-in-use' ? 'usersAdmin.phoneInUseError' : 'usersAdmin.createAccountFailed'
+                  throw new Error(t(errorKey))
                 }
+                message.success(t('usersAdmin.created'))
+                form.setFieldValue('initialPassword', undefined)
               }
               await refreshUsers()
               setEditor(previous => ({ ...previous, open: false }))
@@ -1740,7 +1750,7 @@ const AdminUsers: React.FC = () => {
             label={<span style={{ color: '#FFFFFF' }}>{t('auth.email')}</span>}
             name="email"
             rules={[
-              // ✅ 管理员和开发者手动创建用户时，电邮为选填
+              { required: !editing, message: t('auth.emailRequired') },
               { type: 'email', message: t('auth.emailInvalid') },
               {
                 validator: async (_, value) => {
@@ -1788,6 +1798,12 @@ const AdminUsers: React.FC = () => {
             validateDebounce={500}
           >
             <Input placeholder={t('auth.email')} />
+          </Form.Item>
+
+          <Form.Item name="initialPassword" label={t(editing ? 'usersAdmin.initialPasswordExisting' : 'usersAdmin.initialPassword')}
+            rules={[{ required: !editing, message: t('auth.passwordRequired') },
+              { min: 6, max: 128, message: t('usersAdmin.initialPasswordLength') }]}>
+            <Input.Password autoComplete="new-password" />
           </Form.Item>
 
           {editing && (emailChanged || ['requested', 'awaiting-verification', 'sync-pending'].includes(editing.emailChange?.status || '') || editing.emailAuth?.verified === false) && (

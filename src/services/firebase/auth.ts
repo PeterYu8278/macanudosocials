@@ -20,6 +20,8 @@ import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
 import { sendRecoveryEmail } from './passwordResetEmail';
 import { loginPhoneWithPassword } from './phoneLogin';
+import { updateMemberPhone } from './memberPhone';
+import i18n from '../../i18n';
 import { normalizePhoneNumber, identifyInputType } from '../../utils/phoneNormalization';
 import { generateMemberId, getUserByMemberId } from '../../utils/memberId';
 import { getLoginLandingPath } from '../../utils/loginLanding';
@@ -153,6 +155,17 @@ export const registerUser = async (
       // 重试一次写入
       await setDoc(userDocRef, userData);
       await waitForPendingWrites(db);
+    }
+
+    // The backend synchronizes Auth and records that phone ownership is not SMS-verified.
+    try {
+      await updateMemberPhone(user.uid, normalizedPhone);
+    } catch (error) {
+      // Keep the created account so the member can sign in by email and repair the phone.
+      return { success: false, code: 'registration-phone-sync-failed',
+        error: new Error(i18n.t('auth.registrationPhoneSyncFailed', {
+          reason: error instanceof Error ? error.message : i18n.t('profile.phoneSync.failed'),
+        })) } as { success: false; error: Error; code?: string };
     }
     
     // ✅ 如果有引荐人，更新引荐人的数据（不再赠送积分）

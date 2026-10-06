@@ -264,6 +264,7 @@
     "noData": "暂无数据"
   },
   "auth": {
+    "registrationPhoneSyncFailed": "电邮账号已创建，但电话号码同步失败：{{reason}}。请使用电邮和密码登录，再到个人资料更新电话号码。",
     "phoneLoginInvalidCredentials": "手机号或密码不正确",
     "phoneLoginTooManyAttempts": "尝试次数过多，请在5分钟后重试",
     "phoneLoginUnavailable": "手机号登录暂时不可用，请稍后重试",
@@ -1162,6 +1163,13 @@
     "createEvent": "创建活动"
   },
   "usersAdmin": {
+    "initialPassword": "初始密码",
+    "initialPasswordExisting": "初始密码（仅未有登录账号时需要）",
+    "missingAccountPassword": "此会员尚未有登录账号，请填写初始密码后再次保存。",
+    "accountIdentityRequired": "会员已保存的资料需要有效电邮和电话号码，才能补建登录账号。",
+    "accountIdentityConflict": "此会员关联了不同的登录身份，请先处理账号关联后再保存。",
+    "initialPasswordLength": "密码长度须为 6 至 128 个字符",
+    "createAccountFailed": "无法创建登录账号，请检查权限后重试。",
     "userList": "用户列表",
     "referralTree": "引荐树",
     "addUser": "添加用户",
