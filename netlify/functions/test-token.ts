@@ -1,6 +1,6 @@
 // Netlify Function: 测试单个 FCM Token
 // 用于诊断推送通知问题
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getMessaging } from 'firebase-admin/messaging';
 
@@ -20,7 +20,7 @@ if (!getApps().length) {
   }
 }
 
-export const handler: Handler = async (event, context) => {
+export const eventHandler: Handler = async (event) => {
   // 处理 OPTIONS 请求（CORS 预检）
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -186,3 +186,4 @@ export const handler: Handler = async (event, context) => {
   }
 };
 
+export default toWebFunction(eventHandler)

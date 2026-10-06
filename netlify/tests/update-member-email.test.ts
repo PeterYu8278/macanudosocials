@@ -39,7 +39,7 @@ vi.mock('firebase-admin/firestore', () => {
     },
   }) }
 })
-import { handler } from '../functions/update-member-email'
+import { eventHandler as handler } from '../functions/update-member-email'
 const invoke = handler as unknown as (event: unknown) => Promise<{ statusCode: number; body: string }>
 const save = (mode = 'prepare', email = 'New@Example.com ', userId = 'member') => invoke({
   httpMethod: 'POST', headers: { authorization: 'Bearer token' }, body: JSON.stringify({ userId, mode, email }),

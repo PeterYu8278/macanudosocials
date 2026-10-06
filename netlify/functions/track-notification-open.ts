@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { getAuth } from 'firebase-admin/auth';
@@ -23,7 +23,7 @@ const initializeAdmin = () => {
   initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
 };
 
-export const handler: Handler = async (event) => {
+export const eventHandler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return reply(200, {});
   if (event.httpMethod !== 'POST') return reply(405, { success: false });
 
@@ -91,3 +91,5 @@ export const handler: Handler = async (event) => {
     return reply(500, { success: false, error: 'Unable to record notification open' });
   }
 };
+
+export default toWebFunction(eventHandler)

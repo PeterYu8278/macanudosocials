@@ -15,7 +15,7 @@ vi.mock('firebase-admin/firestore', () => {
     runTransaction: async (callback: any) => callback({ get: (ref: any) => ref.get(), create: m.create }),
   }) }
 })
-import { handler } from '../functions/ensure-member-profile'
+import { eventHandler as handler } from '../functions/ensure-member-profile'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const request = () => invoke({ httpMethod: 'POST', headers: { authorization: 'Bearer token' } })
 describe('trusted profile bootstrap', () => {

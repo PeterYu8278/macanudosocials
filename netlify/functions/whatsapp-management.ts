@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { FieldValue, initializeFirestore, Timestamp } from 'firebase-admin/firestore'
@@ -38,7 +38,7 @@ function validateConfig(value: any): WhatsAppSettings {
     testPhones: [...new Set(testPhones)] as string[] }
 }
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405)
   const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/)?.[1]
   if (!token) return reply(401)
@@ -156,3 +156,5 @@ export const handler: Handler = async event => {
     return reply(safe.status || 503, { code: safe.status ? safe.code : 'service-unavailable' })
   }
 }
+
+export default toWebFunction(eventHandler)

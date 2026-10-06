@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
@@ -9,7 +9,7 @@ const reply = (statusCode: number, code: string, extra = {}) => ({
   body: JSON.stringify({ success: statusCode === 200, code, ...extra }),
 });
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed');
   let input;
   try {
@@ -39,3 +39,5 @@ export const handler: Handler = async event => {
     return reply(statuses[code] || 503, statuses[code] ? code : 'service-unavailable');
   }
 };
+
+export default toWebFunction(eventHandler)

@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
@@ -13,7 +13,7 @@ const reply = (statusCode: number, code: string, extra = {}) => ({
 })
 const ranks: Record<string, number> = { developer: 5, superAdmin: 4, admin: 3 }
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   if (!event.body || event.body.length > 8192) return reply(400, 'invalid-request')
   let input: { userId?: unknown; phone?: unknown }
@@ -78,3 +78,5 @@ export const handler: Handler = async event => {
     return reply(503, authUpdated ? 'profile-sync-failed' : 'service-unavailable')
   } finally { try { await unlock?.() } catch { /* The short-lived lease releases after a crash. */ } }
 }
+
+export default toWebFunction(eventHandler)

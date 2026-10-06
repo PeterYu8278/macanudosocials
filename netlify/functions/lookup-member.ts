@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -30,7 +30,7 @@ const getAdminDb = () => {
   return getFirestore();
 };
 
-export const handler: Handler = async (event) => {
+export const eventHandler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return response(200, {});
   }
@@ -70,3 +70,5 @@ export const handler: Handler = async (event) => {
     return response(500, { success: false, error: '查询失败，请重试' });
   }
 };
+
+export default toWebFunction(eventHandler)

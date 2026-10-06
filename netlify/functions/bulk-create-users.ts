@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { Timestamp, getFirestore } from 'firebase-admin/firestore'
@@ -105,7 +105,7 @@ const getUserByPhoneOrNull = async (phone: string) => {
 
 const PROTECTED_ROLES = new Set(['developer', 'superAdmin', 'admin', 'storeAdmin'])
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
 
   try {
@@ -298,3 +298,5 @@ export const handler: Handler = async event => {
     return json(error?.code === 'auth/id-token-revoked' ? 401 : 500, { error: error?.message || 'Bulk import failed' })
   }
 }
+
+export default toWebFunction(eventHandler)

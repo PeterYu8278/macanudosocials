@@ -1,5 +1,5 @@
 // Netlify Function: 保存 FCM Token
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
@@ -20,7 +20,7 @@ if (!getApps().length) {
   }
 }
 
-export const handler: Handler = async (event, context) => {
+export const eventHandler: Handler = async (event) => {
   // 只允许 POST 请求
   if (event.httpMethod !== 'POST') {
     return {
@@ -124,3 +124,4 @@ export const handler: Handler = async (event, context) => {
   }
 };
 
+export default toWebFunction(eventHandler)

@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
@@ -14,7 +14,7 @@ const reply = (statusCode: number, code: string, extra = {}) => ({
 const normalize = (email: string) => email.trim().toLowerCase()
 const modes = ['request', 'prepare', 'send', 'confirm', 'correct', 'sync', 'cancel']
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   if (!event.body || event.body.length > 8192) return reply(400, 'invalid-request')
   let input: { userId?: unknown; email?: unknown; mode?: unknown; changeId?: unknown; confirmationToken?: unknown }
@@ -193,3 +193,5 @@ export const handler: Handler = async event => {
     try { await unlock?.() } catch { /* The short-lived lease releases even if Firestore is unavailable. */ }
   }
 }
+
+export default toWebFunction(eventHandler)

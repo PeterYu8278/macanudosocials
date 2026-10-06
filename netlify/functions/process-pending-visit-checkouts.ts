@@ -1,4 +1,4 @@
-import { schedule } from '@netlify/functions'
+import { toWebFunction } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getFirestore } from 'firebase-admin/firestore'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
@@ -13,7 +13,7 @@ const getAdminDb = () => {
   return getFirestore()
 }
 
-export const handler = schedule('* * * * *', async () => {
+const processPendingCheckouts = async () => {
   const db = getAdminDb()
   const snapshot = await db.collection(GLOBAL_COLLECTIONS.VISIT_SESSIONS)
     .where('status', '==', 'pending')
@@ -34,4 +34,7 @@ export const handler = schedule('* * * * *', async () => {
   console.log(`[process-pending-visit-checkouts] scanned=${userIds.size} completed=${completed} failed=${failed}`)
 
   return { statusCode: 200 }
-})
+}
+
+export const config = { schedule: '* * * * *' }
+export default toWebFunction(processPendingCheckouts)

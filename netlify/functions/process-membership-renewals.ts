@@ -1,4 +1,4 @@
-import { schedule } from '@netlify/functions';
+import { toWebFunction } from './_shared/webFunction';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { Timestamp, getFirestore } from 'firebase-admin/firestore';
 
@@ -172,4 +172,5 @@ const processRenewals = async () => {
 };
 
 // Netlify cron uses UTC; 16:05 UTC is 00:05 in Singapore.
-export const handler = schedule('5 16 * * *', processRenewals);
+export const config = { schedule: '5 16 * * *' };
+export default toWebFunction(processRenewals);

@@ -56,7 +56,7 @@ vi.mock('firebase-admin/firestore', () => {
       } })) }
 })
 import { initializeFirestore } from 'firebase-admin/firestore'
-import { handler } from '../functions/register-member'
+import { eventHandler as handler } from '../functions/register-member'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const input = { email: 'MEMBER@example.com', password: 'password123', displayName: 'Member', phone: '0123456789' }
 const request = (body: any = input) => invoke({ httpMethod: 'POST', headers: { 'x-nf-client-connection-ip': '127.0.0.1' }, body: JSON.stringify(body) })

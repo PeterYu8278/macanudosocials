@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
@@ -8,7 +8,7 @@ import { MemberIdentityError } from './_shared/memberIdentity'
 import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/memberIdentityLock'
 const reply = (statusCode: number, code: string, extra = {}) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify({ success: statusCode === 200, code, ...extra }) })
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/)?.[1]
   if (!token) return reply(401, 'auth-required')
@@ -58,3 +58,5 @@ export const handler: Handler = async event => {
     return reply(503, 'service-unavailable')
   } finally { try { await unlock?.() } catch { /* The lease expires after a crash. */ } }
 }
+
+export default toWebFunction(eventHandler)

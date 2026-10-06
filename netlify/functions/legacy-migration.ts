@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
@@ -581,7 +581,7 @@ const processVisits = async (rows: AnyRow[], redemptions: AnyRow[], batchId: str
   return result
 }
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return json(405, { error: 'Method not allowed' })
   try {
     initAdmin()
@@ -612,3 +612,5 @@ export const handler: Handler = async event => {
     return json(error?.code === 'auth/id-token-revoked' ? 401 : 500, { error: error?.message || 'Legacy migration failed' })
   }
 }
+
+export default toWebFunction(eventHandler)

@@ -5,7 +5,7 @@ vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initi
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: mocks.verify }) }));
 vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({}), Timestamp: { now: () => 'now' } }));
 vi.mock('../functions/_shared/dayPass', () => ({ executeDayPass: mocks.execute }));
-import { handler } from '../functions/day-pass';
+import { eventHandler as handler } from '../functions/day-pass';
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>;
 const request = (changes = {}) => invoke({ httpMethod: 'POST', headers: { authorization: 'Bearer token' },
   body: JSON.stringify({ action: 'set-enabled', enabled: false }), ...changes });

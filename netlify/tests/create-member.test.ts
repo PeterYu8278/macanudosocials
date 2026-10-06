@@ -14,7 +14,7 @@ vi.mock('firebase-admin/firestore', () => {
     runTransaction: m.transaction,
   }) }
 })
-import { handler } from '../functions/create-member'
+import { eventHandler as handler } from '../functions/create-member'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const input = { displayName: 'Member', email: 'MEMBER@example.com', phone: '+60123456789', password: 'secret123', role: 'member', level: 'bronze' }
 const request = (body: any = input, headers = { authorization: 'Bearer token' }) => invoke({ httpMethod: 'POST', body: JSON.stringify(body), headers })

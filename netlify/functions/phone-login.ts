@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
@@ -12,7 +12,7 @@ const reply = (statusCode: number, body: Record<string, unknown>) => ({
 })
 const invalidCredentials = () => reply(401, { success: false, code: 'auth/invalid-credential' })
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, { success: false, code: 'method-not-allowed' })
   if (!event.body || event.body.length > 8192) return reply(400, { success: false, code: 'invalid-request' })
   let input: { phone?: unknown; password?: unknown }
@@ -110,3 +110,5 @@ export const handler: Handler = async event => {
     return reply(503, { success: false, code: 'auth/service-unavailable' })
   }
 }
+
+export default toWebFunction(eventHandler)

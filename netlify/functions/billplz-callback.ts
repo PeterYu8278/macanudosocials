@@ -2,7 +2,7 @@
  * Netlify Function: Billplz Callback Handler
  * Handles successful payment callbacks from Billplz
  */
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { createHmac } from 'crypto';
@@ -48,7 +48,7 @@ function verifyXSignature(params: URLSearchParams, xSignatureKey: string): boole
   return computed === receivedSig;
 }
 
-export const handler: Handler = async (event) => {
+export const eventHandler: Handler = async (event) => {
   // Only allow POST
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'Method Not Allowed' };
@@ -248,3 +248,5 @@ export const handler: Handler = async (event) => {
     return { statusCode: 500, body: `Internal Server Error: ${error.message}` };
   }
 };
+
+export default toWebFunction(eventHandler)

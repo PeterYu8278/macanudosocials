@@ -1,5 +1,5 @@
 // Netlify Function: 更新 Netlify 环境变量并触发部署
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 
 interface EnvVar {
   key: string;
@@ -100,7 +100,7 @@ async function getDeployStatus(
   return await response.json();
 }
 
-export const handler: Handler = async (event, context) => {
+export const eventHandler: Handler = async (event) => {
   // 处理 CORS 预检请求
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -196,3 +196,4 @@ export const handler: Handler = async (event, context) => {
   }
 };
 
+export default toWebFunction(eventHandler)

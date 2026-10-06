@@ -1,4 +1,4 @@
-import { schedule } from '@netlify/functions';
+import { toWebFunction } from './_shared/webFunction';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
 import { getMessaging } from 'firebase-admin/messaging';
@@ -367,4 +367,5 @@ const runScheduledReminders = async () => {
 };
 
 // Netlify cron is UTC. 04:00 UTC is 12:00 in Singapore.
-export const handler = schedule('0 4 * * *', runScheduledReminders);
+export const config = { schedule: '0 4 * * *' };
+export default toWebFunction(runScheduledReminders);

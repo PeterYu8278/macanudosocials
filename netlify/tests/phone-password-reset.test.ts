@@ -8,7 +8,7 @@ vi.mock('firebase-admin/firestore', () => ({ initializeFirestore: () => ({
   collection: () => ({ doc: (id: string) => ({ id }), where: () => ({ limit: () => ({ get: m.query }) }) }),
   runTransaction: async (callback: any) => callback({ get: async () => ({ data: () => undefined }), set: vi.fn() }),
 }) }))
-import { handler } from '../functions/phone-password-reset'
+import { eventHandler as handler } from '../functions/phone-password-reset'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const request = () => invoke({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ phone: '0168008000' }) })
 const loaded = () => ({ config: { enabled: true, defaultProvider: 'whapi', features: { passwordReset: true } }, token: 'secret-token', verified: true })

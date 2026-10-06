@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions'
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { initializeFirestore, Timestamp, FieldValue, type Firestore } from 'firebase-admin/firestore'
@@ -21,7 +21,7 @@ async function readinessRead<T>(work: () => Promise<T>): Promise<T> {
   } finally { clearTimeout(timer) }
 }
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   if (!event.body || event.body.length > 4096) return reply(400, 'invalid-request')
   let input: { email?: unknown; password?: unknown; displayName?: unknown; phone?: unknown; referralCode?: unknown }
@@ -133,3 +133,5 @@ export const handler: Handler = async event => {
     console.info('register-member', { requestId, stage: 'request-finished', durationMs: Date.now() - startedAt })
   }
 }
+
+export default toWebFunction(eventHandler)

@@ -11,7 +11,7 @@ vi.mock('firebase-admin/firestore', () => ({ Timestamp: { now: () => 'now' }, ge
     where: () => ({ limit: () => ({ get: m.query }) }) }),
   batch: () => ({ delete: m.deleteDoc, create: m.audit, commit: m.commit }),
 }) }))
-import { handler } from '../functions/delete-member'
+import { eventHandler as handler } from '../functions/delete-member'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number }>
 const request = (userId = 'member', headers: Record<string, string> = { authorization: 'Bearer token' }) =>
   invoke({ httpMethod: 'POST', headers, body: JSON.stringify({ userId }) })

@@ -2,10 +2,10 @@
  * Netlify Function: Billplz API Proxy
  * Handles CORS and secure API calls to Billplz
  */
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import axios from 'axios';
 
-export const handler: Handler = async (event, context) => {
+export const eventHandler: Handler = async (event) => {
   // CORS Headers
   const corsHeaders = {
     'Content-Type': 'application/json',
@@ -85,3 +85,5 @@ export const handler: Handler = async (event, context) => {
     };
   }
 };
+
+export default toWebFunction(eventHandler)

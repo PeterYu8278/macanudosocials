@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { Timestamp, getFirestore } from 'firebase-admin/firestore';
@@ -71,7 +71,7 @@ const getAuthenticatedUser = async (authorization?: string) => {
   return userSnapshot;
 };
 
-export const handler: Handler = async event => {
+export const eventHandler: Handler = async event => {
   if (event.httpMethod === 'OPTIONS') return reply(200, {});
   if (event.httpMethod !== 'POST') return reply(405, { success: false, error: 'Method not allowed' });
 
@@ -226,3 +226,5 @@ export const handler: Handler = async event => {
     return reply(500, { success: false, code: 'ACTIVATION_FAILED' });
   }
 };
+
+export default toWebFunction(eventHandler)

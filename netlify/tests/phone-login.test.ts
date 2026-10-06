@@ -10,7 +10,7 @@ vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({
     : { doc: (id: string) => ({ id }) },
   runTransaction: async (callback: (transaction: unknown) => Promise<boolean>) => callback({ get: mocks.rateGet, set: mocks.rateSet }),
 }) }))
-import { handler } from '../functions/phone-login'
+import { eventHandler as handler } from '../functions/phone-login'
 const invoke = handler as unknown as (event: { httpMethod: string; body: string; headers: Record<string, string> }) => Promise<{ statusCode: number; body: string; headers: Record<string, string> }>
 const login = (body: unknown = { phone: '0123456789', password: 'correct-password' }) => invoke({ httpMethod: 'POST', headers: { 'x-nf-client-connection-ip': '127.0.0.1' }, body: JSON.stringify(body) })
 

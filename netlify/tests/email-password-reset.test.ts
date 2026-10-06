@@ -8,7 +8,7 @@ vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({
   collection: (name: string) => ({ doc: (id: string) => ({ id, get: name === 'app_config' ? mocks.config : undefined }) }),
   runTransaction: async (callback: (transaction: unknown) => Promise<boolean>) => callback({ get: mocks.rateGet, set: mocks.rateSet }),
 }) }))
-import { handler } from '../functions/email-password-reset'
+import { eventHandler as handler } from '../functions/email-password-reset'
 const invoke = handler as unknown as (event: { httpMethod: string; body: string; headers: Record<string, string> }) => Promise<{ statusCode: number; body: string }>
 const request = (email: unknown = ' Member@Example.com ') => invoke({ httpMethod: 'POST', headers: { 'x-nf-client-connection-ip': '127.0.0.1' }, body: JSON.stringify({ email }) })
 

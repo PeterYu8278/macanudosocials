@@ -12,7 +12,7 @@ vi.mock('firebase-admin/firestore', () => ({ Timestamp: { now: () => 'timestamp'
   doc: (id: string) => ({ get: async () => ({ data: () => mocks.documents.get(id) }), update: mocks.updateProfile }),
   where: () => ({ limit: () => ({ get: mocks.duplicates }) }),
 }) }) }))
-import { handler } from '../functions/update-member-phone'
+import { eventHandler as handler } from '../functions/update-member-phone'
 const invoke = handler as unknown as (event: unknown) => Promise<{ statusCode: number; body: string }>
 const save = (userId = 'member', phone = '0123456789') => invoke({ httpMethod: 'POST', headers: { authorization: 'Bearer test-token' }, body: JSON.stringify({ userId, phone }) })
 

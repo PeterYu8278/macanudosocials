@@ -25,7 +25,7 @@ vi.mock('firebase-admin/firestore', () => {
       set: (r: any, value: any) => m.documents.set(r.path, value), create: (r: any, value: any) => m.documents.set(r.path, value) }),
   }) }
 })
-import { handler } from '../functions/whatsapp-management'
+import webHandler, { eventHandler as handler } from '../functions/whatsapp-management'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const request = (action: string, data = {}, headers: any = { authorization: 'Bearer test' }) => invoke({ httpMethod: 'POST', headers, body: JSON.stringify({ action, ...data }) })
 const config = () => ({ ...defaultWhatsAppSettings, enabled: true, defaultProvider: 'whapi', testPhones: ['+60168008000'] })
@@ -43,6 +43,14 @@ describe('WhatsApp management gateway', () => {
     m.fetch.mockResolvedValue({ ok: true, json: async () => ({ id: 'provider-message' }) })
   })
   afterEach(() => vi.unstubAllGlobals())
+  it('enforces authentication through the deployed modern entry point', async () => {
+    const response = await webHandler(new Request('https://example.com/.netlify/functions/whatsapp-management', {
+      method: 'POST', body: JSON.stringify({ action: 'load' }),
+    }))
+    expect(response.status).toBe(401)
+    expect(await response.json()).toEqual({ success: false })
+    expect(m.verify).not.toHaveBeenCalled()
+  })
   it('never returns provider credentials to the browser', async () => {
     const response = await request('load')
     expect(response.statusCode).toBe(200)

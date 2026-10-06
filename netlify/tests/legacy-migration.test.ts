@@ -44,7 +44,7 @@ vi.mock('firebase-admin/firestore', async importOriginal => {
   } }) }
 })
 
-import { handler } from '../functions/legacy-migration'
+import { eventHandler as handler } from '../functions/legacy-migration'
 const invoke = handler as unknown as (event: unknown) => Promise<{ statusCode: number; body: string }>
 const migrate = (stage: string, row: Record<string, unknown> | Record<string, unknown>[]) => invoke({
   httpMethod: 'POST', headers: { authorization: 'Bearer test-token' },

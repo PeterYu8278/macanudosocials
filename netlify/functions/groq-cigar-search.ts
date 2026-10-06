@@ -1,4 +1,4 @@
-import type { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 
@@ -49,7 +49,7 @@ const parseJsonResponse = (content: string) => {
   return JSON.parse(cleaned);
 };
 
-export const handler: Handler = async (event) => {
+export const eventHandler: Handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
     return response(200, {});
   }
@@ -131,3 +131,5 @@ export const handler: Handler = async (event) => {
     return response(500, { success: false, error: 'Groq search failed' });
   }
 };
+
+export default toWebFunction(eventHandler)

@@ -1,5 +1,5 @@
 // Netlify Function: 部署 Firebase Firestore 索引
-import { Handler } from '@netlify/functions';
+import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { GoogleAuth } from 'google-auth-library';
 
 const corsHeaders = {
@@ -206,7 +206,7 @@ async function deployIndexes(
   };
 }
 
-export const handler: Handler = async (event, context) => {
+export const eventHandler: Handler = async (event) => {
   // 处理 CORS 预检请求
   if (event.httpMethod === 'OPTIONS') {
     return {
@@ -405,3 +405,5 @@ export const handler: Handler = async (event, context) => {
     };
   }
 };
+
+export default toWebFunction(eventHandler)
