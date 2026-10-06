@@ -1232,14 +1232,11 @@ export const getUserVisitSessions = async (
         if (storeId) {
           q = query(q, where('storeId', '==', storeId));
         }
-        if (limitCount !== undefined && limitCount > 0) {
-          q = query(q, limit(limitCount));
-        }
         const snapshot = await getDocs(q);
         const sessions = snapshot.docs.map(doc => processVisitSessionData(doc.data(), doc.id));
-        // 手动排序
+        // An unordered limit can omit recent visits when the composite index is missing.
         sessions.sort((a, b) => b.checkInAt.getTime() - a.checkInAt.getTime());
-        return sessions;
+        return limitCount > 0 ? sessions.slice(0, limitCount) : sessions;
       } catch (retryError) {
         console.error('[getUserVisitSessions] 重试查询也失败:', retryError);
         return [];

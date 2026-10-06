@@ -2020,6 +2020,49 @@ a:hover {
   margin-bottom: 16px;
 }
 
+.manual-reload-form .ant-form-item-row {
+  display: flex;
+  flex-flow: row nowrap;
+  gap: 12px;
+}
+
+.manual-reload-form .ant-form-item-label {
+  flex: 0 0 112px !important;
+  width: auto !important;
+  min-width: 0;
+  max-width: 112px !important;
+  padding: 0;
+  text-align: left;
+  white-space: normal;
+}
+
+.manual-reload-form .ant-form-item-label > label {
+  height: auto;
+  min-height: 32px;
+}
+
+.manual-reload-form .ant-form-item-control {
+  flex: 1 1 0 !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: calc(100% - 124px) !important;
+}
+
+@media (max-width: 480px) {
+  .manual-reload-form .ant-form-item-label {
+    flex-basis: 88px !important;
+    max-width: 88px !important;
+  }
+
+  .manual-reload-form .ant-form-item-control {
+    max-width: calc(100% - 100px) !important;
+  }
+}
+
+.manual-reload-form .ant-form-item-control:only-child {
+  max-width: 100% !important;
+}
+
 .reload-verification-filter {
   width: 150px;
   min-width: 0;

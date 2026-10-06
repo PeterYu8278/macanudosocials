@@ -2167,6 +2167,9 @@
     "joined": "加入",
     "memberNumber": "会员编号",
     "eventStatus": {
+      "draft": "草稿",
+      "published": "已发布",
+      "unknown": "未知状态",
       "upcoming": "即将开始",
       "ongoing": "进行中",
       "completed": "已结束",

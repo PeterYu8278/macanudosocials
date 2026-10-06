@@ -2166,6 +2166,9 @@
     "joined": "Joined",
     "memberNumber": "Member ID",
     "eventStatus": {
+      "draft": "Draft",
+      "published": "Published",
+      "unknown": "Unknown status",
       "upcoming": "Upcoming",
       "ongoing": "Ongoing",
       "completed": "Completed",

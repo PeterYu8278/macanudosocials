@@ -18,7 +18,7 @@ import {
   type DocumentData,
   type QueryDocumentSnapshot
 } from 'firebase/firestore';
-import { db } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { ReloadRecord, User } from '../../types';
 import { createPointsRecord } from './pointsRecords';
@@ -37,10 +37,24 @@ export const createReloadRecord = async (
   requestedAmount: number, // RM
   userName?: string,
   storeId?: string,
-  billplzId?: string
+  billplzId?: string,
+  options?: { manual?: boolean }
 ): Promise<{ success: boolean; recordId?: string; error?: string }> => {
   try {
-    if (!Number.isFinite(requestedAmount) || requestedAmount < MINIMUM_RELOAD_AMOUNT_RM) {
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
+      return { success: false, error: '金额必须大于 0' };
+    }
+
+    if (options?.manual) {
+      const operatorId = auth.currentUser?.uid;
+      if (!operatorId || billplzId) {
+        return { success: false, error: '无权创建手动充值记录' };
+      }
+      const operator = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, operatorId));
+      if (!operator.exists() || !['admin', 'superAdmin', 'developer', 'storeAdmin'].includes(operator.data().role)) {
+        return { success: false, error: '无权创建手动充值记录' };
+      }
+    } else if (requestedAmount < MINIMUM_RELOAD_AMOUNT_RM) {
       return { success: false, error: `最低充值金额为 RM ${MINIMUM_RELOAD_AMOUNT_RM}` };
     }
 

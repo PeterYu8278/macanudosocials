@@ -215,7 +215,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         values.amount,
         selectedUser?.displayName,
         values.storeId,
-        undefined
+        undefined,
+        { manual: true }
       );
 
       if (!result.success || !result.recordId) {
@@ -889,9 +890,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         >
           <Form
             form={manualForm}
-            layout="vertical"
+            layout="horizontal"
+            labelAlign="left"
+            labelWrap
+            colon={false}
             onFinish={onManualCreateSubmit}
-            className="points-config-form"
+            className="points-config-form manual-reload-form"
             initialValues={{ autoVerify: true }}
           >
             <Form.Item
@@ -917,11 +921,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               label={<span style={{ color: 'rgba(255,255,255,0.85)' }}>{t('pointsConfig.reloadVerification.manualCreateAmountLabel')}</span>}
               rules={[
                 { required: true, message: t('pointsConfig.reloadVerification.manualCreateAmountRequired') },
-                { type: 'number', min: 1, message: t('pointsConfig.reloadVerification.manualCreateAmountMin') }
+                { type: 'number', min: 0.01, message: t('pointsConfig.reloadVerification.manualCreateAmountMin') }
               ]}
             >
               <InputNumber
-                min={1}
+                min={0.01}
+                precision={2}
                 style={{
                   width: '100%',
                   background: 'rgba(255,255,255,0.1)',

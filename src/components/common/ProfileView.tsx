@@ -20,6 +20,7 @@ import { collection, getDocs, query, limit } from 'firebase/firestore'
 import { db } from '../../config/firebase'
 import { getUserPointsRecords } from '../../services/firebase/pointsRecords'
 import { getUserVisitSessions } from '../../services/firebase/visitSessions'
+import { sortMemberActivityRecords, getMemberActivityEventImage, getMemberActivityEventStatus } from '../../utils/memberActivityRecords'
 import { getTotalRedemptions } from '../../services/firebase/redemption'
 import type { User, Event, Order, Cigar, PointsRecord, RedemptionRecord, VisitSession } from '../../types'
 import { useTranslation } from 'react-i18next'
@@ -86,6 +87,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   const [userEvents, setUserEvents] = useState<Event[]>([])
   const [loadingEvents, setLoadingEvents] = useState(false)
   const [userVisitSessions, setUserVisitSessions] = useState<VisitSession[]>([])
+  const memberActivities = useMemo(() => sortMemberActivityRecords(userVisitSessions, userEvents), [userVisitSessions, userEvents])
   const [loadingVisitSessions, setLoadingVisitSessions] = useState(false)
   const [userOrders, setUserOrders] = useState<Order[]>([])
   const [loadingOrders, setLoadingOrders] = useState(false)
@@ -1507,49 +1509,51 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 gridTemplateColumns: '1fr',
                 gap: isMobile ? 12 : 16
               }}>
-                {userVisitSessions.map((session) => {
-                  const statusKey = `visitSessions.status${session.status.charAt(0).toUpperCase()}${session.status.slice(1)}`
-                  const statusColor = session.status === 'completed'
-                    ? '#52c41a'
-                    : session.status === 'pending' ? '#F4AF25' : '#ff7875'
-                  const period = formatVisitPeriod(session)
-                  const visitTypeLabel = session.checkInType === 'daypass'
-                    ? t('profile.dayPass')
-                    : t('profile.annualPass')
-                  return (
-                    <div
-                      key={`visit-${session.id}`}
-                      style={{
-                        borderRadius: 12,
-                        border: '1px solid rgba(244,175,37,0.2)',
-                        background: 'rgba(255,255,255,0.04)',
-                        padding: isMobile ? '12px 14px' : '14px 16px',
-                        minWidth: 0,
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
-                        <div style={{ minWidth: 0 }}>
-                          <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {session.storeName || t('navigation.visitSessions')}
+                {memberActivities.map(activity => {
+                  if (activity.kind === 'visit') {
+                    const session = activity.record
+                    const statusKey = `visitSessions.status${session.status.charAt(0).toUpperCase()}${session.status.slice(1)}`
+                    const statusColor = session.status === 'completed'
+                      ? '#52c41a'
+                      : session.status === 'pending' ? '#F4AF25' : '#ff7875'
+                    const period = formatVisitPeriod(session)
+                    const visitTypeLabel = session.checkInType === 'daypass'
+                      ? t('profile.dayPass')
+                      : t('profile.annualPass')
+                    return (
+                      <div
+                        key={`visit-${session.id}`}
+                        style={{
+                          borderRadius: 12,
+                          border: '1px solid rgba(244,175,37,0.2)',
+                          background: 'rgba(255,255,255,0.04)',
+                          padding: isMobile ? '12px 14px' : '14px 16px',
+                          minWidth: 0,
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 10 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ color: '#fff', fontSize: 14, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              {session.storeName || t('navigation.visitSessions')}
+                            </div>
+                            <div style={{ color: 'rgba(255,255,255,0.42)', fontSize: 11, marginTop: 4 }}>
+                              {period || formatDateTime(session.checkInAt)}
+                            </div>
                           </div>
-                          <div style={{ color: 'rgba(255,255,255,0.42)', fontSize: 11, marginTop: 4 }}>
-                            {period || formatDateTime(session.checkInAt)}
-                          </div>
+                          <span style={{ color: statusColor, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
+                            {t(statusKey)}
+                          </span>
                         </div>
-                        <span style={{ color: statusColor, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-                          {t(statusKey)}
-                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
+                          <span>{visitTypeLabel}</span>
+                          <span style={{ color: 'rgba(255,255,255,0.3)' }}>&middot;</span>
+                          <ClockCircleOutlined />
+                          <span>{formatHoursMinutes(session.durationHours, session.durationMinutes)}</span>
+                        </div>
                       </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 10, color: '#FDE08D', fontSize: 12, fontWeight: 700 }}>
-                        <span>{visitTypeLabel}</span>
-                        <span style={{ color: 'rgba(255,255,255,0.3)' }}>&middot;</span>
-                        <ClockCircleOutlined />
-                        <span>{formatHoursMinutes(session.durationHours, session.durationMinutes)}</span>
-                      </div>
-                    </div>
-                  )
-                })}
-                {userEvents.map((event) => {
+                    )
+                  }
+                  const event = activity.record
                   const startDate = event.schedule.startDate instanceof Date
                     ? event.schedule.startDate
                     : (event.schedule.startDate as any)?.toDate
@@ -1558,18 +1562,22 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
 
                   const isRegistered = event.participants?.registered?.includes(user?.id || '')
                   const isCheckedIn = event.participants?.checkedIn?.includes(user?.id || '')
+                  const eventImage = getMemberActivityEventImage(event)
 
                   const eventStatusConfig: Record<string, { bg: string; border: string; color: string; label: string }> = {
                     upcoming: { bg: 'rgba(64,169,255,0.12)', border: 'rgba(64,169,255,0.4)', color: '#40a9ff', label: t('profile.eventStatus.upcoming') },
                     ongoing:  { bg: 'rgba(82,196,26,0.12)',  border: 'rgba(82,196,26,0.4)',  color: '#52c41a', label: t('profile.eventStatus.ongoing') },
                     completed:{ bg: 'rgba(255,255,255,0.06)',border: 'rgba(255,255,255,0.15)',color: 'rgba(255,255,255,0.5)', label: t('profile.eventStatus.completed') },
                     cancelled:{ bg: 'rgba(255,77,79,0.12)',  border: 'rgba(255,77,79,0.4)',  color: '#ff4d4f', label: t('profile.eventStatus.cancelled') },
+                    draft: { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', label: t('profile.eventStatus.draft') },
+                    published: { bg: 'rgba(64,169,255,0.12)', border: 'rgba(64,169,255,0.4)', color: '#40a9ff', label: t('profile.eventStatus.published') },
+                    unknown: { bg: 'rgba(255,255,255,0.06)', border: 'rgba(255,255,255,0.15)', color: 'rgba(255,255,255,0.5)', label: t('profile.eventStatus.unknown') },
                   }
-                  const evStatus = eventStatusConfig[event.status] ?? eventStatusConfig.completed
+                  const evStatus = eventStatusConfig[getMemberActivityEventStatus(event)]
 
                   return (
                     <div
-                      key={event.id}
+                      key={`event-${event.id}`}
                       style={{
                         borderRadius: 12,
                         border: '1px solid rgba(244,175,37,0.15)',
@@ -1588,9 +1596,9 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                         background: 'rgba(255,255,255,0.06)',
                         flexShrink: 0
                       }}>
-                        {event.coverImage ? (
+                        {eventImage ? (
                           <img
-                            src={event.coverImage}
+                            src={eventImage}
                             alt={event.title}
                             style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                           />
