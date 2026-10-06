@@ -4,8 +4,8 @@ import { createHash, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
-import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
-import { createWhatsAppMember, maskEmail, messageText, normalizeWhatsAppSender, registrationSessionRef, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
+import { createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
 async function handleRegistrationMessage(db: any, payload: any) {
@@ -38,18 +38,33 @@ async function handleRegistrationMessage(db: any, payload: any) {
     return
   }
   const send = async (body: string) => { await submitWhapi(token, phone, body) }
+  const sendConfirmation = async (body: string) => {
+    const result = await submitWhapiButtons(token, phone, body)
+    if (result.status !== 'accepted') await send(`${body}\n\n请回复 CONFIRM 确认，或 CANCEL 取消。`)
+  }
   const ref = registrationSessionRef(db, phone)
   const existing = (await ref.get()).data() as WhatsAppRegistrationSession | undefined
   const expired = existing && existing.expiresAtMs <= Date.now()
   if (expired) await ref.set({ step: 'expired', expiredAt: Timestamp.now() }, { merge: true })
 
-  if (command === '/register') {
+  const registerMatch = /^\/register\s+(.+?)\s+([^\s@]+@[^\s@]+\.[^\s@]+)$/i.exec(text)
+  if (registerMatch) {
+    const displayName = registerMatch[1].trim()
+    const email = validateRegistrationEmail(registerMatch[2])
+    if (displayName.length < 2 || displayName.length > 128 || !email) {
+      await send('格式不正确，请使用：/register 姓名 email@example.com')
+      return
+    }
     if (existing && !expired && existing.step === 'completed') {
       await send('这个 WhatsApp 号码已经注册过账号。如需恢复账号，请使用网站的密码重置功能。')
       return
     }
-    await startRegistration(db, phone, message.chat_id)
-    await send('欢迎注册 Macanudo Socials。我们将使用此 WhatsApp 号码作为账户电话。回复 1 继续，回复 CANCEL 取消。')
+    await startRegistration(db, phone, message.chat_id, displayName, email)
+    await sendConfirmation(`欢迎注册 Macanudo Socials。请确认注册资料：\n姓名：${displayName}\n电话：${phone}\nEmail：${email}`)
+    return
+  }
+  if (command === '/register') {
+    await send('格式不正确，请使用：/register 姓名 email@example.com')
     return
   }
   if (command === 'cancel' || command === '/cancel') {
@@ -57,49 +72,23 @@ async function handleRegistrationMessage(db: any, payload: any) {
     await send('注册流程已取消。如需重新开始，请发送 /register。')
     return
   }
-  if (!existing || expired || !['awaiting-confirmation', 'awaiting-name', 'awaiting-email', 'awaiting-final-confirm'].includes(existing.step)) return
+  if (!existing || expired || existing.step !== 'awaiting-final-confirm') return
   const session = { ...existing, attempts: (existing.attempts || 0) + 1, updatedAt: Timestamp.now() } as WhatsAppRegistrationSession
   if (session.attempts > 12) {
     await ref.set({ step: 'locked', updatedAt: Timestamp.now() }, { merge: true })
     await send('输入次数过多，注册流程已暂停。请稍后重新发送 /register。')
     return
   }
-  if (session.step === 'awaiting-confirmation') {
-    if (text !== '1') { await send('请回复 1 继续，或回复 CANCEL 取消。'); return }
-    session.step = 'awaiting-name'
-    await ref.set(session)
-    await send('请输入您的姓名。')
-    return
-  }
-  if (session.step === 'awaiting-name') {
-    if (text.length < 2 || text.length > 128) { await send('姓名长度需要为 2 至 128 个字符，请重新输入。'); return }
-    session.displayName = text
-    session.step = 'awaiting-email'
-    await ref.set(session)
-    await send('请输入您的 Email。')
-    return
-  }
-  if (session.step === 'awaiting-email') {
-    const email = validateRegistrationEmail(text)
-    if (!email) { await send('Email 格式不正确，请重新输入。'); return }
-    session.email = email
-    session.step = 'awaiting-final-confirm'
-    await ref.set(session)
-    await send(`请确认注册资料：\n姓名：${session.displayName}\n电话：${phone}\nEmail：${maskEmail(email)}\n\n回复 CONFIRM 确认，或 CANCEL 取消。`)
-    return
-  }
-  if (session.step === 'awaiting-final-confirm') {
-    if (command !== 'confirm') { await send('请回复 CONFIRM 确认，或 CANCEL 取消。'); return }
-    try {
-      const result = await createWhatsAppMember(db, session)
-      await send(result.passwordSetupEmail === 'sent'
-        ? '注册成功。请检查 Email 并使用安全链接设置登录密码。'
-        : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
-    } catch (error) {
-      const code = (error as { code?: string })?.code
-      if (code === 'email-in-use' || code === 'phone-in-use') await send('该 Email 或电话号码已经注册，请使用其他资料。')
-      else await send('注册暂时无法完成，请稍后再试或联系管理员。')
-    }
+  if (command !== 'confirm') { await send('请点击 Confirm，或回复 CONFIRM 确认；也可以点击 Cancel 取消。'); return }
+  try {
+    const result = await createWhatsAppMember(db, session)
+    await send(result.passwordSetupEmail === 'sent'
+      ? '注册成功。请检查 Email 并使用安全链接设置登录密码。'
+      : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
+  } catch (error) {
+    const code = (error as { code?: string })?.code
+    if (code === 'email-in-use' || code === 'phone-in-use') await send('该 Email 或电话号码已经注册，请使用其他资料。')
+    else await send('注册暂时无法完成，请稍后再试或联系管理员。')
   }
 }
 export const eventHandler: EventHandler = async event => {

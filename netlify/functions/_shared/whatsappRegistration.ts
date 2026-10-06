@@ -37,13 +37,16 @@ export function normalizeWhatsAppSender(chatId: unknown, from: unknown) {
 
 export function messageText(message: any) {
   const body = message?.text?.body ?? message?.text
-  return typeof body === 'string' ? body.trim().slice(0, 500) : ''
+  if (typeof body === 'string') return body.trim().slice(0, 500)
+  const button = message?.reply?.buttons_reply
+  return typeof button?.title === 'string' ? button.title.trim().slice(0, 100) : ''
 }
 
-export async function startRegistration(db: Firestore, phone: string, chatId: string) {
+export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string) {
   const now = Timestamp.now()
   const session: WhatsAppRegistrationSession = {
-    phone, chatId, step: 'awaiting-confirmation', expiresAtMs: Date.now() + 15 * 60_000,
+    phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : 'awaiting-confirmation',
+    ...(displayName ? { displayName } : {}), ...(email ? { email } : {}), expiresAtMs: Date.now() + 15 * 60_000,
     attempts: 0, createdAt: now, updatedAt: now,
   }
   await registrationSessionRef(db, phone).set(session)
