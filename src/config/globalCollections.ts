@@ -6,6 +6,8 @@
 export const GLOBAL_COLLECTIONS = {
   /** 用户集合 */
   USERS: 'users',
+  MEMBER_IDENTITY_LOCKS: '_memberIdentityLocks',
+  REGISTRATION_ATTEMPTS: '_registrationAttempts',
   /** 品牌集合 */
   BRANDS: 'brands',
   /** 雪茄产品集合（库存管理） */

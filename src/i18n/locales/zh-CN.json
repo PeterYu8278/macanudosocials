@@ -264,6 +264,9 @@
     "noData": "暂无数据"
   },
   "auth": {
+    "invalidReferralCode": "引荐码无效",
+    "registrationRecoveryRequired": "未能确认注册结果，请先尝试使用电邮登录，再决定是否重新注册；如有需要请联系管理员。",
+    "registrationLoginRequired": "账号已创建，请使用电邮和密码登录。",
     "registrationPhoneSyncFailed": "电邮账号已创建，但电话号码同步失败：{{reason}}。请使用电邮和密码登录，再到个人资料更新电话号码。",
     "phoneLoginInvalidCredentials": "手机号或密码不正确",
     "phoneLoginTooManyAttempts": "尝试次数过多，请在5分钟后重试",
@@ -1998,6 +2001,7 @@
       "failed": "电邮操作失败，请稍后重试。"
     },
     "phoneSync": {
+      "busy": "账号正在进行其他更新，请稍后重试。",
       "verifyTitle": "确认更新会员电话号码",
       "member": "会员",
       "newPhone": "新电话号码",

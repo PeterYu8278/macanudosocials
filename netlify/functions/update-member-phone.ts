@@ -4,6 +4,7 @@ import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { MemberIdentityError, resolveMemberAccount } from './_shared/memberIdentity'
+import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/memberIdentityLock'
 
 const reply = (statusCode: number, code: string, extra = {}) => ({
   statusCode,
@@ -24,6 +25,7 @@ export const handler: Handler = async event => {
   const token = (event.headers.authorization || event.headers.Authorization || '').match(/^Bearer (.+)$/)?.[1]
   if (!token) return reply(401, 'auth-required')
   let authUpdated = false
+  let unlock: (() => Promise<void>) | undefined
   try {
     if (!getApps().length) {
       const credentials = process.env.FIREBASE_SERVICE_ACCOUNT
@@ -41,7 +43,7 @@ export const handler: Handler = async event => {
     const ref = db.collection('users').doc(input.userId)
     const member = (await ref.get()).data()
     if (!member) return reply(404, 'member-not-found')
-    const account = await resolveMemberAccount(adminAuth, input.userId, member)
+    let account = await resolveMemberAccount(adminAuth, input.userId, member)
     if (account.uid !== identity.uid) {
       const operator = (await db.collection('users').doc(identity.uid).get()).data()
       const linkedMember = account.uid === input.userId ? member : (await db.collection('users').doc(account.uid).get()).data()
@@ -50,14 +52,16 @@ export const handler: Handler = async event => {
         return reply(403, 'forbidden')
       }
     }
-    const duplicates = await db.collection('users').where('profile.phone', '==', phone).limit(2).get()
-    if (duplicates.docs.some(document => document.id !== input.userId)) return reply(409, 'phone-in-use')
+    unlock = await lockMemberIdentity(db, [`uid:${account.uid}`, `phone:${phone}`])
+    account = await adminAuth.getUser(account.uid)
+    await assertUniqueMemberIdentity(db, undefined, phone, input.userId)
     if (account.phoneNumber !== phone) await adminAuth.updateUser(account.uid, { phoneNumber: phone })
     authUpdated = true
     // Auth is authoritative. Repeating this request repairs a failed profile sync.
     await ref.update({
       authUid: account.uid,
       'profile.phone': phone,
+      ...(Object.hasOwn(member, 'phone') ? { phone } : {}),
       'profile.phoneAuth': { uid: account.uid, ownershipVerified: false, updatedBy: identity.uid, updatedAt: Timestamp.now() },
       updatedAt: Timestamp.now(),
     })
@@ -72,5 +76,5 @@ export const handler: Handler = async event => {
     }
     console.error('[update-member-phone] failed', { code: code || 'dependency-failure', authUpdated })
     return reply(503, authUpdated ? 'profile-sync-failed' : 'service-unavailable')
-  }
+  } finally { try { await unlock?.() } catch { /* The short-lived lease releases after a crash. */ } }
 }

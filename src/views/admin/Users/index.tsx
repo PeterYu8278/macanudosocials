@@ -1618,20 +1618,22 @@ const AdminUsers: React.FC = () => {
                 }
                 normalizedPhone = normalized
                 // 检查手机号唯一性
-                const phoneQuery = query(
-                  collection(db, 'users'),
-                  where('profile.phone', '==', normalizedPhone),
-                  limit(1)
-                )
-                const phoneSnap = await getDocs(phoneQuery)
+                if (!editing || normalizedPhone !== normalizePhoneNumber(editing.profile?.phone || '')) {
+                  const phoneQuery = query(
+                    collection(db, 'users'),
+                    where('profile.phone', '==', normalizedPhone),
+                    limit(1)
+                  )
+                  const phoneSnap = await getDocs(phoneQuery)
 
-                if (!phoneSnap.empty) {
-                  const existingUserId = phoneSnap.docs[0].id
-                  // 如果是编辑模式，检查是否是当前用户自己的手机号
-                  if (!editing || existingUserId !== editing.id) {
-                    message.error(t('usersAdmin.phoneInUseError'))
-                    setLoading(false)
-                    return
+                  if (!phoneSnap.empty) {
+                    const existingUserId = phoneSnap.docs[0].id
+                    // 如果是编辑模式，检查是否是当前用户自己的手机号
+                    if (!editing || existingUserId !== editing.id) {
+                      message.error(t('usersAdmin.phoneInUseError'))
+                      setLoading(false)
+                      return
+                    }
                   }
                 }
               }
@@ -1673,7 +1675,7 @@ const AdminUsers: React.FC = () => {
                 }
                 form.setFieldValue('initialPassword', undefined)
                 const email = normalizeMemberEmail(values.email || '')
-                if (email !== normalizeMemberEmail(result.code === 'member-created' ? result.email : editing.email || '')) {
+                if (email !== normalizeMemberEmail(editing.email || '') && email !== normalizeMemberEmail(result.email || editing.email || '')) {
                   if (!email) throw new Error(t('profile.emailSync.required'))
                   const correction = values.emailChangeMode === 'correct'
                   if (!await verifyEmailChange({ memberName: editing.displayName, email, correction })) return
@@ -1681,8 +1683,8 @@ const AdminUsers: React.FC = () => {
                   if (!correction) message.info(t('profile.emailSync.requestSaved'))
                 }
                 if (normalizedPhone) {
-                  const currentPhone = normalizePhoneNumber(result.code === 'member-created' ? result.phone : editing.profile?.phone || '')
-                  if (normalizedPhone !== currentPhone) {
+                  const currentPhone = normalizePhoneNumber(result.phone || editing.profile?.phone || '')
+                  if (normalizedPhone !== normalizePhoneNumber(editing.profile?.phone || '') && normalizedPhone !== currentPhone) {
                     if (!await verifyPhoneChange({ memberName: editing.displayName || editing.email || '', phone: normalizedPhone })) return
                     await updateMemberPhone(editing.id, normalizedPhone)
                   }

@@ -1,7 +1,6 @@
 // Firebase认证服务
 import { 
   signInWithEmailAndPassword, 
-  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged,
   updateProfile,
@@ -14,205 +13,22 @@ import {
   linkWithCredential
 } from 'firebase/auth';
 import type { User as FirebaseUser } from 'firebase/auth';
-import { doc, setDoc, getDoc, getDocFromCache, getDocFromServer, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc, waitForPendingWrites } from 'firebase/firestore';
+import { doc, setDoc, getDoc, getDocFromCache, getDocFromServer, collection, getDocs, query, where, limit, updateDoc, arrayUnion, increment, deleteDoc } from 'firebase/firestore';
 import { auth, db } from '../../config/firebase';
 import type { User } from '../../types';
 import { getAppConfig } from './appConfig';
 import { sendRecoveryEmail } from './passwordResetEmail';
 import { loginPhoneWithPassword } from './phoneLogin';
 import { updateMemberPhone } from './memberPhone';
-import i18n from '../../i18n';
+import { updateMemberEmail } from './memberEmail';
+import { ensureMemberProfile } from './memberProfile';
 import { normalizePhoneNumber, identifyInputType } from '../../utils/phoneNormalization';
-import { generateMemberId, getUserByMemberId } from '../../utils/memberId';
+import { getUserByMemberId } from '../../utils/memberId';
 import { getLoginLandingPath } from '../../utils/loginLanding';
 
-/**
- * 创建 Google 登录临时用户数据的公共函数
- * 用于统一创建新用户时的数据结构
- */
-const createGoogleTempUserData = (
-  email: string,
-  displayName: string,
-  memberId: string
-): Omit<User, 'id'> => {
-  return {
-    email,
-    displayName: displayName || '未命名用户',
-    role: 'guest',
-    status: 'inactive',
-    memberId,
-    profile: {
-      // phone 字段省略，待用户完善信息后添加
-    },
-    preferences: {
-      locale: 'zh',
-      notifications: true,
-    },
-    membership: {
-      level: 'bronze',
-      joinDate: new Date(),
-      lastActive: new Date(),
-      points: 0,
-      referralPoints: 0,
-    },
-    referral: {
-      referredBy: null as string | null,
-      referredByUserId: null as string | null,
-      referralDate: null as Date | null,
-      referrals: [],
-      totalReferred: 0,
-      activeReferrals: 0,
-    },
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  };
-};
 
 // 用户注册（所有字段都是必需的）
-export const registerUser = async (
-  email: string, 
-  password: string, 
-  displayName: string, 
-  phone: string,
-  referralCode?: string  // 可选的引荐码（memberId）
-) => {
-  try {
-    // 验证必需字段（所有字段都是必需的）
-    if (!email || !password || !displayName || !phone) {
-      return { success: false, error: new Error('所有字段都是必需的'), code: 'missing-required-fields' } as { success: false; error: Error; code?: string }
-    }
-    
-    // 标准化邮箱（转小写并去除空格）
-    const normalizedEmail = email.toLowerCase().trim()
-
-    // 标准化手机号为 E.164 格式（在创建账号前验证格式）
-    const normalizedPhone = normalizePhoneNumber(phone)
-    if (!normalizedPhone) {
-      return { success: false, error: new Error('手机号格式无效'), code: 'invalid-phone' } as { success: false; error: Error; code?: string }
-    }
-
-    // 验证引荐码（如果提供）
-    let referrer: any = null;
-    if (referralCode) {
-      const referralResult = await getUserByMemberId(referralCode.trim());
-      if (!referralResult.success) {
-        return { success: false, error: new Error(referralResult.error || '引荐码无效'), code: 'invalid-referral-code' } as { success: false; error: Error; code?: string }
-      }
-      referrer = referralResult.user;
-    }
-    
-    const userCredential = await createUserWithEmailAndPassword(auth, normalizedEmail, password);
-    const user = userCredential.user;
-
-    // 更新用户显示名称
-    await updateProfile(user, { displayName });
-
-    // 生成会员编号（基于 userId hash）
-    const memberId = await generateMemberId(user.uid);
-    
-    // 在Firestore中创建用户文档
-    const userData: Omit<User, 'id'> = {
-      email: normalizedEmail,  // ✅ 邮箱必填（使用标准化格式）
-      displayName,
-      role: 'guest',
-      status: 'inactive',
-      memberId,  // ✅ 会员编号（用作引荐码）
-      profile: {
-        phone: normalizedPhone,  // ✅ 使用标准化格式
-      },
-      preferences: {
-        locale: 'zh',
-        notifications: true,
-      },
-      membership: {
-        level: 'bronze',
-        joinDate: new Date(),
-        lastActive: new Date(),
-        points: 0,  // 注册不再赠送积分
-        referralPoints: 0,
-      },
-      // ✅ 引荐信息（使用 null 替代 undefined，Firestore 不接受 undefined）
-      referral: {
-        referredBy: (referrer?.memberId || null) as string | null,
-        referredByUserId: (referrer?.id || null) as string | null,
-        referralDate: (referrer ? new Date() : null) as Date | null,
-        referrals: [],
-        totalReferred: 0,
-        activeReferrals: 0,
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-    
-    const userDocRef = doc(db, 'users', user.uid);
-    await setDoc(userDocRef, userData);
-    // 等待数据真正写入服务器，而非仅写入本地缓存
-    await waitForPendingWrites(db);
-
-    // 验证文档已写入服务器（waitForPendingWrites 在冷连接时可能在服务器确认前就 resolve）
-    const serverDoc = await getDocFromServer(userDocRef);
-    if (!serverDoc.exists()) {
-      // 重试一次写入
-      await setDoc(userDocRef, userData);
-      await waitForPendingWrites(db);
-    }
-
-    // The backend synchronizes Auth and records that phone ownership is not SMS-verified.
-    try {
-      await updateMemberPhone(user.uid, normalizedPhone);
-    } catch (error) {
-      // Keep the created account so the member can sign in by email and repair the phone.
-      return { success: false, code: 'registration-phone-sync-failed',
-        error: new Error(i18n.t('auth.registrationPhoneSyncFailed', {
-          reason: error instanceof Error ? error.message : i18n.t('profile.phoneSync.failed'),
-        })) } as { success: false; error: Error; code?: string };
-    }
-    
-    // ✅ 如果有引荐人，更新引荐人的数据（不再赠送积分）
-    if (referrer) {
-      try {
-        // 获取引荐人的当前 referrals 数组
-        const referrerDoc = await getDoc(doc(db, 'users', referrer.id));
-        const referrerData = referrerDoc.exists() ? referrerDoc.data() as User : null;
-        const existingReferrals = referrerData?.referral?.referrals || [];
-        
-        // 检查是否已存在该用户
-        const exists = existingReferrals.some((r: any) => 
-          (typeof r === 'string' ? r === user.uid : r.userId === user.uid)
-        );
-        
-        if (!exists) {
-          // 添加新的引荐记录（对象格式）
-          const newReferral = {
-            userId: user.uid,
-            userName: displayName,
-            memberId: memberId
-          };
-          
-          await updateDoc(doc(db, 'users', referrer.id), {
-            'referral.referrals': arrayUnion(newReferral),
-            'referral.totalReferred': increment(1),
-            updatedAt: new Date()
-          });
-        }
-      } catch (error) {
-        // 不影响注册流程，静默失败
-      }
-    }
-    
-    return { success: true, user };
-  } catch (error) {
-    const err = error as any
-    const code = err?.code as string | undefined
-    
-    const message =
-      code === 'auth/email-already-in-use' ? '该邮箱已被注册'
-      : code === 'auth/invalid-email' ? '邮箱格式不正确'
-      : code === 'auth/weak-password' ? '密码强度不足（至少6位）'
-      : err?.message || '注册失败'
-    return { success: false, error: new Error(message), code } as { success: false; error: Error; code?: string };
-  }
-};
+export { registerUser } from './registerMember';
 
 // 用户登录
 export const getAuthenticatedLandingPath = async (firebaseUid?: string, firestoreUserId?: string) => {
@@ -403,21 +219,7 @@ export const loginWithGoogle = async () => {
       }
     } else {
       // ✅ 场景 1.b：邮箱不存在系统数据中，创建新用户（使用 Firestore 自动生成 ID）
-      const usersRef = collection(db, 'users');
-      const newUserDoc = doc(usersRef); // Firestore 自动生成 ID
-      const newUserId = newUserDoc.id;
-      
-      // 生成会员编号
-      const memberId = await generateMemberId(newUserId);
-      
-      // 使用公共函数创建临时用户数据
-      const tempUserData = createGoogleTempUserData(
-        googleEmail,
-        googleUser.displayName || '',
-        memberId
-      );
-      
-      await setDoc(newUserDoc, tempUserData);
+      const newUserId = await ensureMemberProfile();
       // 保存新用户的 document ID
       sessionStorage.setItem('firestoreUserId', newUserId);
 
@@ -481,20 +283,7 @@ export const handleGoogleRedirectResult = async () => {
           };
         } else {
           // 邮箱不存在，创建新用户
-          const usersRef = collection(db, 'users');
-          const newUserDoc = doc(usersRef);
-          const newUserId = newUserDoc.id;
-          
-          const memberId = await generateMemberId(newUserId);
-          
-          // 使用公共函数创建临时用户数据
-          const tempUserData = createGoogleTempUserData(
-            googleEmail,
-            currentUser.displayName || '',
-            memberId
-          );
-          
-          await setDoc(newUserDoc, tempUserData);
+          const newUserId = await ensureMemberProfile();
           sessionStorage.setItem('firestoreUserId', newUserId);
           
           return { 
@@ -532,20 +321,7 @@ export const handleGoogleRedirectResult = async () => {
       };
     } else {
       // 邮箱不存在，创建新用户
-      const usersRef = collection(db, 'users');
-      const newUserDoc = doc(usersRef);
-      const newUserId = newUserDoc.id;
-      
-      const memberId = await generateMemberId(newUserId);
-      
-      // 使用公共函数创建临时用户数据
-      const tempUserData = createGoogleTempUserData(
-        googleEmail,
-        googleUser.displayName || '',
-        memberId
-      );
-      
-      await setDoc(newUserDoc, tempUserData);
+      const newUserId = await ensureMemberProfile();
       sessionStorage.setItem('firestoreUserId', newUserId);
 
       return {
@@ -642,14 +418,12 @@ export const completeGoogleUserProfile = async (
       referrer = referralResult.user;
     }
     
+        await updateMemberPhone(existingPhoneUser.id, normalizedPhone);
+        await updateMemberEmail(existingPhoneUser.id, 'sync');
         // 更新旧用户的数据
         const oldUserRef = doc(db, 'users', existingPhoneUser.id);
         const updateData: any = {
-          email: googleEmail,  // 写入 Google 邮箱
           displayName,
-          profile: {
-            phone: normalizedPhone,  // ✅ 参考手动创建用户逻辑，使用对象结构
-          },
           updatedAt: new Date(),
         };
         
@@ -748,14 +522,12 @@ export const completeGoogleUserProfile = async (
         referrer = referralResult.user;
       }
       
+      await updateMemberPhone(currentFirestoreUserId, normalizedPhone);
+      await updateMemberEmail(currentFirestoreUserId, 'sync');
       // 更新当前用户文档
       const userRef = doc(db, 'users', currentFirestoreUserId);
     const updateData: any = {
-        email: googleEmail,
       displayName,
-        profile: {
-          phone: normalizedPhone,  // ✅ 参考手动创建用户逻辑，使用对象结构
-        },
       updatedAt: new Date(),
     };
     
@@ -939,55 +711,12 @@ export const getUserData = async (uid: string, useCache: boolean = true): Promis
  * 为已有 Firebase Auth 账号但缺少 Firestore 文档的用户创建补救文档
  * 在 onAuthStateChanged 中当 getUserData 返回 null 时调用
  */
-export const createMissingUserDocument = async (firebaseUser: FirebaseUser): Promise<User | null> => {
+export const createMissingUserDocument = async (_firebaseUser: FirebaseUser): Promise<User | null> => {
   try {
-    const userDocRef = doc(db, 'users', firebaseUser.uid);
-
-    // Double-check: 从服务器读取确认文档真的不存在
-    const serverDoc = await getDocFromServer(userDocRef);
-    if (serverDoc.exists()) {
-      const rawData = serverDoc.data();
-      const data = convertFirestoreTimestamps(rawData);
-      return { id: firebaseUser.uid, ...data } as User;
-    }
-
-    const memberId = await generateMemberId(firebaseUser.uid);
-    const email = (firebaseUser.email || '').toLowerCase().trim();
-    const displayName = firebaseUser.displayName || email.split('@')[0];
-
-    const userData: Omit<User, 'id'> = {
-      email,
-      displayName,
-      role: 'guest',
-      status: 'inactive',
-      memberId,
-      profile: { phone: '' },
-      preferences: { locale: 'zh', notifications: true },
-      membership: {
-        level: 'bronze',
-        joinDate: new Date(),
-        lastActive: new Date(),
-        points: 0,
-        referralPoints: 0,
-      },
-      referral: {
-        referredBy: null,
-        referredByUserId: null,
-        referralDate: null,
-        referrals: [],
-        totalReferred: 0,
-        activeReferrals: 0,
-      },
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
-
-    await setDoc(userDocRef, userData);
-    await waitForPendingWrites(db);
-    console.info('[Auth Service] ✅ 补救创建 Firestore 用户文档:', firebaseUser.uid);
-    return { id: firebaseUser.uid, ...userData } as User;
+    const userId = await ensureMemberProfile();
+    return await getUserData(userId, false);
   } catch (error) {
-    console.error('[Auth Service] ❌ 补救创建用户文档失败:', error);
+    console.error('[Auth Service] Profile recovery failed:', error instanceof Error ? error.message : 'service-unavailable');
     return null;
   }
 };

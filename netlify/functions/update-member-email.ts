@@ -5,6 +5,7 @@ import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
 import { authorizeMemberChange, MemberIdentityError, resolveMemberAccount } from './_shared/memberIdentity'
 import { deliverMemberEmail, emailDeliveryConfig } from './_shared/memberEmailDelivery'
+import { lockMemberIdentity } from './_shared/memberIdentityLock'
 
 const reply = (statusCode: number, code: string, extra = {}) => ({
   statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -29,6 +30,7 @@ export const handler: Handler = async event => {
   if (!token) return reply(401, 'auth-required')
   let authUpdated = false
   let unlock: (() => Promise<void>) | undefined
+  let unlockEmail: (() => Promise<void>) | undefined
   try {
     if (!getApps().length) {
       const credentials = process.env.FIREBASE_SERVICE_ACCOUNT
@@ -53,18 +55,7 @@ export const handler: Handler = async event => {
     await authorizeMemberChange(db, identity.uid, input.userId, member, account.uid, mode === 'correct')
 
     // Serialize backend requests for an Auth UID. A crashed function's lease expires.
-    const lock = db.collection('_memberEmailLocks').doc(account.uid)
-    const lockId = randomUUID()
-    await db.runTransaction(async transaction => {
-      const held = (await transaction.get(lock)).data()
-      if (held && held.expiresAtMs > Date.now()) throw new MemberIdentityError('change-busy', 409)
-      transaction.set(lock, { id: lockId, expiresAtMs: Date.now() + 60000 })
-    })
-    unlock = async () => {
-      await db.runTransaction(async transaction => {
-        if ((await transaction.get(lock)).data()?.id === lockId) transaction.delete(lock)
-      })
-    }
+    unlock = await lockMemberIdentity(db, [`uid:${account.uid}`])
     member = (await ref.get()).data()
     if (!member) return reply(404, 'member-not-found')
     account = await adminAuth.getUser(account.uid)
@@ -117,6 +108,7 @@ export const handler: Handler = async event => {
     if (mode === 'sync' && pending?.proofVersion === 1 && pending.status === 'awaiting-verification') return reply(409, 'verification-pending')
     if (mode === 'sync' && pending?.status === 'sync-pending' && effectiveEmail !== pending.email) return reply(409, 'sync-required')
 
+    unlockEmail = await lockMemberIdentity(db, [`email:${effectiveEmail}`])
     const duplicates = await db.collection('users').where('email', '==', effectiveEmail).limit(2).get()
     if (duplicates.docs.some(document => document.id !== input.userId)) return reply(409, 'email-in-use')
     if (mode !== 'sync') {
@@ -197,6 +189,7 @@ export const handler: Handler = async event => {
     console.error('[update-member-email] failed', { code: code || 'dependency-failure', authUpdated })
     return reply(503, authUpdated ? 'profile-sync-failed' : 'service-unavailable')
   } finally {
+    try { await unlockEmail?.() } catch { /* The lease expires after a crash. */ }
     try { await unlock?.() } catch { /* The short-lived lease releases even if Firestore is unavailable. */ }
   }
 }

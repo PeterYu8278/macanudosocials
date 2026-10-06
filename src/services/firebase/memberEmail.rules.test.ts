@@ -37,12 +37,16 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
     for (const field of ['authUid', 'emailAuth', 'emailChange']) {
       await expect(updateDoc(doc(db, 'users/member'), { [field]: 'forged' })).rejects.toMatchObject({ code: 'permission-denied' })
     }
+    for (const field of ['profile.phone', 'profile.phoneAuth', 'phone']) {
+      await expect(updateDoc(doc(db, 'users/member'), { [field]: 'forged' })).rejects.toMatchObject({ code: 'permission-denied' })
+    }
   })
   it('denies administrator bypass of the email backend', async () => {
     const db = client('operator')
     await expect(updateDoc(doc(db, 'users/member'), { displayName: 'Edited by admin' })).resolves.toBeUndefined()
     await expect(updateDoc(doc(db, 'users/member'), { email: 'unverified@example.com' })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(updateDoc(doc(db, 'users/member'), { authUid: 'operator' })).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(updateDoc(doc(db, 'users/member'), { 'profile.phone': '+60123456789' })).rejects.toMatchObject({ code: 'permission-denied' })
   })
   it('allows only the authenticated email to be written by a member', async () => {
     const db = client('member')
@@ -62,6 +66,7 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
     const member = { email: 'new-member@example.com', role: 'guest', status: 'inactive', membership: { points: 0 } }
     await expect(setDoc(doc(db, 'users/new-member'), { ...member, authUid: 'member' })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(setDoc(doc(db, 'users/new-member'), { ...member, emailChange: {} })).rejects.toMatchObject({ code: 'permission-denied' })
-    await expect(setDoc(doc(db, 'users/new-member'), member)).resolves.toBeUndefined()
+    await expect(setDoc(doc(db, 'users/new-member'), { ...member, profile: { phone: '+60123456789' } })).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'users/new-member'), member)).rejects.toMatchObject({ code: 'permission-denied' })
   })
 })

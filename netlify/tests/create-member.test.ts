@@ -1,14 +1,15 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ verify: vi.fn(), create: vi.fn(), remove: vi.fn(), getUser: vi.fn(), getEmail: vi.fn(),
-  read: vi.fn(), query: vi.fn(), createDoc: vi.fn(), updateDoc: vi.fn(), transaction: vi.fn() }))
+  updateAuth: vi.fn(), read: vi.fn(), query: vi.fn(), createDoc: vi.fn(), updateDoc: vi.fn(), transaction: vi.fn() }))
+vi.mock('../functions/_shared/memberIdentityLock', () => ({ lockMemberIdentity: async () => async () => {}, assertUniqueMemberIdentity: vi.fn() }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: m.verify, createUser: m.create,
-  deleteUser: m.remove, getUser: m.getUser, getUserByEmail: m.getEmail }) }))
+  deleteUser: m.remove, getUser: m.getUser, getUserByEmail: m.getEmail, updateUser: m.updateAuth }) }))
 vi.mock('firebase-admin/firestore', () => {
   const query = { limit: () => query, get: m.query }
   return { Timestamp: { now: () => 'now' }, getFirestore: () => ({
-    collection: () => ({ doc: (id = 'audit') => ({ id, get: () => m.read(id) }), where: () => query }),
+    collection: () => ({ doc: (id = 'audit') => ({ id, get: () => m.read(id), update: m.updateDoc }), where: () => query }),
     runTransaction: m.transaction,
   }) }
 })
@@ -70,10 +71,11 @@ describe('manual member account creation', () => {
     expect(m.updateDoc.mock.calls[0][0].id).toBe('legacy')
   })
   it('saving an existing Auth account never changes its password or creates another account', async () => {
-    m.getUser.mockResolvedValue({ uid: 'legacy' })
+    m.getUser.mockResolvedValue({ uid: 'legacy', email: 'member@example.com', phoneNumber: input.phone })
     expect(JSON.parse((await request({ userId: 'legacy', password: 'another123' })).body).code).toBe('account-exists')
     expect(m.create).not.toHaveBeenCalled()
-    expect(m.updateDoc).not.toHaveBeenCalled()
+    expect(m.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ email: 'member@example.com', 'profile.phone': input.phone }))
+    expect(m.updateAuth).not.toHaveBeenCalled()
   })
   it('uses corrected contact details to backfill and preserves existing membership data', async () => {
     const response = await request({ userId: 'legacy', password: input.password, email: 'correct@example.com', phone: '+60129876543' })
@@ -94,5 +96,17 @@ describe('manual member account creation', () => {
     m.getEmail.mockResolvedValue({ uid: 'different' })
     expect(JSON.parse((await request({ userId: 'legacy', password: input.password })).body).code).toBe('identity-conflict')
     expect(m.create).not.toHaveBeenCalled()
+  })
+  it('repairs a missing Auth phone when saving unchanged legacy contact details', async () => {
+    m.getUser.mockResolvedValue({ uid: 'legacy', email: 'member@example.com', emailVerified: true })
+    expect((await request({ userId: 'legacy' })).statusCode).toBe(200)
+    expect(m.updateAuth).toHaveBeenCalledWith('legacy', { phoneNumber: input.phone })
+    expect(m.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ email: 'member@example.com', 'profile.phone': input.phone }))
+  })
+  it('reconciles stale Firestore contact details against Auth without changing Auth', async () => {
+    m.getUser.mockResolvedValue({ uid: 'legacy', email: 'canonical@example.com', phoneNumber: '+60129876543', emailVerified: true })
+    expect((await request({ userId: 'legacy' })).statusCode).toBe(200)
+    expect(m.updateAuth).not.toHaveBeenCalled()
+    expect(m.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ email: 'canonical@example.com', 'profile.phone': '+60129876543' }))
   })
 })

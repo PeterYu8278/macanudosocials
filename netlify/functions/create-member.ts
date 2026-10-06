@@ -6,6 +6,7 @@ import { randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { MemberIdentityError, resolveMemberAccount, authorizeMemberChange } from './_shared/memberIdentity'
+import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/memberIdentityLock'
 
 const ranks: Record<string, number> = { guest: 0, member: 1, vip: 2, storeAdmin: 3, admin: 4, superAdmin: 5, developer: 6 }
 const reply = (statusCode: number, code: string, extra = {}) => ({
@@ -30,6 +31,7 @@ export const handler: Handler = async event => {
     return reply(400, 'invalid-request')
   }
   let uid: string | undefined
+  let unlock: (() => Promise<void>) | undefined
   try {
     if (!getApps().length) {
       if (!process.env.FIREBASE_SERVICE_ACCOUNT) return reply(503, 'service-unavailable')
@@ -47,11 +49,28 @@ export const handler: Handler = async event => {
       if (!member) return reply(404, 'member-not-found')
       await authorizeMemberChange(db, identity.uid, input.userId, member, member.authUid || input.userId, true)
       try {
-        const existing = await resolveMemberAccount(accountAuth, input.userId, member)
+        let existing = await resolveMemberAccount(accountAuth, input.userId, member)
         if (!member.authUid && existing.uid !== input.userId) {
           return reply(409, 'identity-conflict')
         }
-        return reply(200, 'account-exists', { uid: existing.uid })
+        const canonicalEmail = existing.email?.trim().toLowerCase()
+        const canonicalPhone = existing.phoneNumber || normalizePhoneNumber(member.profile?.phone || member.phone || '') || phone
+        if (!canonicalEmail || !canonicalPhone) return reply(409, 'identity-required')
+        unlock = await lockMemberIdentity(db, [`uid:${existing.uid}`, `email:${canonicalEmail}`, `phone:${canonicalPhone}`])
+        existing = await accountAuth.getUser(existing.uid)
+        const latestMember = (await ref.get()).data()
+        if (!latestMember) return reply(404, 'member-not-found')
+        await authorizeMemberChange(db, identity.uid, input.userId, latestMember, existing.uid, true)
+        if (existing.email?.trim().toLowerCase() !== canonicalEmail || (existing.phoneNumber && existing.phoneNumber !== canonicalPhone)) return reply(409, 'change-busy')
+        await assertUniqueMemberIdentity(db, canonicalEmail, canonicalPhone, input.userId)
+        if (!existing.phoneNumber) await accountAuth.updateUser(existing.uid, { phoneNumber: canonicalPhone })
+        const now = Timestamp.now()
+        await ref.update({ authUid: existing.uid, email: canonicalEmail, 'profile.phone': canonicalPhone,
+          ...(Object.hasOwn(latestMember, 'phone') ? { phone: canonicalPhone } : {}),
+          emailAuth: { uid: existing.uid, verified: existing.emailVerified === true, syncedAt: now },
+          'profile.phoneAuth': { uid: existing.uid, ownershipVerified: latestMember.profile?.phoneAuth?.ownershipVerified === true && latestMember.profile?.phone === canonicalPhone,
+            updatedBy: identity.uid, updatedAt: now }, updatedAt: now })
+        return reply(200, 'account-exists', { uid: existing.uid, email: canonicalEmail, phone: canonicalPhone })
       } catch (error) {
         if (!(error instanceof MemberIdentityError) || error.code !== 'auth-account-missing') throw error
       }
@@ -61,6 +80,7 @@ export const handler: Handler = async event => {
       if (typeof input.password !== 'string' || input.password.length < 6 || input.password.length > 128) return reply(400, 'initial-password-required')
       // A missing explicit mapping needs investigation rather than a second identity.
       if (member.authUid && member.authUid !== input.userId) return reply(409, 'identity-conflict')
+      unlock = await lockMemberIdentity(db, [`uid:${input.userId}`, `email:${storedEmail}`, `phone:${storedPhone}`])
       for (const [field, value, code] of [['email', storedEmail, 'email-in-use'], ['profile.phone', storedPhone, 'phone-in-use'], ['phone', storedPhone, 'phone-in-use']] as const) {
         const matches = await users.where(field, '==', value).limit(2).get()
         if (matches.docs.some(document => document.id !== input.userId)) return reply(409, code)
@@ -88,6 +108,7 @@ export const handler: Handler = async event => {
       || (discount.note != null && (typeof discount.note !== 'string' || discount.note.length > 1000)))) {
       return reply(400, 'invalid-request')
     }
+    unlock = await lockMemberIdentity(db, [`email:${email}`, `phone:${phone}`])
     // Auth enforces uniqueness across concurrent account creation; also reject legacy profiles.
     for (const [field, value, code] of [['email', email, 'email-in-use'], ['profile.phone', phone, 'phone-in-use'], ['phone', phone, 'phone-in-use']] as const) {
       if (!(await users.where(field, '==', value).limit(1).get()).empty) return reply(409, code)
@@ -131,5 +152,5 @@ export const handler: Handler = async event => {
     if (code === 'auth/email-already-exists') return reply(409, 'email-in-use')
     if (code === 'auth/phone-number-already-exists') return reply(409, 'phone-in-use')
     return reply(503, 'service-unavailable')
-  }
+  } finally { try { await unlock?.() } catch { /* The lease expires after a crash. */ } }
 }

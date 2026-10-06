@@ -1,6 +1,11 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ verify: vi.fn(), getUser: vi.fn(), getEmail: vi.fn(), updateAuth: vi.fn(), updateProfile: vi.fn(), duplicates: vi.fn(), documents: new Map<string, any>() }))
+vi.mock('../functions/_shared/memberIdentityLock', () => ({ lockMemberIdentity: async () => async () => {},
+  assertUniqueMemberIdentity: async () => { if ((await mocks.duplicates()).docs.some((doc: { id: string }) => doc.id !== 'member')) {
+    const { MemberIdentityError } = await import('../functions/_shared/memberIdentity')
+    throw new MemberIdentityError('phone-in-use', 409)
+  } } }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], initializeApp: vi.fn(), cert: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: mocks.verify, getUser: mocks.getUser, getUserByEmail: mocks.getEmail, updateUser: mocks.updateAuth }) }))
 vi.mock('firebase-admin/firestore', () => ({ Timestamp: { now: () => 'timestamp' }, getFirestore: () => ({ collection: () => ({

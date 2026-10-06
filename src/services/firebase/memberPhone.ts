@@ -12,6 +12,7 @@ export const updateMemberPhone = async (userId: string, phone: string) => {
   const result = await response.json() as { success?: boolean; code?: string }
   if (!response.ok || !result.success) {
     const key = result.code === 'phone-in-use' ? 'inUse'
+      : result.code === 'change-busy' ? 'busy'
       : result.code === 'reauth-required' ? 'reauthRequired'
       : result.code === 'profile-sync-failed' ? 'syncFailed'
       : result.code === 'auth-account-missing' ? 'accountMissing' : 'failed'

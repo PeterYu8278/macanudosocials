@@ -264,6 +264,9 @@
     "noData": "No data"
   },
   "auth": {
+    "invalidReferralCode": "Invalid referral code",
+    "registrationRecoveryRequired": "Registration could not be confirmed. Try signing in with your email before registering again; contact support if needed.",
+    "registrationLoginRequired": "Your account was created. Please sign in with your email and password.",
     "registrationPhoneSyncFailed": "Your email account was created, but phone synchronization failed: {{reason}} Sign in with your email and password, then update your phone in Profile.",
     "phoneLoginInvalidCredentials": "Incorrect phone number or password",
     "phoneLoginTooManyAttempts": "Too many attempts. Please try again in 5 minutes.",
@@ -1998,6 +2001,7 @@
       "failed": "Could not complete the email operation. Please retry."
     },
     "phoneSync": {
+      "busy": "Another account update is in progress. Please try again shortly.",
       "verifyTitle": "Confirm phone number update",
       "member": "Member",
       "newPhone": "New phone",

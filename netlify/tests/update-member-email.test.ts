@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createHash } from 'node:crypto'
 
 const mocks = vi.hoisted(() => ({
   verify: vi.fn(), getUser: vi.fn(), getEmail: vi.fn(), updateAuth: vi.fn(), commit: vi.fn(),
@@ -85,7 +86,7 @@ describe('member email changes', () => {
     expect(mocks.updateAuth).not.toHaveBeenCalled()
     expect(mocks.accounts.get('member').email).toBe('old@example.com')
     expect(mocks.documents.get(`_memberEmailChanges/${profile().emailChange.id}`)).toMatchObject({ userId: 'member', previousEmail: 'old@example.com', requestedBy: 'member' })
-    expect(mocks.documents.has('_memberEmailLocks/member')).toBe(false)
+    expect([...mocks.documents.keys()].some(path => path.startsWith('_memberIdentityLocks/'))).toBe(false)
   })
 
   it('lets an admin request member confirmation without changing Auth or Firestore email', async () => {
@@ -200,9 +201,10 @@ describe('member email changes', () => {
   })
 
   it('rejects competing backend requests while a lease is active', async () => {
-    mocks.documents.set('_memberEmailLocks/member', { id: 'other-request', expiresAtMs: Date.now() + 60000 })
+    const lockPath = `_memberIdentityLocks/${createHash('sha256').update('uid:member').digest('hex')}`
+    mocks.documents.set(lockPath, { id: 'other-request', expiresAtMs: Date.now() + 60000 })
     expect(JSON.parse((await save()).body).code).toBe('change-busy')
-    expect(mocks.documents.get('_memberEmailLocks/member').id).toBe('other-request')
+    expect(mocks.documents.get(lockPath).id).toBe('other-request')
   })
 
   it('allows cancel before verification but requires sync after Auth already changed', async () => {

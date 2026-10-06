@@ -115,22 +115,13 @@ service cloud.firestore {
                   || (isSignedIn()
                       && resource.data.referral.referredByUserId == request.auth.uid);
 
-      // 注册只能建立最低权限、零积分、未激活的本人账户。
-      allow create: if isSignedIn()
-                    && request.auth.uid == userId
-                    && request.resource.data.email == request.auth.token.email
-                    && request.resource.data.get('authUid', request.auth.uid) == request.auth.uid
-                    && !request.resource.data.keys().hasAny(['emailAuth', 'emailChange'])
-                    && request.resource.data.role == 'guest'
-                    && request.resource.data.status == 'inactive'
-                    && request.resource.data.membership.points == 0;
+      // Registration and profile bootstrap use the trusted backend's identity checks.
+      allow create: if false;
 
       // 用户可维护个人资料和消费积分，但不能提升角色、激活账户或自行增加积分。
       // Identity mappings and email audit state are written only by the trusted backend.
-      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'emailAuth', 'emailChange'])
-                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['email'])
-                        || ((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid))
-                            && request.resource.data.email == request.auth.token.email))
+      allow update: if !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'email', 'emailAuth', 'emailChange', 'phone'])
+                    && !request.resource.data.get('profile', {}).diff(resource.data.get('profile', {})).affectedKeys().hasAny(['phone', 'phoneAuth'])
                     && (((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid)) &&
                        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status'])
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['membership'])
