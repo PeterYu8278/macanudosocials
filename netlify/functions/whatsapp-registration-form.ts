@@ -2,7 +2,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
-import { maskEmail, registrationTokenHash, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { encryptRegistrationPassword, maskEmail, registrationTokenHash, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 
 const htmlHeaders = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
@@ -38,12 +38,14 @@ export const eventHandler: EventHandler = async event => {
     const db = init()
     const session = await loadSession(db, token)
     if (!session) return response(410, page('链接已失效', '<h1>注册链接已失效</h1><p>请重新发送 /register 获取新链接。</p>'))
-    if (event.httpMethod === 'GET') return response(200, page('注册 Macanudo Socials', '<h1>注册 Macanudo Socials</h1><p>请填写姓名和 Email。</p><form method="post"><label for="name">Name</label><input id="name" name="name" required minlength="2" maxlength="128"><label for="email">Email</label><input id="email" name="email" type="email" required maxlength="254"><button type="submit">提交注册资料</button></form>'))
+    if (event.httpMethod === 'GET') return response(200, page('注册 Macanudo Socials', '<h1>注册 Macanudo Socials</h1><p>请填写姓名、Email 和登录密码。</p><form method="post"><label for="name">Name</label><input id="name" name="name" required minlength="2" maxlength="128"><label for="email">Email</label><input id="email" name="email" type="email" required maxlength="254"><label for="password">Password</label><input id="password" name="password" type="password" required minlength="6" maxlength="128"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" required minlength="6" maxlength="128"><button type="submit">提交注册资料</button></form>'))
     const form = new URLSearchParams(event.body || '')
     const name = (form.get('name') || '').trim()
     const email = validateRegistrationEmail(form.get('email') || '')
-    if (name.length < 2 || name.length > 128 || !email) return response(400, page('资料不正确', '<h1>资料不正确</h1><p>请返回重新填写姓名和 Email。</p>'))
-    await session.ref.set({ ...session.data, displayName: name, email, step: 'awaiting-final-confirm', updatedAt: Timestamp.now() })
+    const password = form.get('password') || ''
+    const confirmPassword = form.get('confirmPassword') || ''
+    if (name.length < 2 || name.length > 128 || !email || password.length < 6 || password.length > 128 || password !== confirmPassword) return response(400, page('资料不正确', '<h1>资料不正确</h1><p>请确认姓名、Email 和两次密码输入正确。</p>'))
+    await session.ref.set({ ...session.data, displayName: name, email, passwordCiphertext: encryptRegistrationPassword(password), step: 'awaiting-final-confirm', updatedAt: Timestamp.now() })
     const whatsapp = await loadWhatsApp(db)
     const confirmation = `欢迎注册 Macanudo Socials。请确认注册资料：\n姓名：${name}\n电话：${session.data.phone}\nEmail：${email}`
     const result = await submitWhapiButtons(whatsapp.token, session.data.phone, confirmation)
