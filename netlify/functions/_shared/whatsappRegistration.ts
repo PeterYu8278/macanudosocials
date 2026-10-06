@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase-admin/auth'
-import { type Firestore, Timestamp } from 'firebase-admin/firestore'
+import { FieldValue, type Firestore, Timestamp } from 'firebase-admin/firestore'
 import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
@@ -14,6 +14,7 @@ export interface WhatsAppRegistrationSession {
   step: RegistrationStep
   displayName?: string
   email?: string
+  referralCode?: string
   passwordCiphertext?: string
   registrationTokenHash?: string
   expiresAtMs: number
@@ -59,12 +60,12 @@ export function messageText(message: any) {
   return typeof button?.title === 'string' ? button.title.trim().slice(0, 100) : ''
 }
 
-export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string) {
+export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string, referralCode?: string) {
   const now = Timestamp.now()
   const session: WhatsAppRegistrationSession = {
     phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : tokenHash ? 'awaiting-form' : 'awaiting-confirmation',
     ...(displayName ? { displayName } : {}), ...(email ? { email } : {}), expiresAtMs: Date.now() + 15 * 60_000,
-    ...(tokenHash ? { registrationTokenHash: tokenHash } : {}),
+    ...(tokenHash ? { registrationTokenHash: tokenHash } : {}), ...(referralCode ? { referralCode } : {}),
     attempts: 0, createdAt: now, updatedAt: now,
   }
   await registrationSessionRef(db, phone).set(session)
@@ -77,6 +78,9 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
   let uid: string | undefined
   try {
     const users = db.collection(C.USERS)
+    const referral = session.referralCode?.trim().toUpperCase() || ''
+    const referrer = referral ? (await users.where('memberId', '==', referral).limit(1).get()).docs[0] : undefined
+    if (referral && !referrer) throw new MemberIdentityError('invalid-referral-code', 400)
     const [emailProfiles, phoneProfiles, legacyPhoneProfiles] = await Promise.all([
       users.where('email', '==', session.email).limit(1).get(),
       users.where('profile.phone', '==', session.phone).limit(1).get(),
@@ -106,6 +110,7 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
         if ((await transaction.get(users.where('memberId', '==', next).limit(1))).empty) { candidate = next; break }
       }
       if (!candidate) throw new Error('member-id-unavailable')
+      if (referrer && !(await transaction.get(referrer.ref)).exists) throw new MemberIdentityError('invalid-referral-code', 400)
       transaction.create(users.doc(account.uid), {
         authUid: account.uid, email: session.email, displayName: session.displayName, memberId: candidate,
         role: 'guest', status: 'inactive', registrationSource: 'whatsapp',
@@ -114,8 +119,12 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
         whatsappAuth: { chatId: session.chatId, verifiedAt: now },
         preferences: { locale: 'zh', notifications: true },
         membership: { level: 'bronze', joinDate: now, lastActive: now, points: 0, referralPoints: 0 },
+        referral: { referredBy: referral || null, referredByUserId: referrer?.id || null, referralDate: referrer ? now : null,
+          referrals: [], totalReferred: 0, activeReferrals: 0 },
         createdAt: now, updatedAt: now,
       })
+      if (referrer) transaction.update(referrer.ref, { 'referral.referrals': FieldValue.arrayUnion({ userId: account.uid, userName: session.displayName, memberId: candidate }),
+        'referral.totalReferred': FieldValue.increment(1), updatedAt: now })
       transaction.create(db.collection(C.AUDIT_LOGS).doc(), { action: 'register-member-whatsapp', userId: account.uid, createdAt: now })
       return candidate
     })

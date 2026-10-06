@@ -10,7 +10,7 @@ import { getUserByMemberId } from '../../utils/memberId'
 import { getAppConfig } from '../../services/firebase/appConfig'
 import type { AppConfig } from '../../types'
 
-const { Title, Text } = Typography
+const { Text } = Typography
 
 const Register: React.FC = () => {
   const { message } = App.useApp()
@@ -179,7 +179,7 @@ const Register: React.FC = () => {
       )}
       
       <Card
-        styles={{ body: { padding: '16px 24px' } }}
+        styles={{ body: { padding: '12px 20px' } }}
         style={{
         width: '100%',
         maxWidth: 400,
@@ -192,13 +192,14 @@ const Register: React.FC = () => {
         zIndex: 1
         }}
       >
-        <Space direction="vertical" size={16} style={{ width: '100%' }}>
+        <Space direction="vertical" size={10} style={{ width: '100%' }}>
           <div style={{ textAlign: 'center' }}>
             {appConfig?.logoUrl && !logoError && (
               <div style={{
                 display: 'flex',
                 justifyContent: 'center',
-                background: 'transparent'
+                background: 'transparent',
+                margin: '8px'
               }}>
                 <img
                   src={appConfig.logoUrl}
@@ -209,7 +210,7 @@ const Register: React.FC = () => {
                   }}
                   style={{
                     width: 'auto',
-                    height: '44px',
+                    height: '66px',
                     maxWidth: '100%',
                     objectFit: 'contain',
                     background: 'transparent',
@@ -218,18 +219,6 @@ const Register: React.FC = () => {
                 />
               </div>
             )}
-            <Title level={2} style={{ 
-              marginTop: 6,
-              marginBottom: 4,
-              background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              fontWeight: 700,
-              letterSpacing: '2px'
-            }}>
-              {appConfig?.appName || 'MS'}
-            </Title>
             <Text style={{ color: '#c0c0c0', fontSize: '14px' }}>
               {t('auth.createAccountSubtitle', { defaultValue: `创建您的账户，加入${appConfig?.appName || 'MS'}社区` })}
             </Text>
@@ -242,12 +231,12 @@ const Register: React.FC = () => {
             onFinish={onFinish}
             autoComplete="off"
             size="large"
-            style={{ padding: '0 20px' }}
+            style={{ padding: '0 12px' }}
           >
             <Form.Item
               name="displayName"
               rules={[{ required: true, message: t('auth.nameRequired') }]}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
             >
               <Input
                 prefix={<UserOutlined style={{ color: '#ffd700' }} />}
@@ -314,7 +303,7 @@ const Register: React.FC = () => {
               getValueFromEvent={(e) => e.target.value.replace(/[^\d+]/g, '')}
               validateTrigger={['onBlur', 'onChange']}
               validateDebounce={500}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
             >
               <Input
                 prefix={<UserOutlined style={{ color: '#ffd700' }} />}
@@ -369,7 +358,7 @@ const Register: React.FC = () => {
               ]}
               validateTrigger={['onBlur', 'onChange']}
               validateDebounce={500}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
             >
               <Input
                 prefix={<MailOutlined style={{ color: '#ffd700' }} />}
@@ -389,7 +378,7 @@ const Register: React.FC = () => {
                 { required: true, message: t('auth.passwordRequired') },
                 { min: 6, message: t('auth.passwordMinLength') }
               ]}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
             >
               <Input.Password
                 prefix={<LockOutlined style={{ color: '#ffd700' }} />}
@@ -417,7 +406,7 @@ const Register: React.FC = () => {
                   },
                 }),
               ]}
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
             >
               <Input.Password
                 prefix={<LockOutlined style={{ color: '#ffd700' }} />}
@@ -434,7 +423,7 @@ const Register: React.FC = () => {
             {/* 引荐码（可选） */}
             <Form.Item
               name="referralCode"
-              style={{ marginBottom: '8px' }}
+              style={{ marginBottom: '4px' }}
               rules={[
                 {
                   validator: async (_, value) => {
@@ -482,7 +471,7 @@ const Register: React.FC = () => {
                 loading={loading}
                 style={{ 
                   width: '100%',
-                  height: '48px',
+                  height: '44px',
                   background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
                   border: 'none',
                   borderRadius: '8px',
