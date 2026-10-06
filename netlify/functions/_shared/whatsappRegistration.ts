@@ -1,11 +1,10 @@
 import { getAuth } from 'firebase-admin/auth'
 import { type Firestore, Timestamp } from 'firebase-admin/firestore'
-import { createHash, randomBytes, randomInt } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './memberIdentity'
 import { lockMemberIdentity } from './memberIdentityLock'
-import { sendMemberPasswordSetup } from './memberPasswordSetup'
 
 export type RegistrationStep = 'awaiting-form' | 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
 
@@ -15,6 +14,7 @@ export interface WhatsAppRegistrationSession {
   step: RegistrationStep
   displayName?: string
   email?: string
+  passwordCiphertext?: string
   registrationTokenHash?: string
   expiresAtMs: number
   attempts: number
@@ -26,6 +26,20 @@ const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sessionId = (phone: string) => Buffer.from(phone).toString('base64url')
 export const createRegistrationToken = () => randomBytes(32).toString('hex')
 export const registrationTokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
+const passwordKey = () => createHash('sha256').update(process.env.WHATSAPP_REGISTRATION_ENCRYPTION_KEY || process.env.WHAPI_WEBHOOK_SECRET || '').digest()
+export function encryptRegistrationPassword(password: string) {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', passwordKey(), iv)
+  const encrypted = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()])
+  return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`
+}
+function decryptRegistrationPassword(value: string) {
+  const [version, ivText, tagText, encryptedText] = value.split('.')
+  if (version !== 'v1' || !ivText || !tagText || !encryptedText) throw new MemberIdentityError('invalid-registration', 400)
+  const decipher = createDecipheriv('aes-256-gcm', passwordKey(), Buffer.from(ivText, 'base64url'))
+  decipher.setAuthTag(Buffer.from(tagText, 'base64url'))
+  return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64url')), decipher.final()]).toString('utf8')
+}
 
 export function registrationSessionRef(db: Firestore, phone: string) {
   return db.collection(C.WHATSAPP_REGISTRATION_SESSIONS).doc(sessionId(phone))
@@ -58,7 +72,7 @@ export async function startRegistration(db: Firestore, phone: string, chatId: st
 }
 
 export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegistrationSession) {
-  if (!session.displayName || !session.email) throw new MemberIdentityError('invalid-registration', 400)
+  if (!session.displayName || !session.email || !session.passwordCiphertext) throw new MemberIdentityError('invalid-registration', 400)
   const unlock = await lockMemberIdentity(db, [`email:${session.email}`, `phone:${session.phone}`])
   let uid: string | undefined
   try {
@@ -81,7 +95,7 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
     if (phoneInUse) throw new MemberIdentityError('phone-in-use', 409)
     const account = await getAuth().createUser({
       email: session.email, phoneNumber: session.phone,
-      displayName: session.displayName, password: randomBytes(32).toString('base64url'), emailVerified: false,
+      displayName: session.displayName, password: decryptRegistrationPassword(session.passwordCiphertext), emailVerified: false,
     })
     uid = account.uid
     const now = Timestamp.now()
@@ -105,9 +119,8 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
       transaction.create(db.collection(C.AUDIT_LOGS).doc(), { action: 'register-member-whatsapp', userId: account.uid, createdAt: now })
       return candidate
     })
-    const passwordSetupEmail = await sendMemberPasswordSetup(session.email)
-    await registrationSessionRef(db, session.phone).set({ step: 'completed', completedAt: now, uid: account.uid, memberId, passwordSetupEmail }, { merge: true })
-    return { uid: account.uid, memberId, passwordSetupEmail }
+    await registrationSessionRef(db, session.phone).set({ step: 'completed', completedAt: now, uid: account.uid, memberId, passwordCiphertext: null }, { merge: true })
+    return { uid: account.uid, memberId }
   } catch (error) {
     if (uid) {
       try {
