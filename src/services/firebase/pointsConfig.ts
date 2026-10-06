@@ -2,13 +2,14 @@
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import type { PointsConfig } from '../../types';
+import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 
 /**
  * 获取积分配置
  */
 export const getPointsConfig = async (): Promise<PointsConfig | null> => {
   try {
-    const docRef = doc(db, 'config', 'points');
+    const docRef = doc(db, GLOBAL_COLLECTIONS.CONFIG, 'points');
     const docSnap = await getDoc(docRef);
     
     if (docSnap.exists()) {
@@ -44,10 +45,12 @@ export const updatePointsConfig = async (
   userId: string
 ): Promise<{ success: boolean; error?: string }> => {
   try {
-    const docRef = doc(db, 'config', 'points');
+    const docRef = doc(db, GLOBAL_COLLECTIONS.CONFIG, 'points');
+    const { enabled: _enabled, ...dayPassPricing } = config.dayPass || {};
     
     await setDoc(docRef, {
       ...config,
+      ...(config.dayPass && { dayPass: dayPassPricing }),
       updatedAt: new Date(),
       updatedBy: userId,
     }, { merge: true });

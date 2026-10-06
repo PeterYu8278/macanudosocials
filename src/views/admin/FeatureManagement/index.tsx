@@ -21,6 +21,7 @@ import PaymentTester from '../../../components/admin/PaymentTester';
 import CigarDatabase from '../CigarDatabase';
 import NotificationManagement from '../NotificationManagement';
 import EmailProviders from './EmailProviders';
+import DayPassControl from './DayPassControl';
 import SystemSettingsNav from './SystemSettingsNav';
 import { getSettingsSection, getSectionTab, readSettingsNavigation, writeSettingsNavigation, type ContentTab } from './settingsNavigation';
 
@@ -2961,6 +2962,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
                           </Button>
                         </Space>
                       </div>
+                      {feature.key === 'points-config' && activeTab === 'admin' && <DayPassControl />}
                     </div>
                   );
                 })}

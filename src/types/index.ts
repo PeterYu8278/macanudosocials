@@ -640,6 +640,7 @@ export interface PointsConfig {
   
   // Day Pass 配置
   dayPass?: {
+    enabled?: boolean;
     cost: number;              // 购买价格（积分）
     freeHours: number;         // 包含的免费小时
     hourlyRateAfter: number;   // 超出后的每小时费用（积分）

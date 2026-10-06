@@ -1,8 +1,8 @@
 import type { Handler } from '@netlify/functions'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore, Timestamp, FieldValue } from 'firebase-admin/firestore'
-import { createHash, randomInt } from 'node:crypto'
+import { initializeFirestore, Timestamp, FieldValue, type Firestore } from 'firebase-admin/firestore'
+import { createHash, randomInt, randomUUID } from 'node:crypto'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './_shared/memberIdentity'
@@ -25,29 +25,49 @@ export const handler: Handler = async event => {
     || (referral && !/^[A-Z0-9]{6}$/.test(referral))) return reply(400, 'invalid-request')
   let unlock: (() => Promise<void>) | undefined
   let uid: string | undefined
+  let db: Firestore | undefined
+  const requestId = randomUUID()
+  const startedAt = Date.now()
+  const step = async <T>(stage: string, work: () => Promise<T>): Promise<T> => {
+    const start = Date.now()
+    console.info('register-member', { requestId, stage, status: 'started' })
+    try {
+      const result = await work()
+      console.info('register-member', { requestId, stage, status: 'completed', durationMs: Date.now() - start })
+      return result
+    } catch (error) {
+      // SDK error messages can contain contact details; log only a bounded code.
+      const code = (error as { code?: unknown } | null)?.code
+      console.error('register-member', { requestId, stage, status: 'failed', durationMs: Date.now() - start,
+        code: typeof code === 'number' || (typeof code === 'string' && /^[a-z0-9/_-]{1,80}$/i.test(code)) ? code : 'unknown' })
+      throw error
+    }
+  }
   try {
     if (!getApps().length) {
       if (!process.env.FIREBASE_SERVICE_ACCOUNT) return reply(503, 'service-unavailable')
       initializeApp({ credential: cert(JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT)) })
     }
-    const db = getFirestore()
+    // Registration needs unary requests only. REST avoids cold-start gRPC connection stalls.
+    db = initializeFirestore(getApps()[0], { preferRest: true })
+    const registrationDb = db
     const ip = event.headers['x-nf-client-connection-ip'] || event.headers['client-ip'] || 'unknown'
     const attempt = db.collection(GLOBAL_COLLECTIONS.REGISTRATION_ATTEMPTS).doc(createHash('sha256').update(ip).digest('hex'))
-    await db.runTransaction(async transaction => {
+    await step('rate-limit', () => registrationDb.runTransaction(async transaction => {
       const data = (await transaction.get(attempt)).data()
       const count = data?.expiresAtMs > Date.now() ? Number(data.count) || 0 : 0
       if (count >= 10) throw new MemberIdentityError('too-many-requests', 429)
       transaction.set(attempt, { count: count + 1, expiresAtMs: data?.expiresAtMs > Date.now() ? data.expiresAtMs : Date.now() + 900000 })
-    })
-    unlock = await lockMemberIdentity(db, [`email:${email}`, `phone:${phone}`])
-    await assertUniqueMemberIdentity(db, email, phone)
+    }))
+    unlock = await step('identity-lock', () => lockMemberIdentity(registrationDb, [`email:${email}`, `phone:${phone}`]))
+    await step('identity-check', () => assertUniqueMemberIdentity(registrationDb, email, phone))
     const users = db.collection(GLOBAL_COLLECTIONS.USERS)
-    const referrer = referral ? (await users.where('memberId', '==', referral).limit(1).get()).docs[0] : undefined
+    const referrer = referral ? (await step('referral-check', () => users.where('memberId', '==', referral).limit(1).get())).docs[0] : undefined
     if (referral && !referrer) return reply(400, 'invalid-referral-code')
-    const account = await getAuth().createUser({ email, password: input.password, phoneNumber: phone, displayName: name, emailVerified: false })
+    const account = await step('auth-create', () => getAuth().createUser({ email, password: input.password as string, phoneNumber: phone, displayName: name, emailVerified: false }))
     uid = account.uid
     const now = Timestamp.now()
-    await db.runTransaction(async transaction => {
+    await step('profile-create', () => registrationDb.runTransaction(async transaction => {
       let memberId = ''
       for (let attempt = 0; attempt < 10; attempt++) {
         const candidate = randomInt(36 ** 6).toString(36).toUpperCase().padStart(6, '0')
@@ -65,14 +85,18 @@ export const handler: Handler = async event => {
       })
       if (referrer) transaction.update(referrer.ref, { 'referral.referrals': FieldValue.arrayUnion({ userId: account.uid, userName: name, memberId }),
         'referral.totalReferred': FieldValue.increment(1), updatedAt: now })
-      transaction.create(db.collection(GLOBAL_COLLECTIONS.AUDIT_LOGS).doc(), { action: 'register-member', userId: account.uid, createdAt: now })
-    })
+      transaction.create(registrationDb.collection(GLOBAL_COLLECTIONS.AUDIT_LOGS).doc(), { action: 'register-member', userId: account.uid, createdAt: now })
+    }))
     return reply(200, 'member-created')
   } catch (error) {
-    if (uid) {
+    if (uid && db) {
       try {
         // Keep a successfully committed account if Firestore's acknowledgement was lost.
-        if (!(await getFirestore().collection(GLOBAL_COLLECTIONS.USERS).doc(uid).get()).exists) await getAuth().deleteUser(uid)
+        const memberRef = db.collection(GLOBAL_COLLECTIONS.USERS).doc(uid)
+        if (!(await step('profile-recovery', () => memberRef.get())).exists) {
+          const accountUid = uid
+          await step('auth-rollback', () => getAuth().deleteUser(accountUid))
+        }
         else return reply(200, 'member-created')
       } catch { return reply(503, 'registration-recovery-required') }
     }
@@ -81,5 +105,8 @@ export const handler: Handler = async event => {
     if (code === 'auth/email-already-exists') return reply(409, 'email-in-use')
     if (code === 'auth/phone-number-already-exists') return reply(409, 'phone-in-use')
     return reply(503, 'service-unavailable')
-  } finally { try { await unlock?.() } catch { /* The lease expires after a crash. */ } }
+  } finally {
+    try { if (unlock) await step('identity-unlock', unlock) } catch { /* The lease expires after a crash. */ }
+    console.info('register-member', { requestId, stage: 'request-finished', durationMs: Date.now() - startedAt })
+  }
 }

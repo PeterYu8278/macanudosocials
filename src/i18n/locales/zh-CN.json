@@ -1,4 +1,20 @@
 {
+  "dayPassControl": {
+    "title": "允许购买 Day Pass",
+    "errors": {
+      "auth-required": "请重新登录。",
+      "forbidden": "你没有执行此操作的权限。",
+      "disabled": "目前暂停新的 Day Pass 购买。",
+      "invalid-request": "请选择有效的会员和会所。",
+      "member-not-found": "找不到会员。",
+      "lounge-not-found": "找不到会所。",
+      "invalid-config": "Day Pass 配置无效，请联系管理员。",
+      "insufficient-points": "积分不足，无法购买 Day Pass。",
+      "invalid-session": "此到访无法用于购买 Day Pass，请刷新后重试。",
+      "account-suspended": "此账号已暂停。",
+      "service-unavailable": "Day Pass 服务暂时无法使用，请稍后重试。"
+    }
+  },
   "systemSettings": {
     "title": "系统设置",
     "categories": "设置分类",
@@ -1068,7 +1084,7 @@
     "redeemFailedRetry": "兑换失败，请重试",
     "dayPassPurchaseSuccess": "Day Pass 购买成功，已为您自动办理签到及雪茄兑换！",
     "purchaseFailed": "购买失败",
-    "dayPassIncludesRedemption": "Day Pass 已包含一次兑换，无法手动提交",
+    "dayPassIncludesRedemption": "Day Pass 包含 {{quantity}} 支雪茄，不支持额外提交兑换申请。",
     "insufficientPointsTooltip": "积分不足（当前: {{points}}），请先充值",
     "dailyQuotaExhausted": "今日兑换限额已用完",
     "waitBeforeRedeem": "请等待 {{countdown}} 后再次兑换",
@@ -1077,7 +1093,7 @@
     "contactAdminForRedemption": "兑换功能需在驻店时联系管理员操作",
     "benefits": {
       "membership": "• 无限制兑换雪茄\n• 参与专属活动\n• 优先使用休息室",
-      "dayPass": "• 单次雪茄兑换\n• 单日休息室使用权限"
+      "dayPass": "• 包含 {{quantity}} 支雪茄\n• 包含 {{hours}} 小时休息室使用时间"
     }
   },
   "redemption": {

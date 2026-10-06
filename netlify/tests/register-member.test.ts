@@ -1,19 +1,22 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createHash } from 'node:crypto'
-const m = vi.hoisted(() => ({ create: vi.fn(), remove: vi.fn(), documents: new Map<string, any>(), failWrite: false, lostAcknowledgement: false }))
+const m = vi.hoisted(() => ({ create: vi.fn(), remove: vi.fn(), documents: new Map<string, any>(), failWrite: false, failRead: false, lostAcknowledgement: false }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ createUser: m.create, deleteUser: m.remove }) }))
 vi.mock('firebase-admin/firestore', () => {
   const snapshot = (path: string) => ({ id: path.split('/')[1], exists: m.documents.has(path), ref: reference(path), data: () => m.documents.get(path) })
-  const reference = (path: string): any => ({ path, get: async () => snapshot(path) })
+  const reference = (path: string): any => ({ path, get: async () => {
+    if (m.failRead) throw Object.assign(new Error('private member@example.com password123 +60123456789'), { code: 4 })
+    return snapshot(path)
+  } })
   const field = (data: any, key: string) => key.split('.').reduce((value, part) => value?.[part], data)
   const query = (name: string, key: string, value: unknown) => ({ limit: (count: number) => ({ get: async () => {
     const docs = [...m.documents].filter(([path, data]) => path.startsWith(`${name}/`) && field(data, key) === value).slice(0, count).map(([path]) => snapshot(path))
     return { docs, empty: !docs.length }
   } }) })
   return { Timestamp: { now: () => 'now' }, FieldValue: { arrayUnion: (value: unknown) => ['union', value], increment: (value: number) => ['increment', value] },
-    getFirestore: () => ({ collection: (name: string) => ({ doc: (id = 'audit') => reference(`${name}/${id}`), where: (key: string, _op: string, value: unknown) => query(name, key, value) }),
+    initializeFirestore: vi.fn(() => ({ collection: (name: string) => ({ doc: (id = 'audit') => reference(`${name}/${id}`), where: (key: string, _op: string, value: unknown) => query(name, key, value) }),
       runTransaction: async (callback: any) => {
         const writes: Array<() => void> = []
         let profileWrite = false
@@ -29,16 +32,41 @@ vi.mock('firebase-admin/firestore', () => {
         writes.forEach(write => write())
         if (profileWrite && m.lostAcknowledgement) throw new Error('ack lost')
         return result
-      } }) }
+      } })) }
 })
+import { initializeFirestore } from 'firebase-admin/firestore'
 import { handler } from '../functions/register-member'
 const invoke = handler as unknown as (event: any) => Promise<{ statusCode: number; body: string }>
 const input = { email: 'MEMBER@example.com', password: 'password123', displayName: 'Member', phone: '0123456789' }
 const request = (body: any = input) => invoke({ httpMethod: 'POST', headers: { 'x-nf-client-connection-ip': '127.0.0.1' }, body: JSON.stringify(body) })
 describe('backend member registration', () => {
   beforeEach(() => {
-    vi.resetAllMocks(); m.documents.clear(); m.failWrite = false; m.lostAcknowledgement = false
+    vi.clearAllMocks(); m.create.mockReset(); m.remove.mockReset()
+    m.documents.clear(); m.failWrite = false; m.failRead = false; m.lostAcknowledgement = false
+    vi.spyOn(console, 'info').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     m.create.mockResolvedValue({ uid: 'new-member' })
+  })
+  afterEach(() => vi.restoreAllMocks())
+  it('uses REST Firestore for cold and warm registrations', async () => {
+    await request()
+    await request({ ...input, email: 'second@example.com', phone: '0123456790' })
+    expect(initializeFirestore).toHaveBeenCalledTimes(2)
+    expect(initializeFirestore).toHaveBeenCalledWith(expect.anything(), { preferRest: true })
+  })
+  it('identifies a failure before Auth creation without logging personal data', async () => {
+    m.failRead = true
+    expect((await request()).statusCode).toBe(503)
+    expect(m.create).not.toHaveBeenCalled()
+    expect(console.error).toHaveBeenCalledWith('register-member', expect.objectContaining({ stage: 'rate-limit', status: 'failed', code: 4 }))
+    const logs = JSON.stringify([vi.mocked(console.info).mock.calls, vi.mocked(console.error).mock.calls])
+    for (const value of [input.email, 'member@example.com', input.password, '+60123456789']) expect(logs).not.toContain(value)
+  })
+  it('logs each successful registration stage including lease release', async () => {
+    expect((await request()).statusCode).toBe(200)
+    const completed = vi.mocked(console.info).mock.calls.map(call => call[1]).filter(value => value.status === 'completed')
+    expect(completed.map(value => value.stage)).toEqual(['rate-limit', 'identity-lock', 'identity-check', 'auth-create', 'profile-create', 'identity-unlock'])
+    expect(m.documents.size).toBe(3)
   })
   it('creates matching Auth and Firestore contacts, with no password in the member document', async () => {
     expect((await request()).statusCode).toBe(200)

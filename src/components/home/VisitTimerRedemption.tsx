@@ -16,6 +16,9 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
 import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
+import { doc, onSnapshot } from 'firebase/firestore';
+import { db } from '../../config/firebase';
+import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 
 const { Title, Text } = Typography;
 
@@ -43,10 +46,20 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null); // 倒计时剩余秒数
   const [annualFeeAmount, setAnnualFeeAmount] = useState<number | null>(null); // 年费金额
   const [dayPassConfig, setDayPassConfig] = useState<any>(null);
+  const [dayPassEnabled, setDayPassEnabled] = useState(false);
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null);
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [membershipModalVisible, setMembershipModalVisible] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState<'membership' | 'daypass' | null>(null);
+  useEffect(() => {
+    if (!user?.id) { setDayPassEnabled(false); return; }
+    return onSnapshot(doc(db, GLOBAL_COLLECTIONS.CONFIG, 'points'), snapshot => {
+      setDayPassEnabled(snapshot.data()?.dayPass?.enabled !== false);
+    }, () => setDayPassEnabled(false));
+  }, [user?.id]);
+  useEffect(() => {
+    if (!dayPassEnabled && selectedAccess === 'daypass') setSelectedAccess(null);
+  }, [dayPassEnabled, selectedAccess]);
   const [redemptionHistory, setRedemptionHistory] = useState<any[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
@@ -569,10 +582,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               const hasDayPass = currentSession?.dayPass?.isPurchased;
 
               // 计算显示用的限额
-              const displayDailyLimit = hasDayPass ? 1 : (isActiveMember ? limits.dailyLimit : 0);
+              const displayDailyLimit = hasDayPass ? (currentSession?.dayPass?.config.cigarAllowance ?? 1) : (isActiveMember ? limits.dailyLimit : 0);
               // 计算当日已兑换数量（如果是 Day Pass，由于系统会自动创建一个 pending 记录，我们计算所有状态的 Day Pass 记录）
               // 但为了统一逻辑，我们先看看如何获取当日 Day Pass 记录
-              const displayDailyCount = isActiveMember ? dailyCount : (hasDayPass ? dailyRedemptions.filter(r => r.isDayPass).length : 0);
+              const displayDailyCount = hasDayPass ? dailyRedemptions.filter(r => r.isDayPass).reduce((sum, r) => sum + r.quantity, 0) : (isActiveMember ? dailyCount : 0);
 
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
               if (!isActiveMember && !hasDayPass) {
@@ -695,7 +708,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                     }}
                     title={
                       hasDayPass
-                        ? t('visitTimer.dayPassIncludesRedemption')
+                        ? t('visitTimer.dayPassIncludesRedemption', { quantity: currentSession?.dayPass?.config.cigarAllowance ?? 1 })
                         : isLowPoints
                           ? t('visitTimer.insufficientPointsTooltip', { currentPoints })
                           : dailyCount >= limits.dailyLimit
@@ -1062,7 +1075,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
         <div style={{
           display: 'grid',
-          gridTemplateColumns: window.innerWidth < 768 ? 'repeat(2, 1fr)' : 'repeat(2, 1fr)',
+          gridTemplateColumns: dayPassEnabled ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)',
           gap: 12,
           marginTop: 16
         }}>
@@ -1107,6 +1120,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
           </div>
 
           {/* Card 2: Day Pass */}
+          {dayPassEnabled && (
           <div
             onClick={() => setSelectedAccess('daypass')}
             style={{
@@ -1129,7 +1143,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 {t('visitTimer.dayPass')}
               </div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, lineHeight: 1.4, whiteSpace: 'pre-line' }} className="benefit-list">
-                {t('visitTimer.benefits.dayPass')}
+                {t('visitTimer.benefits.dayPass', { quantity: dayPassConfig?.cigarAllowance ?? 1, hours: dayPassConfig?.freeHours ?? 3 })}
               </div>
             </div>
             <div style={{ textAlign: 'right', marginTop: 16 }} className="price-text-container">
@@ -1145,6 +1159,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, letterSpacing: 1 }}>{t('visitTimer.oneTime')}</div>
             </div>
           </div>
+          )}
         </div>
 
         {/* Action Button Section */}

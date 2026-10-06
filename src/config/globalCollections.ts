@@ -6,6 +6,7 @@
 export const GLOBAL_COLLECTIONS = {
   /** 用户集合 */
   USERS: 'users',
+  STORES: 'stores',
   MEMBER_IDENTITY_LOCKS: '_memberIdentityLocks',
   REGISTRATION_ATTEMPTS: '_registrationAttempts',
   /** 品牌集合 */
@@ -30,6 +31,7 @@ export const GLOBAL_COLLECTIONS = {
   NOTIFICATIONS: 'notifications',
   /** 系统配置集合 */
   SYSTEM_CONFIG: 'system_config',
+  CONFIG: 'config',
   /** 积分记录集合 */
   POINTS_RECORDS: 'pointsRecords',
   /** 驻店记录集合 */

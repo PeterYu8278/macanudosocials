@@ -1,4 +1,20 @@
 {
+  "dayPassControl": {
+    "title": "Allow Day Pass purchases",
+    "errors": {
+      "auth-required": "Please sign in again.",
+      "forbidden": "You do not have permission to perform this action.",
+      "disabled": "New Day Pass purchases are currently unavailable.",
+      "invalid-request": "Please select a valid member and lounge.",
+      "member-not-found": "Member not found.",
+      "lounge-not-found": "Lounge not found.",
+      "invalid-config": "Day Pass configuration is invalid. Contact an administrator.",
+      "insufficient-points": "Insufficient points to purchase a Day Pass.",
+      "invalid-session": "This visit cannot be used for a Day Pass purchase. Refresh and try again.",
+      "account-suspended": "This account is suspended.",
+      "service-unavailable": "Day Pass service is unavailable. Please try again later."
+    }
+  },
   "systemSettings": {
     "title": "System Settings",
     "categories": "Settings category",
@@ -1068,7 +1084,7 @@
     "redeemFailedRetry": "Redemption failed, please try again",
     "dayPassPurchaseSuccess": "Day Pass purchased successfully, check-in and cigar redemption have been processed automatically!",
     "purchaseFailed": "Purchase failed",
-    "dayPassIncludesRedemption": "Day Pass already includes one redemption, cannot submit manually",
+    "dayPassIncludesRedemption": "Day Pass includes {{quantity}} cigar(s). No additional redemption requests are available.",
     "insufficientPointsTooltip": "Insufficient points (current: {{points}}), please reload first",
     "dailyQuotaExhausted": "Daily redemption quota exhausted",
     "waitBeforeRedeem": "Please wait {{countdown}} before redeeming again",
@@ -1077,7 +1093,7 @@
     "contactAdminForRedemption": "Redemption must be completed at the lounge with an admin's assistance",
     "benefits": {
       "membership": "• Unlimited cigar redemption\n• Access to exclusive events\n• Priority lounge access",
-      "dayPass": "• One-time cigar redemption\n• Single day lounge access"
+      "dayPass": "• {{quantity}} cigar(s) included\n• {{hours}} hours of lounge access included"
     }
   },
   "redemption": {
