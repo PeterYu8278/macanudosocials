@@ -53,6 +53,7 @@ export const GLOBAL_COLLECTIONS = {
   WHATSAPP_CONFIG: '_whatsappConfig',
   WHATSAPP_TASKS: '_whatsappTasks',
   WHATSAPP_ATTEMPTS: '_whatsappAttempts',
+  WHATSAPP_RECEIPTS: '_whatsappReceipts',
   /** 订阅激活请求 */
   SUBSCRIPTION_REQUESTS: 'subscription_requests',
   /** 交易记录（财务） */

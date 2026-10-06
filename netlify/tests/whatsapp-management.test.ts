@@ -19,10 +19,12 @@ vi.mock('firebase-admin/firestore', () => {
       create: (r: any, value: any) => mutations.push(() => m.documents.set(r.path, value)),
       commit: async () => mutations.forEach(fn => fn()) }
   }
-  return { FieldValue: { delete: () => 'DELETE' }, Timestamp: { now: () => new Date() }, initializeFirestore: () => ({
+  return { FieldValue: { delete: () => 'DELETE' }, Timestamp: { now: () => new Date(), fromMillis: (value: number) => new Date(value) }, initializeFirestore: () => ({
     collection: (name: string) => ({ doc: (id = 'audit') => ref(`${name}/${id}`) }), batch,
     runTransaction: async (fn: any) => fn({ get: async (r: any) => snapshot(r.path),
-      set: (r: any, value: any) => m.documents.set(r.path, value), create: (r: any, value: any) => m.documents.set(r.path, value) }),
+      set: (r: any, value: any, options: any) => m.documents.set(r.path, options?.merge ? merge(m.documents.get(r.path), value) : value),
+      update: (r: any, value: any) => m.documents.set(r.path, { ...m.documents.get(r.path), ...value }),
+      create: (r: any, value: any) => m.documents.set(r.path, value) }),
   }) }
 })
 import webHandler, { eventHandler as handler } from '../functions/whatsapp-management'

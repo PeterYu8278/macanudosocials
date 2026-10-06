@@ -439,6 +439,9 @@ service cloud.firestore {
     match /_whatsappAttempts/{documentId} {
       allow read, write: if false;
     }
+    match /_whatsappReceipts/{documentId} {
+      allow read, write: if false;
+    }
 
     // ================================
     // Points Config Collection (保留向后兼容)

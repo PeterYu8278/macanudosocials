@@ -37,6 +37,22 @@ export default function WhatsAppManagement() {
     finally { setBusy(false) }
   }
   useEffect(() => { void load() }, [])
+  useEffect(() => {
+    if (tab !== 'records') return
+    let cancelled = false
+    let timer: ReturnType<typeof setTimeout>
+    const refresh = async () => {
+      if (document.visibilityState === 'visible') {
+        try {
+          const result = await whatsappRequest('records')
+          if (!cancelled) setRecords(result.records)
+        } catch { /* Keep the last successful records during a temporary outage. */ }
+      }
+      if (!cancelled) timer = setTimeout(refresh, 15000)
+    }
+    timer = setTimeout(refresh, 15000)
+    return () => { cancelled = true; clearTimeout(timer) }
+  }, [tab])
   const save = async () => {
     setBusy(true)
     try { apply(await whatsappRequest('save', { config: await form.validateFields() })); message.success(t('common.saveSuccess')) }
@@ -98,6 +114,12 @@ export default function WhatsAppManagement() {
               <Form.Item name={['whapi', 'channelId']} label="Channel ID"><Input maxLength={200} /></Form.Item>
               <Space wrap><Tag>{label(state.whapiCredentials ? 'credentialsConfigured' : 'credentialsMissing')}</Tag>
                 <Button icon={<CheckCircleOutlined />} onClick={health} disabled={!manager || busy || !state.whapiCredentials}>{label('verifyConnection')}</Button></Space>
+              <div className="whatsapp-webhook">
+                <strong>{label('webhook')}</strong>
+                <Tag color={state.webhookConfigured ? 'green' : 'default'}>{label(state.webhookConfigured ? 'webhookReady' : 'webhookMissing')}</Tag>
+                <Typography.Text type="secondary">{label('webhookLastReceived')}: {state.webhookLastReceivedAt ? new Date(state.webhookLastReceivedAt).toLocaleString() : '-'}</Typography.Text>
+                {state.webhookUrl && <Typography.Text copyable>{state.webhookUrl}</Typography.Text>}
+              </div>
             </>}
             {provider === 'whatsmeow' && <div className="whatsapp-settings-grid">
               <Form.Item name={['whatsmeow', 'baseUrl']} label={label('gatewayUrl')} rules={[{ type: 'url' }]}><Input placeholder="https://" maxLength={500} /></Form.Item>
@@ -139,7 +161,7 @@ export default function WhatsAppManagement() {
         { title: label('time'), dataIndex: 'createdAt', render: value => value ? new Date(value).toLocaleString() : '-' },
         { title: label('channels'), dataIndex: 'provider', render: value => label(value) },
         { title: label('phone'), dataIndex: 'phone' },
-        { title: label('statusLabel'), dataIndex: 'status', render: value => <Tag>{label(`status.${value}`)}</Tag> },
+        { title: label('statusLabel'), dataIndex: 'status', render: value => <Tag color={value === 'read' || value === 'delivered' ? 'green' : value === 'failed' ? 'red' : value === 'sent' ? 'blue' : 'default'}>{label(`status.${value}`)}</Tag> },
         { title: label('testing'), dataIndex: 'test', render: value => value ? label('test') : label('business') },
       ]} />
     </>}

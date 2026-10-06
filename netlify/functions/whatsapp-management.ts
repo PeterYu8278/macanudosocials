@@ -7,6 +7,7 @@ import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import type { WhatsAppSettings } from '../../src/types/whatsapp'
 import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
+import { attachSubmission } from './_shared/whapiReceipts'
 
 const reply = (statusCode: number, data = {}) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -64,7 +65,16 @@ export const eventHandler: Handler = async event => {
     const loaded = await loadWhatsApp(db)
     const { config } = loaded
     const ref = db.collection(C.WHATSAPP_CONFIG).doc('settings')
-    const state = () => ({ config, whapiCredentials: !!loaded.token, whapiVerified: loaded.verified })
+    const webhook = (await ref.get()).data()
+    let webhookUrl: string | null = null
+    try {
+      const url = new URL('/.netlify/functions/whapi-webhook', process.env.URL || '')
+      if (url.protocol === 'https:') webhookUrl = url.href
+    } catch { /* Local Functions may not have a public URL. */ }
+    const state = () => ({ config, whapiCredentials: !!loaded.token, whapiVerified: loaded.verified,
+      webhookConfigured: (process.env.WHAPI_WEBHOOK_SECRET?.length || 0) >= 32,
+      webhookUrl,
+      webhookLastReceivedAt: webhook?.whapiWebhookAt?.toDate?.().toISOString() || null })
     if (input.action === 'load') return reply(200, state())
     if (input.action === 'save') {
       if (!manager) return reply(403)
@@ -73,13 +83,13 @@ export const eventHandler: Handler = async event => {
       if (['waba', 'whatsmeow'].includes(next.defaultProvider)) throw fail('channel-unavailable', 409)
       if (next.defaultProvider === 'whapi' && next.enabled && (!loaded.token || !verified)) throw fail('verification-required', 409)
       const batch = db.batch()
-      batch.set(ref, { config: next, whapiVerified: verified, whapiTokenHash: verified ? loaded.tokenHash : '', updatedAt: Timestamp.now(), updatedBy: identity.uid })
+      batch.set(ref, { config: next, whapiVerified: verified, whapiTokenHash: verified ? loaded.tokenHash : '', updatedAt: Timestamp.now(), updatedBy: identity.uid }, { merge: true })
       if (loaded.legacyToken) batch.set(db.collection(C.WHATSAPP_CONFIG).doc('credentials'), { whapiToken: loaded.migrationToken }, { merge: true })
       batch.set(db.collection(C.APP_CONFIG).doc('default'), { whapi: { enabled: next.enabled && next.defaultProvider === 'whapi',
         features: next.features, channelId: next.whapi.channelId, apiToken: FieldValue.delete() } }, { merge: true })
       batch.create(db.collection(C.AUDIT_LOGS).doc(), { action: 'whatsapp-config', operatorId: identity.uid, createdAt: Timestamp.now() })
       await batch.commit()
-      return reply(200, { config: next, whapiCredentials: !!loaded.token, whapiVerified: verified })
+      return reply(200, { ...state(), config: next, whapiVerified: verified })
     }
     if (input.action === 'health') {
       if (!manager) return reply(403)
@@ -149,8 +159,8 @@ export const eventHandler: Handler = async event => {
     if (provider === 'manual') return reply(200, { status: 'opened', taskId: id })
     let submitted
     try { submitted = await submitWhapi(loaded.token, phone, input.text) } catch { submitted = { status: 'unknown', messageId: '' } }
-    await task.update({ ...submitted, updatedAt: Timestamp.now() })
-    return reply(200, { ...submitted, taskId: id })
+    const status = await attachSubmission(db, id, config.whapi.channelId, submitted)
+    return reply(200, { ...submitted, status, taskId: id })
   } catch (error) {
     const safe = error as { status?: number; code?: string }
     return reply(safe.status || 503, { code: safe.status ? safe.code : 'service-unavailable' })

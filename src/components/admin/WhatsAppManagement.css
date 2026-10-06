@@ -13,6 +13,9 @@
 .whatsapp-save { display: flex; justify-content: flex-end; padding: 16px 0; }
 .whatsapp-result { margin-top: 16px; }
 .whatsapp-management .ant-table-wrapper { margin-top: 12px; }
+.whatsapp-management .ant-table .ant-tag { white-space: normal; overflow-wrap: anywhere; }
+.whatsapp-webhook { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.12); }
+.whatsapp-webhook .ant-typography { width: 100%; overflow-wrap: anywhere; }
 @media (max-width: 767px) {
   .whatsapp-management { padding-bottom: 90px; }
   .whatsapp-channel { padding: 12px; }

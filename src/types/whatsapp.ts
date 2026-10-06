@@ -13,6 +13,9 @@ export interface WhatsAppManagementState {
   config: WhatsAppSettings
   whapiCredentials: boolean
   whapiVerified: boolean
+  webhookConfigured?: boolean
+  webhookLastReceivedAt?: string | null
+  webhookUrl?: string | null
 }
 export const defaultWhatsAppSettings: WhatsAppSettings = {
   enabled: false, defaultProvider: 'manual',
