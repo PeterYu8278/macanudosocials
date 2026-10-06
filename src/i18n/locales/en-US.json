@@ -21,6 +21,7 @@
     "credentialsConfigured": "Credentials configured",
     "credentialsMissing": "Credentials missing",
     "verifyConnection": "Verify saved connection",
+    "userId": "User ID",
     "webhook": "Delivery callbacks",
     "webhookReady": "Authentication configured",
     "webhookMissing": "Authentication missing",

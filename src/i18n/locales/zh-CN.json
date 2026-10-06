@@ -21,6 +21,7 @@
     "credentialsConfigured": "凭据已配置",
     "credentialsMissing": "缺少凭据",
     "verifyConnection": "验证已保存连接",
+    "userId": "用户 ID",
     "webhook": "送达回执",
     "webhookReady": "鉴权已配置",
     "webhookMissing": "缺少鉴权配置",

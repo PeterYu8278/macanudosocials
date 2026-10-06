@@ -4,7 +4,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
-import { loadWhatsApp, submitWhapi, submitWhapiButtons, submitWhapiUrlButton } from './_shared/whatsapp'
+import { loadWhatsApp, submitWhapi, submitWhapiButtons, submitWhapiQuickReply, submitWhapiUrlButton } from './_shared/whatsapp'
 import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, registrationTokenHash, startRegistration, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
@@ -32,6 +32,11 @@ async function handleRegistrationMessage(db: any, payload: any) {
   }
   const text = messageText(message)
   const command = text.toLowerCase()
+  const buttonId = typeof message.reply?.buttons_reply?.id === 'string' ? message.reply.buttons_reply.id : ''
+  const restartReferral = /^register_start_([A-Z0-9]{6})$/i.exec(buttonId)?.[1]?.toUpperCase()
+  const registrationCommand = restartReferral
+    ? `/register ${restartReferral}`
+    : command === 'to start again' ? '/register' : text
   const whapiToken = (await loadWhatsApp(db)).token
   if (!whapiToken) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
@@ -47,7 +52,7 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const expired = existing && existing.expiresAtMs <= Date.now()
   if (expired) await ref.set({ step: 'expired', expiredAt: Timestamp.now() }, { merge: true })
 
-  const registerCommand = /^\/register(?:\s+([A-Z0-9]{6}))?$/i.exec(text)
+  const registerCommand = /^\/register(?:\s+([A-Z0-9]{6}))?$/i.exec(registrationCommand)
   if (registerCommand) {
     const referralCode = registerCommand[1]?.toUpperCase()
     if (referralCode && (await db.collection(C.USERS).where('memberId', '==', referralCode).limit(1).get()).empty) {
@@ -74,7 +79,9 @@ async function handleRegistrationMessage(db: any, payload: any) {
   }
   if (command === 'cancel' || command === '/cancel') {
     if (existing) await ref.set({ step: 'cancelled', cancelledAt: Timestamp.now() }, { merge: true })
-    await send('Registration cancelled. To start again, send /register.')
+    const restartId = existing?.referralCode ? `register_start_${existing.referralCode}` : 'register_start'
+    const result = await submitWhapiQuickReply(whapiToken, phone, 'Registration cancelled.', 'To start again', restartId)
+    if (result.status !== 'accepted') await send('Registration cancelled.\n\nReply /register to start again.')
     return
   }
   if (!existing || expired || existing.step !== 'awaiting-final-confirm') return

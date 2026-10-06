@@ -60,7 +60,7 @@ export default function WhatsAppManagement() {
   }
   const health = async () => {
     setBusy(true)
-    try { const result = await whatsappRequest<WhatsAppManagementState>('health'); setState(result); message.success(label('verified')) }
+    try { const result = await whatsappRequest<WhatsAppManagementState>('health'); apply(result); message.success(label('verified')) }
     catch (reason) { showError(reason) } finally { setBusy(false) }
   }
   const loadRecords = async () => {
@@ -112,6 +112,7 @@ export default function WhatsAppManagement() {
             {provider === 'manual' && <Typography.Text type="secondary">{label('manualStatus')}</Typography.Text>}
             {provider === 'whapi' && <>
               <Form.Item name={['whapi', 'channelId']} label="Channel ID"><Input maxLength={200} /></Form.Item>
+              {state.whapiUserId && <Typography.Text type="secondary">{label('userId')}: {state.whapiUserId}</Typography.Text>}
               <Space wrap><Tag>{label(state.whapiCredentials ? 'credentialsConfigured' : 'credentialsMissing')}</Tag>
                 <Button icon={<CheckCircleOutlined />} onClick={health} disabled={!manager || busy || !state.whapiCredentials}>{label('verifyConnection')}</Button></Space>
               <div className="whatsapp-webhook">

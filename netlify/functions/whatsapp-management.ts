@@ -71,10 +71,11 @@ export const eventHandler: Handler = async event => {
       const url = new URL('/.netlify/functions/whapi-webhook', process.env.URL || '')
       if (url.protocol === 'https:') webhookUrl = url.href
     } catch { /* Local Functions may not have a public URL. */ }
-    const state = () => ({ config, whapiCredentials: !!loaded.token, whapiVerified: loaded.verified,
+    const state = (nextConfig = config, nextUserId = webhook?.whapiUserId || null) => ({ config: nextConfig, whapiCredentials: !!loaded.token, whapiVerified: loaded.verified,
       webhookConfigured: (process.env.WHAPI_WEBHOOK_SECRET?.length || 0) >= 32,
       webhookUrl,
-      webhookLastReceivedAt: webhook?.whapiWebhookAt?.toDate?.().toISOString() || null })
+      webhookLastReceivedAt: webhook?.whapiWebhookAt?.toDate?.().toISOString() || null,
+      whapiUserId: typeof nextUserId === 'string' ? nextUserId : null })
     if (input.action === 'load') return reply(200, state())
     if (input.action === 'save') {
       if (!manager) return reply(403)
@@ -101,12 +102,16 @@ export const eventHandler: Handler = async event => {
       }
       const health = await response.json()
       const operational = (health.status || health.health?.status)?.text === 'AUTH'
-      if (!operational || (config.whapi.channelId && health.channel_id && health.channel_id !== config.whapi.channelId)) {
+      const channelId = typeof health.channel_id === 'string' ? health.channel_id.trim()
+        : typeof health.channel?.id === 'string' ? health.channel.id.trim() : ''
+      const userId = typeof health.user?.id === 'string' || typeof health.user?.id === 'number' ? String(health.user.id) : ''
+      if (!operational || !channelId || !userId || (config.whapi.channelId && channelId !== config.whapi.channelId)) {
         await ref.set({ whapiVerified: false }, { merge: true })
         throw fail('connection-failed', 503)
       }
-      await ref.set({ config, whapiVerified: true, whapiTokenHash: loaded.tokenHash, verifiedAt: Timestamp.now() }, { merge: true })
-      return reply(200, { ...state(), whapiVerified: true })
+      const nextConfig = { ...config, whapi: { ...config.whapi, channelId } }
+      await ref.set({ config: nextConfig, whapiUserId: userId, whapiVerified: true, whapiTokenHash: loaded.tokenHash, verifiedAt: Timestamp.now() }, { merge: true })
+      return reply(200, { ...state(nextConfig, userId), whapiVerified: true })
     }
     if (input.action === 'records') {
       const records = await db.collection(C.WHATSAPP_TASKS).orderBy('createdAt', 'desc').limit(50).get()

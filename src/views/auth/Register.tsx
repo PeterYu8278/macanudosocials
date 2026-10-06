@@ -11,6 +11,7 @@ import { getAppConfig } from '../../services/firebase/appConfig'
 import type { AppConfig } from '../../types'
 
 const { Text } = Typography
+const WHATSAPP_USER_ID = '601157288278'
 
 const Register: React.FC = () => {
   const { message } = App.useApp()
@@ -76,15 +77,14 @@ const Register: React.FC = () => {
   // 注册页面不应该在加载时就重定向（让用户可以访问注册页面）
   // 重定向只在注册成功后的 onFinish 中处理
 
-  // 自动填充 URL 中的引荐码
+  // Referral links start registration in the verified business WhatsApp chat.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const refCode = params.get('ref');
-    if (refCode) {
-      form.setFieldsValue({ referralCode: refCode.toUpperCase() });
-      message.info(t('auth.referralCodeAutoFilled'));
-    }
-  }, [location, form]);
+    const refCode = params.get('ref')?.trim().toUpperCase() || '';
+    if (!/^[A-Z0-9]{6}$/.test(refCode)) return;
+    const command = encodeURIComponent(`/register ${refCode}`);
+    window.location.replace(`https://wa.me/${WHATSAPP_USER_ID}?text=${command}`);
+  }, [location.search]);
 
   const onFinish = async (values: { 
     email: string;  // ✅ 邮箱改为必填
