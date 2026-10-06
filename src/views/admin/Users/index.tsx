@@ -1658,22 +1658,19 @@ const AdminUsers: React.FC = () => {
                 if (!token) throw new Error(t('usersAdmin.createAccountFailed'))
                 const response = await fetch('/.netlify/functions/create-member', {
                   method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-                  body: JSON.stringify({ userId: editing.id, password: values.initialPassword,
+                  body: JSON.stringify({ userId: editing.id,
                     email: normalizeMemberEmail(values.email || ''), phone: normalizedPhone }),
                 })
                 const result = await response.json()
                 if (!response.ok || !result.success) {
-                  if (result.code === 'initial-password-required') {
-                    form.setFields([{ name: 'initialPassword', errors: [t('usersAdmin.missingAccountPassword')] }])
-                    return
-                  }
                   const key = result.code === 'identity-required' ? 'usersAdmin.accountIdentityRequired'
                     : result.code === 'identity-conflict' ? 'usersAdmin.accountIdentityConflict'
                     : result.code === 'email-in-use' ? 'usersAdmin.emailInUseError'
                     : result.code === 'phone-in-use' ? 'usersAdmin.phoneInUseError' : 'usersAdmin.createAccountFailed'
                   throw new Error(t(key))
                 }
-                form.setFieldValue('initialPassword', undefined)
+                if (result.passwordSetupEmail === 'sent') message.success(t('usersAdmin.passwordSetupSent'))
+                if (result.passwordSetupEmail === 'failed') message.warning(t('usersAdmin.passwordSetupFailed'))
                 const email = normalizeMemberEmail(values.email || '')
                 if (email !== normalizeMemberEmail(editing.email || '') && email !== normalizeMemberEmail(result.email || editing.email || '')) {
                   if (!email) throw new Error(t('profile.emailSync.required'))
@@ -1709,7 +1706,6 @@ const AdminUsers: React.FC = () => {
                   body: JSON.stringify({
                   displayName: values.displayName,
                   email: normalizeMemberEmail(values.email || ''),
-                  password: values.initialPassword,
                   phone: normalizedPhone,
                   role: values.role,
                   level: values.level,
@@ -1725,7 +1721,8 @@ const AdminUsers: React.FC = () => {
                   throw new Error(t(errorKey))
                 }
                 message.success(t('usersAdmin.created'))
-                form.setFieldValue('initialPassword', undefined)
+                if (result.passwordSetupEmail === 'sent') message.success(t('usersAdmin.passwordSetupSent'))
+                if (result.passwordSetupEmail === 'failed') message.warning(t('usersAdmin.passwordSetupFailed'))
               }
               await refreshUsers()
               setEditor(previous => ({ ...previous, open: false }))
@@ -1800,12 +1797,6 @@ const AdminUsers: React.FC = () => {
             validateDebounce={500}
           >
             <Input placeholder={t('auth.email')} />
-          </Form.Item>
-
-          <Form.Item name="initialPassword" label={t(editing ? 'usersAdmin.initialPasswordExisting' : 'usersAdmin.initialPassword')}
-            rules={[{ required: !editing, message: t('auth.passwordRequired') },
-              { min: 6, max: 128, message: t('usersAdmin.initialPasswordLength') }]}>
-            <Input.Password autoComplete="new-password" />
           </Form.Item>
 
           {editing && (emailChanged || ['requested', 'awaiting-verification', 'sync-pending'].includes(editing.emailChange?.status || '') || editing.emailAuth?.verified === false) && (

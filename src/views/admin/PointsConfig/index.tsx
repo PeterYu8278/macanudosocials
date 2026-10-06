@@ -1,7 +1,7 @@
 // 积分配置管理页面
 import React, { useState, useEffect } from 'react';
 import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
-import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal } from 'antd';
+import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal, Segmented, Grid, Alert } from 'antd';
 import { SaveOutlined, ReloadOutlined, HistoryOutlined, SettingOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
 import { getPointsConfig, updatePointsConfig, getDefaultPointsConfig } from '../../../services/firebase/pointsConfig';
 import { getAllPointsRecords } from '../../../services/firebase/pointsRecords';
@@ -18,6 +18,9 @@ import { ReloadVerification } from '../../../components/admin/ReloadVerification
 import dayjs from 'dayjs';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { formatPointsRecordDescription } from '../../../utils/pointsRecordDisplay';
+import { getMembershipFeeDisplayStatus, type MembershipFeeDisplayStatus } from '../../../utils/membershipFeeDisplay';
+import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections';
+import { toDateOrNull } from '../../../services/firebase/core/sanitize';
 
 const { Title, Text } = Typography;
 
@@ -29,7 +32,10 @@ const PointsConfigPage: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState<'records' | 'reload' | 'membershipFees'>('reload');
   const [processingFees, setProcessingFees] = useState(false);
-  const [membershipFeeStatusFilter, setMembershipFeeStatusFilter] = useState<'all' | 'pending' | 'paid' | 'failed' | 'cancelled'>('all');
+  const [membershipFeeStatusFilter, setMembershipFeeStatusFilter] = useState<MembershipFeeDisplayStatus | 'all'>('all');
+  const [membershipFeeView, setMembershipFeeView] = useState<'paid' | 'upcoming' | 'all'>('paid');
+  const [linkedPointsRecord, setLinkedPointsRecord] = useState<PointsRecord | null>(null);
+  const [loadingLinkedRecord, setLoadingLinkedRecord] = useState<string | null>(null);
   const [creatingFeeRecord, setCreatingFeeRecord] = useState(false);
   const [feeRecordForm] = Form.useForm();
 
@@ -38,9 +44,9 @@ const PointsConfigPage: React.FC = () => {
     [activeTab]
   );
 
-  const { data: membershipFeeRecords = [], loading: loadingMembershipFeeRecords, refresh: refreshMembershipFeeRecords } = useFirestoreQuery(
-    () => getAllMembershipFeeRecords(membershipFeeStatusFilter === 'all' ? undefined : membershipFeeStatusFilter),
-    [activeTab, membershipFeeStatusFilter]
+  const { data: membershipFeeRecords = [], loading: loadingMembershipFeeRecords, error: membershipFeeLoadError, refresh: refreshMembershipFeeRecords } = useFirestoreQuery(
+    () => getAllMembershipFeeRecords(),
+    [activeTab]
   );
 
   const { data: users = [] } = useFirestoreQuery(
@@ -64,7 +70,37 @@ const PointsConfigPage: React.FC = () => {
 
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
   const { t, i18n } = useTranslation();
-  const isMobile = typeof window !== 'undefined' ? window.matchMedia('(max-width: 768px)').matches : false;
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
+  const feeNow = new Date();
+  const visibleMembershipFeeRecords = membershipFeeRecords.filter(record => {
+    if (membershipFeeView === 'paid' && record.status !== 'paid') return false;
+    if (membershipFeeView === 'upcoming' && record.status !== 'pending') return false;
+    return membershipFeeStatusFilter === 'all' || getMembershipFeeDisplayStatus(record, feeNow) === membershipFeeStatusFilter;
+  });
+  const feeStatusInfo = (record: MembershipFeeRecord) => {
+    const status = getMembershipFeeDisplayStatus(record, feeNow);
+    const colors = { scheduled: 'blue', pending: 'orange', insufficient: 'red', paid: 'green', failed: 'red', cancelled: 'default' };
+    return { color: colors[status], text: t(`pointsConfig.membershipFee.${status}`) };
+  };
+  const formatFeeDate = (value: unknown) => {
+    const date = toDateOrNull(value);
+    return date ? dayjs(date).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm') : t('pointsConfig.membershipFee.notRecorded');
+  };
+  const openFeePointsRecord = async (record: MembershipFeeRecord) => {
+    if (!record.pointsRecordId) return;
+    setLoadingLinkedRecord(record.id);
+    try {
+      const point = await getDocument<PointsRecord>(GLOBAL_COLLECTIONS.POINTS_RECORDS, record.pointsRecordId);
+      if (!point || point.userId !== record.userId || point.type !== 'spend' || point.source !== 'membership_fee'
+        || point.relatedId !== record.id || Number(point.amount) !== Number(record.amount)) {
+        message.error(t('pointsConfig.membershipFee.linkMismatch'));
+        return;
+      }
+      setLinkedPointsRecord(point);
+    } catch { message.error(t('pointsConfig.membershipFee.loadFailed')); }
+    finally { setLoadingLinkedRecord(null); }
+  };
   const [eventsAdminFeatureVisible, setEventsAdminFeatureVisible] = useState<boolean>(true);
 
   // 检查活动管理功能是否可见（developer 不受限制）
@@ -899,13 +935,22 @@ const PointsConfigPage: React.FC = () => {
 
         {activeTab === 'membershipFees' && (
           <div>
-            <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {membershipFeeLoadError && <Alert type="error" showIcon message={t('pointsConfig.membershipFee.loadFailed')} style={{ marginBottom: 16 }} />}
+            <div style={{ marginBottom: 16, display: 'flex', flexWrap: 'wrap', gap: 12, alignItems: 'center' }}>
+              <Segmented value={membershipFeeView} onChange={value => { setMembershipFeeView(value as 'paid' | 'upcoming' | 'all'); setMembershipFeeStatusFilter('all'); }}
+                options={[
+                  { value: 'paid', label: t('pointsConfig.membershipFee.paidFees') },
+                  { value: 'upcoming', label: t('pointsConfig.membershipFee.upcomingFees') },
+                  { value: 'all', label: t('pointsConfig.membershipFee.all') },
+                ]} />
               <Select
                 value={membershipFeeStatusFilter}
-                onChange={(value: 'all' | 'pending' | 'paid' | 'failed' | 'cancelled') => setMembershipFeeStatusFilter(value)}
-                style={{ width: 150 }}
+                onChange={setMembershipFeeStatusFilter}
+                style={{ width: 150, display: membershipFeeView === 'paid' ? 'none' : undefined }}
                 options={[
                   { label: t('pointsConfig.membershipFee.all'), value: 'all' },
+                  { label: t('pointsConfig.membershipFee.scheduled'), value: 'scheduled' },
+                  { label: t('pointsConfig.membershipFee.insufficient'), value: 'insufficient' },
                   { label: t('pointsConfig.membershipFee.pending'), value: 'pending' },
                   { label: t('pointsConfig.membershipFee.paid'), value: 'paid' },
                   { label: t('pointsConfig.membershipFee.failed'), value: 'failed' },
@@ -916,6 +961,7 @@ const PointsConfigPage: React.FC = () => {
               <Button
                   onClick={refreshMembershipFeeRecords}
                   loading={loadingMembershipFeeRecords}
+                  icon={<ReloadOutlined />}
                   style={{
                     background: 'rgba(255, 255, 255, 0.1)',
                     border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -970,10 +1016,10 @@ const PointsConfigPage: React.FC = () => {
                           title: t('pointsConfig.membershipFee.amount'),
                           dataIndex: 'amount',
                           key: 'amount',
-                          width: 120,
-                          render: (amount: number) => (
-                            <Text strong style={{ color: '#ff4d4f' }}>
-                              -{amount} {t('pointsConfig.units.points')}
+                          width: 190,
+                          render: (amount: number, record: MembershipFeeRecord) => (
+                            <Text strong style={{ color: record.status === 'paid' ? '#ff4d4f' : '#e5c46c' }}>
+                              {record.status === 'paid' ? `-${amount} ${t('pointsConfig.units.points')}` : t('pointsConfig.membershipFee.expectedAmount', { amount })}
                             </Text>
                           )
                         },
@@ -982,28 +1028,22 @@ const PointsConfigPage: React.FC = () => {
                           dataIndex: 'dueDate',
                           key: 'dueDate',
                           width: 180,
-                          render: (date: Date) => dayjs(date).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')
+                          render: (date: Date) => formatFeeDate(date)
                         },
                         {
                           title: t('pointsConfig.membershipFee.deductedAt'),
                           dataIndex: 'deductedAt',
                           key: 'deductedAt',
                           width: 180,
-                          render: (date: Date | undefined) => date ? dayjs(date).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm') : '-'
+                          render: (date: Date | undefined, record: MembershipFeeRecord) => date ? formatFeeDate(date) : t(record.status === 'paid' ? 'pointsConfig.membershipFee.notRecorded' : 'pointsConfig.membershipFee.notDeducted')
                         },
                         {
                           title: t('pointsConfig.membershipFee.status'),
                           dataIndex: 'status',
                           key: 'status',
                           width: 100,
-                          render: (status: string) => {
-                            const statusMap: Record<string, { color: string; text: string }> = {
-                              pending: { color: 'orange', text: t('pointsConfig.membershipFee.pending') },
-                              paid: { color: 'green', text: t('pointsConfig.membershipFee.paid') },
-                              failed: { color: 'red', text: t('pointsConfig.membershipFee.failed') },
-                              cancelled: { color: 'default', text: t('pointsConfig.membershipFee.cancelled') }
-                            };
-                            const statusInfo = statusMap[status] || { color: 'default', text: status };
+                          render: (_status: string, record: MembershipFeeRecord) => {
+                            const statusInfo = feeStatusInfo(record);
                             return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
                           }
                         },
@@ -1013,9 +1053,16 @@ const PointsConfigPage: React.FC = () => {
                           key: 'createdAt',
                           width: 180,
                           render: (date: Date) => dayjs(date).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')
+                        },
+                        {
+                          title: t('pointsConfig.tabs.records'), key: 'pointsRecord', width: 140,
+                          render: (_value: unknown, record: MembershipFeeRecord) => record.status === 'paid' && record.pointsRecordId
+                            ? <Button type="link" loading={loadingLinkedRecord === record.id} onClick={() => openFeePointsRecord(record)}>{t('pointsConfig.membershipFee.viewPoints')}</Button>
+                            : record.status === 'paid' ? t('pointsConfig.membershipFee.notRecorded') : null,
                         }
                       ]}
-                      dataSource={membershipFeeRecords}
+                      dataSource={visibleMembershipFeeRecords}
+                      scroll={{ x: 1400 }}
                       rowKey="id"
                       loading={loadingMembershipFeeRecords}
                       pagination={{
@@ -1037,25 +1084,13 @@ const PointsConfigPage: React.FC = () => {
                   <div style={{ textAlign: 'center', padding: '40px 20px', color: 'rgba(255, 255, 255, 0.6)' }}>
                     <Spin />
                   </div>
-                ) : membershipFeeRecords.length === 0 ? (
+                ) : visibleMembershipFeeRecords.length === 0 ? (
                   <div style={{ color: 'rgba(255, 255, 255, 0.6)', textAlign: 'center', padding: '24px 0' }}>
                     {t('pointsConfig.membershipFee.noRecords')}
                   </div>
                 ) : (
-                  membershipFeeRecords.map((record) => {
-                    const statusMap: Record<string, { color: string; text: string }> = {
-                      pending: { color: '#fb923c', text: t('pointsConfig.membershipFee.pending') },
-                      paid: { color: '#34d399', text: t('pointsConfig.membershipFee.paid') },
-                      failed: { color: '#f87171', text: t('pointsConfig.membershipFee.failed') },
-                      cancelled: { color: '#9ca3af', text: t('pointsConfig.membershipFee.cancelled') }
-                    };
-                    const statusInfo = statusMap[record.status] || { color: '#9ca3af', text: record.status };
-
-                    const dueDate = record.dueDate instanceof Date
-                      ? record.dueDate
-                      : (record.dueDate as any)?.toDate
-                        ? (record.dueDate as any).toDate()
-                        : new Date(record.dueDate);
+                  visibleMembershipFeeRecords.map((record) => {
+                    const statusInfo = feeStatusInfo(record);
 
                     const deductedDate = record.deductedAt instanceof Date
                       ? record.deductedAt
@@ -1076,14 +1111,14 @@ const PointsConfigPage: React.FC = () => {
                         key={record.id}
                         style={{
                           border: '1px solid rgba(244,175,37,0.2)',
-                          borderRadius: 12,
+                          borderRadius: 8,
                           padding: 12,
                           background: 'rgba(34,28,16,0.5)',
                           backdropFilter: 'blur(10px)'
                         }}
                       >
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                          <div style={{ flex: 1 }}>
+                          <div style={{ flex: 1, minWidth: 0, overflowWrap: 'anywhere' }}>
                             <div style={{ fontSize: 13, fontWeight: 600, color: 'rgba(255,255,255,0.85)', marginBottom: 4 }}>
                               {record.userName || record.userId.substring(0, 20)}
                             </div>
@@ -1091,44 +1126,35 @@ const PointsConfigPage: React.FC = () => {
                               {memberPhones?.[record.userId] || '-'}
                             </div>
                             <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
-                              {t('pointsConfig.membershipFee.due')}: {dayjs(dueDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}
+                              {t('pointsConfig.membershipFee.due')}: {formatFeeDate(record.dueDate)}
                             </div>
-                            {deductedDate && (
+                            {(
                               <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.6)', marginBottom: 4 }}>
-                                {t('pointsConfig.membershipFee.deducted')}: {dayjs(deductedDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}
+                                {t('pointsConfig.membershipFee.deducted')}: {deductedDate ? formatFeeDate(deductedDate) : t(record.status === 'paid' ? 'pointsConfig.membershipFee.notRecorded' : 'pointsConfig.membershipFee.notDeducted')}
                               </div>
                             )}
                             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
                               {t('pointsConfig.membershipFee.created')}: {dayjs(createdDate).format(i18n.language === 'en-US' ? 'D MMM, YYYY HH:mm' : 'YYYY-MM-DD HH:mm')}
                             </div>
                           </div>
-                          <div style={{ textAlign: 'right', marginLeft: 12 }}>
+                          <div style={{ textAlign: 'right', marginLeft: 12, maxWidth: '45%', overflowWrap: 'anywhere' }}>
                             <div style={{
                               fontSize: 18,
                               fontWeight: 700,
-                              color: '#ff4d4f',
+                              color: record.status === 'paid' ? '#ff4d4f' : '#e5c46c',
                               marginBottom: 4
                             }}>
-                              -{record.amount} {t('pointsConfig.units.points')}
+                              {record.status === 'paid' ? `-${record.amount} ${t('pointsConfig.units.points')}` : t('pointsConfig.membershipFee.expectedAmount', { amount: record.amount })}
                             </div>
-                            <span style={{
-                              fontSize: 11,
-                              padding: '2px 8px',
-                              borderRadius: 4,
-                              background: statusInfo.color === '#fb923c' ? 'rgba(251,146,60,0.2)' :
-                                statusInfo.color === '#34d399' ? 'rgba(52,211,153,0.2)' :
-                                statusInfo.color === '#f87171' ? 'rgba(248,113,113,0.2)' :
-                                'rgba(156,163,175,0.2)',
-                              color: statusInfo.color,
-                              fontWeight: 600
-                            }}>
+                            <Tag color={statusInfo.color}>
                               {statusInfo.text}
-                            </span>
+                            </Tag>
                             <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 4 }}>
                               {record.renewalType === 'initial' ? t('pointsConfig.membershipFee.initial') : t('pointsConfig.membershipFee.renewal')}
                             </div>
                           </div>
                         </div>
+                        {record.status === 'paid' && record.pointsRecordId && <Button type="link" style={{ padding: 0 }} loading={loadingLinkedRecord === record.id} onClick={() => openFeePointsRecord(record)}>{t('pointsConfig.membershipFee.viewPoints')}</Button>}
                       </div>
                     );
                   })
@@ -1139,6 +1165,15 @@ const PointsConfigPage: React.FC = () => {
         )}
       </div>
 
+      <Modal open={!!linkedPointsRecord} title={t('pointsConfig.membershipFee.viewPoints')} footer={null} onCancel={() => setLinkedPointsRecord(null)}>
+        {linkedPointsRecord && <Space direction="vertical" style={{ width: '100%', overflowWrap: 'anywhere' }}>
+          <Text strong>{linkedPointsRecord.userName || linkedPointsRecord.userId}</Text>
+          <Text>{formatFeeDate(linkedPointsRecord.createdAt)}</Text>
+          <Text type="danger">-{linkedPointsRecord.amount} {t('pointsConfig.units.points')}</Text>
+          <Text>{formatPointsRecordDescription(linkedPointsRecord, t)}</Text>
+          <Text>{t('pointsConfig.membershipFee.pointsRecordId')}: {linkedPointsRecord.id}</Text>
+        </Space>}
+      </Modal>
       {/* 创建年费记录Modal */}
       <Modal
         title={<span style={{ color: '#FFFFFF' }}>{t('pointsConfig.membershipFee.createRecord')}</span>}

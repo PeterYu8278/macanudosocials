@@ -782,6 +782,7 @@ export interface MembershipFeeRecord {
   dueDate: Date;              // 应扣费日期（基于开通/续费日期+1年）
   deductedAt?: Date;          // 实际扣费时间
   pointsRecordId?: string;    // 关联的积分记录ID
+  lastAttemptResult?: 'insufficient_points' | 'paid';
   storeId?: string;           // 关联的门店ID
   
   // 状态

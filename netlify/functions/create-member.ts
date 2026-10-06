@@ -2,11 +2,12 @@ import type { Handler } from '@netlify/functions'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { getFirestore, Timestamp } from 'firebase-admin/firestore'
-import { randomInt } from 'node:crypto'
+import { randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { MemberIdentityError, resolveMemberAccount, authorizeMemberChange } from './_shared/memberIdentity'
 import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/memberIdentityLock'
+import { sendMemberPasswordSetup } from './_shared/memberPasswordSetup'
 
 const ranks: Record<string, number> = { guest: 0, member: 1, vip: 2, storeAdmin: 3, admin: 4, superAdmin: 5, developer: 6 }
 const reply = (statusCode: number, code: string, extra = {}) => ({
@@ -26,7 +27,6 @@ export const handler: Handler = async event => {
   const name = typeof input?.displayName === 'string' ? input.displayName.trim() : ''
   const phone = typeof input?.phone === 'string' ? normalizePhoneNumber(input.phone) : null
   if (!ensureExisting && (!name || name.length > 128 || !phone || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
-    || typeof input.password !== 'string' || input.password.length < 6 || input.password.length > 128
     || !Object.hasOwn(ranks, input.role) || !['bronze', 'silver', 'gold', 'platinum'].includes(input.level))) {
     return reply(400, 'invalid-request')
   }
@@ -77,7 +77,6 @@ export const handler: Handler = async event => {
       const storedEmail = email || (typeof member.email === 'string' ? member.email.trim().toLowerCase() : '')
       const storedPhone = phone || normalizePhoneNumber(member.profile?.phone || member.phone || '')
       if (!storedEmail || storedEmail.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(storedEmail) || !storedPhone) return reply(400, 'identity-required')
-      if (typeof input.password !== 'string' || input.password.length < 6 || input.password.length > 128) return reply(400, 'initial-password-required')
       // A missing explicit mapping needs investigation rather than a second identity.
       if (member.authUid && member.authUid !== input.userId) return reply(409, 'identity-conflict')
       unlock = await lockMemberIdentity(db, [`uid:${input.userId}`, `email:${storedEmail}`, `phone:${storedPhone}`])
@@ -86,7 +85,7 @@ export const handler: Handler = async event => {
         if (matches.docs.some(document => document.id !== input.userId)) return reply(409, code)
       }
       const account = await accountAuth.createUser({ uid: input.userId, email: storedEmail, phoneNumber: storedPhone,
-        password: input.password, displayName: member.displayName || storedEmail, emailVerified: false })
+        password: randomBytes(32).toString('base64url'), displayName: member.displayName || storedEmail, emailVerified: false })
       uid = account.uid
       const now = Timestamp.now()
       await db.runTransaction(async transaction => {
@@ -98,7 +97,8 @@ export const handler: Handler = async event => {
           action: 'create-member-auth', userId: account.uid, operatorId: identity.uid, createdAt: now,
         })
       })
-      return reply(200, 'member-created', { uid: account.uid, email: storedEmail, phone: storedPhone })
+      const passwordSetupEmail = await sendMemberPasswordSetup(storedEmail)
+      return reply(200, 'member-created', { uid: account.uid, email: storedEmail, phone: storedPhone, passwordSetupEmail })
     }
     if (!operator || !['admin', 'superAdmin', 'developer'].includes(operator.role)
       || ranks[input.role] >= ranks[operator.role]) return reply(403, 'forbidden')
@@ -113,7 +113,7 @@ export const handler: Handler = async event => {
     for (const [field, value, code] of [['email', email, 'email-in-use'], ['profile.phone', phone, 'phone-in-use'], ['phone', phone, 'phone-in-use']] as const) {
       if (!(await users.where(field, '==', value).limit(1).get()).empty) return reply(409, code)
     }
-    const account = await accountAuth.createUser({ email, password: input.password, phoneNumber: phone, displayName: name, emailVerified: false })
+    const account = await accountAuth.createUser({ email, password: randomBytes(32).toString('base64url'), phoneNumber: phone, displayName: name, emailVerified: false })
     uid = account.uid
     const now = Timestamp.now()
     const memberId = await db.runTransaction(async transaction => {
@@ -138,7 +138,8 @@ export const handler: Handler = async event => {
       })
       return candidate
     })
-    return reply(200, 'member-created', { uid: account.uid, memberId })
+    const passwordSetupEmail = await sendMemberPasswordSetup(email)
+    return reply(200, 'member-created', { uid: account.uid, memberId, passwordSetupEmail })
   } catch (error) {
     if (uid) {
       // A timed-out commit may have succeeded. Never delete Auth unless profile absence is confirmed.
