@@ -87,7 +87,9 @@ async function handleRegistrationMessage(db: any, payload: any) {
       : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
   } catch (error) {
     const code = (error as { code?: string })?.code
-    if (code === 'email-in-use' || code === 'phone-in-use') await send('该 Email 或电话号码已经注册，请使用其他资料。')
+    if (code === 'email-and-phone-in-use') await send('该 Email 和电话号码都已经注册，请使用其他 Email 和电话号码。')
+    else if (code === 'email-in-use') await send('该 Email 已经注册，请使用其他 Email。')
+    else if (code === 'phone-in-use') await send('该电话号码已经注册，请使用其他电话号码。')
     else await send('注册暂时无法完成，请稍后再试或联系管理员。')
   }
 }

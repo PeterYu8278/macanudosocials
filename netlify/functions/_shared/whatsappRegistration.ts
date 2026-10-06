@@ -4,7 +4,7 @@ import { randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './memberIdentity'
-import { assertUniqueMemberIdentity, lockMemberIdentity } from './memberIdentityLock'
+import { lockMemberIdentity } from './memberIdentityLock'
 import { sendMemberPasswordSetup } from './memberPasswordSetup'
 
 export type RegistrationStep = 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
@@ -58,13 +58,28 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
   const unlock = await lockMemberIdentity(db, [`email:${session.email}`, `phone:${session.phone}`])
   let uid: string | undefined
   try {
-    await assertUniqueMemberIdentity(db, session.email, session.phone)
+    const users = db.collection(C.USERS)
+    const [emailProfiles, phoneProfiles, legacyPhoneProfiles] = await Promise.all([
+      users.where('email', '==', session.email).limit(1).get(),
+      users.where('profile.phone', '==', session.phone).limit(1).get(),
+      users.where('phone', '==', session.phone).limit(1).get(),
+    ])
+    let emailInUse = !emailProfiles.empty
+    let phoneInUse = !phoneProfiles.empty || !legacyPhoneProfiles.empty
+    try { await getAuth().getUserByEmail(session.email); emailInUse = true } catch (error) {
+      if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+    }
+    try { await getAuth().getUserByPhoneNumber(session.phone); phoneInUse = true } catch (error) {
+      if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+    }
+    if (emailInUse && phoneInUse) throw new MemberIdentityError('email-and-phone-in-use', 409)
+    if (emailInUse) throw new MemberIdentityError('email-in-use', 409)
+    if (phoneInUse) throw new MemberIdentityError('phone-in-use', 409)
     const account = await getAuth().createUser({
       email: session.email, phoneNumber: session.phone,
       displayName: session.displayName, password: randomBytes(32).toString('base64url'), emailVerified: false,
     })
     uid = account.uid
-    const users = db.collection(C.USERS)
     const now = Timestamp.now()
     const memberId = await db.runTransaction(async transaction => {
       let candidate = ''
