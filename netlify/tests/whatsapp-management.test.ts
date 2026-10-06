@@ -123,6 +123,25 @@ describe('WhatsApp management gateway', () => {
     expect((await request('send', { ...send, userId: 'recipient' })).statusCode).toBe(403)
     expect(m.fetch).not.toHaveBeenCalled()
   })
+  it.each([
+    ['event_reminder', 'eventReminder'], ['vip_expiry', 'vipExpiry'], ['password_reset', 'passwordReset'],
+  ])('enforces the %s switch before creating or sending a task', async (kind, feature) => {
+    m.documents.set(`${C.USERS}/recipient`, { profile: { phone: send.phone }, preferences: { whatsapp: true } })
+    expect((await request('send', { ...send, userId: 'recipient', kind })).statusCode).toBe(409)
+    expect(m.fetch).not.toHaveBeenCalled()
+    expect([...m.documents.keys()].some(path => path.startsWith(`${C.WHATSAPP_TASKS}/`))).toBe(false)
+    m.documents.set(`${C.WHATSAPP_CONFIG}/settings`, verifiedState({ ...config(), features: { ...config().features, [feature]: true } }))
+    expect((await request('send', { ...send, userId: 'recipient', kind })).statusCode).toBe(200)
+    await request('send', { ...send, userId: 'recipient', kind })
+    expect(m.fetch).toHaveBeenCalledTimes(1)
+  })
+  it('does not silently route automated notifications to manual sending', async () => {
+    m.documents.set(`${C.WHATSAPP_CONFIG}/settings`, verifiedState({ ...config(), defaultProvider: 'manual' }))
+    const response = await request('send', { ...send, userId: 'recipient', kind: 'event_reminder' })
+    expect(response.statusCode).toBe(409)
+    expect(JSON.parse(response.body).code).toBe('manual-action-required')
+    expect(m.fetch).not.toHaveBeenCalled()
+  })
   it('does not mark QR/disconnected health responses as verified', async () => {
     m.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: { text: 'QR' } }) })
     expect((await request('health')).statusCode).toBe(503)

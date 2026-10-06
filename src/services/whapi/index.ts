@@ -23,8 +23,9 @@ export const sendTextMessage = async (
     const result = await whatsappRequest(userId ? 'send' : 'test', {
       phone: to, text, userId, kind, requestId: key,
     });
-    return { success: result.status === 'accepted', messageId: result.messageId || undefined,
-      ...(result.status !== 'accepted' ? { error: result.status } : {}) };
+    const success = ['accepted', 'sent', 'delivered', 'read'].includes(result.status);
+    return { success, messageId: result.messageId || undefined,
+      ...(!success ? { error: result.status } : {}) };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : 'request-failed' };
   }

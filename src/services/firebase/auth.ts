@@ -724,29 +724,8 @@ export const createMissingUserDocument = async (_firebaseUser: FirebaseUser): Pr
 // 管理员触发密码重置邮件
 export const sendPasswordResetEmailFor = async (email: string) => {
   try {
-    const provider = await sendRecoveryEmail(email)
-    if (provider === 'resend') return { success: true }
-
-    // Anonymous recovery must not query protected member records.
-    if (!auth.currentUser) return { success: true }
-    
-    // 尝试通过 WhatsApp 发送重置密码消息（异步，不阻塞主流程）
-    try {
-      // 查找用户
-      const user = await findUserByEmail(email);
-      if (user?.id) {
-        // 生成重置链接（Firebase 会在邮件中包含）
-        const resetLink = `${window.location.origin}/reset-password`;
-        const { sendPasswordResetToUser } = await import('../whapi/integrations');
-        sendPasswordResetToUser(user.id, resetLink).catch(error => {
-          console.warn('[sendPasswordResetEmailFor] 发送WhatsApp重置密码消息失败:', error);
-        });
-      }
-    } catch (whapiError) {
-      // 静默失败，不影响主流程
-      console.warn('[sendPasswordResetEmailFor] Whapi 集成失败:', whapiError);
-    }
-    
+    // WhatsApp recovery has its own server endpoint that generates a real Auth action link.
+    await sendRecoveryEmail(email)
     return { success: true }
   } catch (error) {
     return { success: false, error: error as Error }
