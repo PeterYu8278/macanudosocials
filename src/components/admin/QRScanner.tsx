@@ -432,24 +432,29 @@ export const QRScannerView: React.FC<QRScannerViewProps> = ({ active, onSuccess,
 
   // 解析QR码内容，提取memberId
   const parseQRCode = (qrData: string): string | null => {
+    const normalizedData = qrData.trim();
+    if (!normalizedData) return null;
+
     try {
       // 尝试解析JSON格式
-      const parsed = JSON.parse(qrData);
+      const parsed = JSON.parse(normalizedData);
       if (parsed.memberId) {
-        return parsed.memberId;
+        return String(parsed.memberId).trim().toUpperCase();
       }
     } catch {
-      // 如果不是JSON，尝试从URL中提取ref参数
-      if (qrData.includes('?ref=')) {
-        const url = new URL(qrData);
-        return url.searchParams.get('ref');
-      }
-      // 如果直接是memberId字符串
-      if (qrData && qrData.length > 0) {
-        return qrData;
-      }
+      // 非 JSON 内容继续按 URL 或纯会员编号处理。
     }
-    return null;
+
+    // Referral QR 使用 /?open=register&ref=MEMBER_ID，参数顺序不能假定。
+    try {
+      const url = new URL(normalizedData);
+      const referralCode = url.searchParams.get('ref')?.trim();
+      if (referralCode) return referralCode.toUpperCase();
+    } catch {
+      // 不是 URL 时，按纯会员编号处理。
+    }
+
+    return normalizedData.toUpperCase();
   };
 
 
