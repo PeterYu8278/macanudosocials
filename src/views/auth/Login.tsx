@@ -678,7 +678,7 @@ const Login: React.FC = () => {
                 {t('auth.noAccount')}{' '}
                 <Button
                   type="link"
-                  onClick={() => navigate('/register')}
+                  onClick={() => navigate('/?open=register')}
                   style={{
                     background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
                     WebkitBackgroundClip: 'text',

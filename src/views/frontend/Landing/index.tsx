@@ -29,6 +29,7 @@ import { getAppConfig } from '../../../services/firebase/appConfig'
 import type { Brand, Event as CigarEvent, AppConfig } from '../../../types'
 import { identifyInputType, normalizePhoneNumber, isValidEmail } from '../../../utils/phoneNormalization'
 import ResetPasswordModal from '../../../components/common/ResetPasswordModal'
+import RegisterForm from '../../../components/auth/RegisterForm'
 
 const { Title, Paragraph, Text } = Typography
 
@@ -75,12 +76,13 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
       return data.slice(0, 3)
     }
   )
+  const openRegisterFromUrl = new URLSearchParams(window.location.search).get('open') === 'register'
   const [scrolled, setScrolled] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992)
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
   const [salonModalVisible, setSalonModalVisible] = useState(false)
-  const [authModalVisible, setAuthModalVisible] = useState(loginOnly)
-  const [authMode, setAuthMode] = useState<'login' | 'register'>('login')
+  const [authModalVisible, setAuthModalVisible] = useState(loginOnly || openRegisterFromUrl)
+  const [authMode, setAuthMode] = useState<'login' | 'register'>(openRegisterFromUrl ? 'register' : 'login')
   const [authLoading, setAuthLoading] = useState(false)
   const [resetPasswordVisible, setResetPasswordVisible] = useState(false)
   const [appConfig, setAppConfig] = useState<AppConfig | null>(null)
@@ -98,11 +100,26 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   }, [isMobile, loginOnly, prefersReducedMotion])
 
   useEffect(() => {
-    if (!loginOnly) return
+    if (!loginOnly || openRegisterFromUrl) return
     setAuthMode('login')
     setAuthModalVisible(true)
     setSalonModalVisible(false)
-  }, [loginOnly])
+  }, [loginOnly, openRegisterFromUrl])
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('open') !== 'register') return
+
+    const referralCode = params.get('ref')?.trim().toUpperCase()
+    setAuthMode('register')
+    setAuthModalVisible(true)
+    setSalonModalVisible(false)
+    if (referralCode) registerForm.setFieldsValue({ referralCode })
+    const clearRegisterQuery = window.setTimeout(() => {
+      window.history.replaceState({}, document.title, window.location.pathname)
+    }, 1000)
+    return () => window.clearTimeout(clearRegisterQuery)
+  }, [registerForm])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -981,11 +998,11 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
           }
         }}
       >
-        <div className="ant-card-body" style={{ padding: '24px 0' }}>
-          <Space direction="vertical" size="large" style={{ width: '100%' }}>
-            <div style={{ textAlign: 'center', paddingTop: '10px' }}>
+        <div className="ant-card-body" style={{ padding: '14px 0' }}>
+          <Space direction="vertical" size={8} style={{ width: '100%' }}>
+            <div style={{ textAlign: 'center', paddingTop: '4px' }}>
               {appConfig?.logoUrl && (
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '4px' }}>
                   <img
                     src={appConfig.logoUrl}
                     alt="Logo"
@@ -1114,197 +1131,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                 </div>
               </Form>
             ) : (
-              <Form className="auth-form" form={registerForm} onFinish={handleRegister} layout="vertical" size="large" style={{ padding: '0 30px' }}>
-                <Form.Item
-                  name="displayName"
-                  rules={[{ required: true, message: t('auth.nameRequired') }]}
-                  style={{ marginBottom: '12px' }}
-                >
-                  <Input
-                    prefix={<UserOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.name')}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="phone"
-                  rules={[
-                    { required: true, message: t('auth.phoneRequired') },
-                    {
-                      pattern: /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/,
-                      message: t('auth.phoneFormatInvalid')
-                    },
-                    {
-                      validator: async (_, value) => {
-                        if (!value) return Promise.resolve()
-                        const formatPattern = /^((\+?60[1-9]\d{8,9})|(0[1-9]\d{8,9}))$/
-                        if (!formatPattern.test(value)) return Promise.resolve()
-
-                        const { collection, query, where, getDocs, limit } = await import('firebase/firestore')
-                        const { db } = await import('../../../config/firebase')
-                        const { normalizePhoneNumber } = await import('../../../utils/phoneNormalization')
-
-                        const normalized = normalizePhoneNumber(value)
-                        if (!normalized) return Promise.resolve()
-
-                        try {
-                          const phoneQuery = query(collection(db, 'users'), where('profile.phone', '==', normalized), limit(1))
-                          const phoneSnap = await getDocs(phoneQuery)
-                          if (!phoneSnap.empty) return Promise.reject(new Error(t('auth.phoneAlreadyRegistered')))
-                        } catch (e) { }
-                        return Promise.resolve()
-                      }
-                    }
-                  ]}
-                  getValueFromEvent={(e) => e.target.value.replace(/[^\d+]/g, '')}
-                  validateTrigger={['onBlur']}
-                  style={{ marginBottom: '12px' }}
-                >
-                  <Input
-                    prefix={<UserOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.phone')}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="email"
-                  rules={[
-                    { required: true, type: 'email', message: t('auth.emailRequired') },
-                    {
-                      validator: async (_, value) => {
-                        if (!value || !isValidEmail(value)) return Promise.resolve()
-                        const { collection, query, where, getDocs, limit } = await import('firebase/firestore')
-                        const { db } = await import('../../../config/firebase')
-                        try {
-                          const emailQuery = query(collection(db, 'users'), where('email', '==', value.toLowerCase().trim()), limit(1))
-                          const emailSnap = await getDocs(emailQuery)
-                          if (!emailSnap.empty) return Promise.reject(new Error(t('auth.emailAlreadyRegistered')))
-                        } catch (e) { }
-                        return Promise.resolve()
-                      }
-                    }
-                  ]}
-                  validateTrigger={['onBlur']}
-                  style={{ marginBottom: '12px' }}
-                >
-                  <Input
-                    prefix={<MailOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.email')}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="password"
-                  rules={[
-                    { required: true, message: t('auth.passwordRequired') },
-                    { min: 6, message: t('auth.passwordMinLength') }
-                  ]}
-                  style={{ marginBottom: '12px' }}
-                >
-                  <Input.Password
-                    prefix={<LockOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.password')}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name="confirmPassword"
-                  dependencies={['password']}
-                  rules={[
-                    { required: true, message: t('auth.confirmPasswordRequired') },
-                    ({ getFieldValue }) => ({
-                      validator(_, value) {
-                        if (!value || getFieldValue('password') === value) return Promise.resolve();
-                        return Promise.reject(new Error(t('auth.passwordsDoNotMatch')));
-                      },
-                    }),
-                  ]}
-                  style={{ marginBottom: '12px' }}
-                >
-                  <Input.Password
-                    prefix={<LockOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.confirmPassword')}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-
-                <Form.Item name="referralCode" style={{ marginBottom: '12px' }}>
-                  <Input
-                    prefix={<GiftOutlined style={{ color: '#ffd700' }} />}
-                    placeholder={t('auth.referralCodePlaceholder')}
-                    onInput={(e) => { e.currentTarget.value = e.currentTarget.value.toUpperCase() }}
-                    style={{
-                      background: 'rgba(45, 45, 45, 0.8)',
-                      border: '1px solid #444444',
-                      borderRadius: '8px',
-                      color: '#f8f8f8'
-                    }}
-                  />
-                </Form.Item>
-
-                <Button
-                  type="primary"
-                  htmlType="submit"
-                  loading={authLoading}
-                  style={{
-                    width: '100%',
-                    height: '48px',
-                    background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-                    border: 'none',
-                    borderRadius: '8px',
-                    color: '#221c10',
-                    fontSize: '16px',
-                    fontWeight: 600,
-                    marginTop: '10px',
-                    boxShadow: '0 4px 20px rgba(255, 215, 0, 0.3)'
-                  }}
-                >
-                  {t('auth.register')}
-                </Button>
-                <div style={{ textAlign: 'center', marginTop: '24px', paddingBottom: '10px' }}>
-                  <Text style={{ color: '#999999', fontSize: '14px' }}>
-                    {t('auth.alreadyHaveAccount')}{' '}
-                    <a
-                      onClick={() => setAuthMode('login')}
-                      style={{
-                        background: 'linear-gradient(to right,#FDE08D,#C48D3A)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        backgroundClip: 'text',
-                        fontWeight: 700,
-                        cursor: 'pointer'
-                      }}
-                    >
-                      {t('auth.signIn')}
-                    </a>
-                  </Text>
-                </div>
-              </Form>
+              <RegisterForm form={registerForm} onFinish={handleRegister} loading={authLoading} compact onSwitchToLogin={() => setAuthMode('login')} />
             )}
           </Space>
         </div>

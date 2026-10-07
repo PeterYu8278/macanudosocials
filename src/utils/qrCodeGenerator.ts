@@ -94,8 +94,8 @@ export const generateMemberCardQRCode = async (
       : 'https://jcigar.netlify.app';
     
     // 生成带引荐码参数的注册链接
-    // 格式：https://jcigar.netlify.app/register?ref=000123
-    const qrContent = `${baseUrl}/register?ref=${memberId}`;
+    // Format: https://jcigar.netlify.app/?open=register&ref=000123
+    const qrContent = `${baseUrl}/?open=register&ref=${memberId}`;
 
     const qrCodeDataURL = await QRCode.toDataURL(qrContent, {
       width: 200,

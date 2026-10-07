@@ -53,10 +53,16 @@ const SystemConfig = lazy(() => import('./views/admin/SystemConfig'))
 const AdminReports = lazy(() => import('./views/admin/Reports'))
 
 // --- 认证页面 (Lazy Loaded) ---
-const Register = lazy(() => import('./views/auth/Register'))
 const CompleteProfile = lazy(() => import('./views/auth/CompleteProfile'))
 
 const { Content } = Layout
+
+const RegisterRedirect: React.FC = () => {
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  params.set('open', 'register')
+  return <Navigate to={`/?${params.toString()}`} replace />
+}
 
 const AppContent: React.FC = () => {
   const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
@@ -108,11 +114,11 @@ const AppContent: React.FC = () => {
   }, [])
 
   // 无需 padding 的页面（基础认证页面 + 商城页面 + 未登录首页 Landing）
-  const noPaddingPages = ['/register', '/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
+  const noPaddingPages = ['/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
   const needsPadding = !noPaddingPages.includes(location.pathname)
 
   // 认证页面（不显示 footer/navigation，且需要居中显示）
-  const authPages = ['/register', '/auth/complete-profile']
+  const authPages = ['/auth/complete-profile']
   const isAuthPage = authPages.includes(location.pathname)
   const shouldCenter = isAuthPage
   const isLandingPage = !authLoading && !user && location.pathname === '/'
@@ -339,7 +345,7 @@ const AppContent: React.FC = () => {
                 <Routes>
                   {/* 认证路由 */}
                   <Route path="/login" element={<Navigate to="/" replace />} />
-                  <Route path="/register" element={<Register />} />
+                  <Route path="/register" element={<RegisterRedirect />} />
                   <Route path="/auth/complete-profile" element={<CompleteProfile />} />
 
                   {/* 前端路由 */}

@@ -242,7 +242,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
     }
 
     const baseUrl = window.location.origin
-    const shareLink = `${baseUrl}/register?ref=${user.memberId}`
+    const shareLink = `${baseUrl}/?open=register&ref=${user.memberId}`
 
     try {
       await navigator.clipboard.writeText(shareLink)
@@ -273,7 +273,7 @@ export const MemberProfileCard: React.FC<MemberProfileCardProps> = ({
     }
 
     const baseUrl = window.location.origin
-    const shareLink = `${baseUrl}/register?ref=${user.memberId}`
+    const shareLink = `${baseUrl}/?open=register&ref=${user.memberId}`
     const shareText = t('profile.shareText', { code: user.memberId })
 
     if (navigator.share) {
