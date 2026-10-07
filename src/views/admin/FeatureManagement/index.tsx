@@ -23,6 +23,7 @@ import NotificationManagement from '../NotificationManagement';
 import EmailProviders from './EmailProviders';
 import DayPassControl from './DayPassControl';
 import SystemSettingsNav from './SystemSettingsNav';
+import SystemMonitoring from './SystemMonitoring';
 import { getSettingsSection, getSectionTab, readSettingsNavigation, writeSettingsNavigation, type ContentTab } from './settingsNavigation';
 
 const { Title, Text } = Typography;
@@ -1429,6 +1430,8 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       ]} />}
       {activeTab === 'communications' && communicationView === 'email' && <EmailProviders config={appConfig} userId={user?.id} onSaved={() => { refreshAppConfig(); }} />}
       {activeTab === 'communications' && communicationView === 'whatsapp' && <WhatsAppManagement />}
+
+      {activeTab === 'monitoring' && <SystemMonitoring />}
 
       {/* 支付网关标签页 */}
       {activeTab === 'payment' ? (

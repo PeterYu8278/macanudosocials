@@ -11,6 +11,10 @@
 .system-settings-content > .ant-tabs { min-width: 0; }
 .system-settings-heading { margin-bottom: 24px; }
 .system-settings-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.system-monitoring-card { background: rgba(255,255,255,.04) !important; border: 1px solid rgba(244,175,37,.35) !important; }
+.system-monitoring-intro { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.system-monitoring-alerts { display: flex; flex-wrap: wrap; gap: 8px; }
+.system-monitoring-note { display: block; margin-top: 20px; }
 @media (max-width: 768px) {
   .system-settings-layout { display: block; }
   .system-settings-navigation { display: none; }
@@ -19,4 +23,5 @@
   .system-settings-content .ant-form-item-label { white-space: normal; }
   .system-settings-content .ant-form-item-control-input-content { min-width: 0; }
   .system-settings-actions > .ant-btn { flex: 1 1 160px; min-height: 44px; height: auto; white-space: normal; }
+  .system-monitoring-intro { flex-direction: column; }
 }

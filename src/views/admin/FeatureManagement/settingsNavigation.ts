@@ -1,10 +1,10 @@
-export const SETTINGS_SECTIONS = ['appearance', 'login', 'communication', 'payment', 'ai', 'environment'] as const;
+export const SETTINGS_SECTIONS = ['appearance', 'login', 'communication', 'payment', 'ai', 'environment', 'monitoring'] as const;
 export type SettingsSection = typeof SETTINGS_SECTIONS[number];
 export type ContentTab = 'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'login' | 'ai' | 'communications' | 'payment' | 'env';
 export type CommunicationChannel = 'whatsapp' | 'push' | 'email';
 
 const sectionTabs: Record<SettingsSection, ContentTab> = {
-  appearance: 'app', login: 'login', communication: 'communications', payment: 'payment', ai: 'ai', environment: 'env',
+  appearance: 'app', login: 'login', communication: 'communications', payment: 'payment', ai: 'ai', environment: 'env', monitoring: 'monitoring',
 };
 
 export function getSettingsSection(tab: ContentTab): SettingsSection | null {
