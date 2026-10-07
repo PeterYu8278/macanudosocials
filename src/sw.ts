@@ -12,14 +12,15 @@ import { ExpirationPlugin } from 'workbox-expiration'
 
 declare const self: ServiceWorkerGlobalScope
 
-// 预缓存资源（由 Workbox 自动注入）
-precacheAndRoute(self.__WB_MANIFEST)
-
+// Register lifecycle handlers before Workbox starts its asynchronous setup.
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data?.type === 'SKIP_WAITING') {
     void self.skipWaiting()
   }
 })
+
+// 预缓存资源（由 Workbox 自动注入）
+precacheAndRoute(self.__WB_MANIFEST)
 
 // Handle FCM web push in the same worker that powers the PWA. A site can only
 // have one active worker for the root scope, so keeping this here avoids the

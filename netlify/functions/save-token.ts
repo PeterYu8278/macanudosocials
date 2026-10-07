@@ -3,40 +3,55 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
 import { getFirestore } from 'firebase-admin/firestore';
 
-// 初始化 Firebase Admin（如果尚未初始化）
-if (!getApps().length) {
+const headers = {
+  'Content-Type': 'application/json',
+  'Cache-Control': 'no-store',
+};
+
+const reply = (statusCode: number, body: Record<string, unknown>) => ({
+  statusCode,
+  headers,
+  body: JSON.stringify(body),
+});
+
+const initializeAdmin = (): boolean => {
+  if (getApps().length) return true;
+
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) {
+    console.error('[save-token] FIREBASE_SERVICE_ACCOUNT not configured');
+    return false;
+  }
+
   try {
-    // 从环境变量读取 Service Account JSON
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(JSON.parse(serviceAccount))
-      });
-    } else {
-      console.error('[save-token] FIREBASE_SERVICE_ACCOUNT not configured');
-    }
+    initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+    return true;
   } catch (error) {
     console.error('[save-token] Failed to initialize Firebase Admin:', error);
+    return false;
   }
-}
+};
 
 export const eventHandler: Handler = async (event) => {
   // 只允许 POST 请求
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return reply(405, { error: 'Method not allowed' });
   }
 
   try {
-    const { token, userId, deviceId, deviceInfo } = JSON.parse(event.body || '{}');
+    if (!initializeAdmin()) return reply(503, { success: false, code: 'SERVICE_UNAVAILABLE' });
+
+    let input: any;
+    try {
+      input = JSON.parse(event.body || '{}');
+    } catch {
+      return reply(400, { success: false, code: 'INVALID_REQUEST' });
+    }
+
+    const { token, userId, deviceId, deviceInfo } = input;
 
     if (!token || !userId) {
-      return {
-        statusCode: 400,
-        body: JSON.stringify({ error: 'Missing required fields: token, userId' })
-      };
+      return reply(400, { success: false, code: 'MISSING_REQUIRED_FIELDS' });
     }
 
     const db = getFirestore();
@@ -117,10 +132,7 @@ export const eventHandler: Handler = async (event) => {
     };
   } catch (error: any) {
     console.error('[save-token] Error:', error);
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: error.message || 'Internal server error' })
-    };
+    return reply(500, { success: false, code: 'TOKEN_SAVE_FAILED' });
   }
 };
 

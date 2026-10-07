@@ -20,8 +20,14 @@ const initializeAdmin = () => {
   if (getApps().length) return;
 
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT is not configured');
-  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+  if (!serviceAccount) throw new Error('SERVICE_UNAVAILABLE');
+
+  try {
+    initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+  } catch (error) {
+    console.error('[activate-membership] Firebase Admin initialization failed', error);
+    throw new Error('SERVICE_UNAVAILABLE');
+  }
 };
 
 const toDate = (value: unknown): Date | null => {
@@ -54,7 +60,12 @@ const getAuthenticatedUser = async (authorization?: string) => {
   if (!token) throw new Error('UNAUTHENTICATED');
 
   initializeAdmin();
-  const decoded = await getAuth().verifyIdToken(token);
+  let decoded;
+  try {
+    decoded = await getAuth().verifyIdToken(token);
+  } catch {
+    throw new Error('UNAUTHENTICATED');
+  }
   const db = getFirestore();
   let userSnapshot = await db.collection('users').doc(decoded.uid).get();
 
@@ -78,7 +89,14 @@ export const eventHandler: Handler = async event => {
   try {
     const userSnapshot = await getAuthenticatedUser(event.headers.authorization);
     const db = getFirestore();
-    const body = event.body ? JSON.parse(event.body) : {};
+    let body: Record<string, unknown> = {};
+    if (event.body) {
+      try {
+        body = JSON.parse(event.body);
+      } catch {
+        throw new Error('INVALID_REQUEST');
+      }
+    }
     const storeId = typeof body.storeId === 'string' && body.storeId.trim()
       ? body.storeId.trim()
       : null;
@@ -99,13 +117,15 @@ export const eventHandler: Handler = async event => {
     const activationDate = new Date().toISOString().slice(0, 10);
     const recordRef = pendingRecord?.ref
       || db.collection('membershipFeeRecords').doc(`activation_${userSnapshot.id}_${activationDate}`);
+    const nextRecordRef = db.doc(`membershipFeeRecords/${recordRef.id}_renewal`);
     const configRef = db.doc('config/membershipFee');
 
     const result = await db.runTransaction(async transaction => {
-      const [freshUserSnapshot, configSnapshot, recordSnapshot] = await Promise.all([
+      const [freshUserSnapshot, configSnapshot, recordSnapshot, nextRecordSnapshot] = await Promise.all([
         transaction.get(userSnapshot.ref),
         transaction.get(configRef),
         transaction.get(recordRef),
+        transaction.get(nextRecordRef),
       ]);
 
       if (!freshUserSnapshot.exists) throw new Error('USER_NOT_FOUND');
@@ -135,8 +155,6 @@ export const eventHandler: Handler = async event => {
       const activeUntil = new Date(now);
       activeUntil.setFullYear(activeUntil.getFullYear() + 1);
       const pointsRecordRef = db.collection('pointsRecords').doc();
-      const nextRecordRef = db.doc(`membershipFeeRecords/${recordRef.id}_renewal`);
-      const nextRecordSnapshot = await transaction.get(nextRecordRef);
 
       const userUpdate: Record<string, unknown> = {
         'membership.points': newPoints,
@@ -221,6 +239,10 @@ export const eventHandler: Handler = async event => {
     }
     if (code === 'INSUFFICIENT_POINTS') {
       return reply(400, { success: false, code, ...error.details });
+    }
+    if (code === 'INVALID_REQUEST') return reply(400, { success: false, code });
+    if (code === 'SERVICE_UNAVAILABLE' || code === 'INVALID_MEMBERSHIP_FEE') {
+      return reply(503, { success: false, code: 'SERVICE_UNAVAILABLE' });
     }
     console.error('[activate-membership]', error);
     return reply(500, { success: false, code: 'ACTIVATION_FAILED' });
