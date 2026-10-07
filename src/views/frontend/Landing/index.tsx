@@ -32,6 +32,7 @@ import ResetPasswordModal from '../../../components/common/ResetPasswordModal'
 import RegisterForm from '../../../components/auth/RegisterForm'
 
 const { Title, Paragraph, Text } = Typography
+const WHATSAPP_USER_ID = '601157288278'
 
 const usePrefersReducedMotion = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
@@ -111,15 +112,33 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     if (params.get('open') !== 'register') return
 
     const referralCode = params.get('ref')?.trim().toUpperCase()
-    setAuthMode('register')
-    setAuthModalVisible(true)
-    setSalonModalVisible(false)
-    if (referralCode) registerForm.setFieldsValue({ referralCode })
-    const clearRegisterQuery = window.setTimeout(() => {
-      window.history.replaceState({}, document.title, window.location.pathname)
-    }, 1000)
-    return () => window.clearTimeout(clearRegisterQuery)
-  }, [registerForm])
+    if (!referralCode) {
+      setAuthMode('register')
+      setAuthModalVisible(true)
+      setSalonModalVisible(false)
+      return
+    }
+
+    const command = encodeURIComponent(`/register ${referralCode}`)
+    const appUrl = `whatsapp://send?phone=${WHATSAPP_USER_ID}&text=${command}`
+    const webUrl = `https://api.whatsapp.com/send/?phone=${WHATSAPP_USER_ID}&text=${command}`
+    let appOpened = false
+    const markAppOpened = () => {
+      appOpened = true
+      window.clearTimeout(fallbackTimer)
+    }
+    const fallbackTimer = window.setTimeout(() => {
+      if (!appOpened) window.location.replace(webUrl)
+    }, 1200)
+
+    document.addEventListener('visibilitychange', markAppOpened, { once: true })
+    window.location.href = appUrl
+
+    return () => {
+      window.clearTimeout(fallbackTimer)
+      document.removeEventListener('visibilitychange', markAppOpened)
+    }
+  }, [])
 
   useEffect(() => {
     const handleScroll = () => {
