@@ -232,6 +232,10 @@ export const eventHandler: Handler = async event => {
     return reply(200, { success: true, ...result });
   } catch (error: any) {
     const code = error?.message || 'ACTIVATION_FAILED';
+    if (error?.code === 8 || String(code).includes('RESOURCE_EXHAUSTED')) {
+      console.error('[activate-membership] Firestore quota exceeded', error);
+      return reply(503, { success: false, code: 'FIRESTORE_QUOTA_EXCEEDED' });
+    }
     if (code === 'UNAUTHENTICATED') return reply(401, { success: false, code });
     if (code === 'USER_NOT_FOUND') return reply(404, { success: false, code });
     if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED') {
