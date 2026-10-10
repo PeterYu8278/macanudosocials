@@ -1,4 +1,4 @@
-export const MINIMUM_RELOAD_AMOUNT_RM = 300
+export const MINIMUM_RELOAD_AMOUNT_RM = 200
 
 export interface CheckoutAffordability {
   canCheckout: boolean

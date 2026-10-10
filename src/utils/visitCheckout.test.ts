@@ -23,8 +23,8 @@ describe('visit checkout affordability', () => {
     })
   })
 
-  it('defines the minimum reload amount as RM300', () => {
-    expect(MINIMUM_RELOAD_AMOUNT_RM).toBe(300)
+  it('defines the minimum reload amount as RM200', () => {
+    expect(MINIMUM_RELOAD_AMOUNT_RM).toBe(200)
   })
 })
 

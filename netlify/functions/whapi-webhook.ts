@@ -1,4 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
+import { getAuth } from 'firebase-admin/auth'
 import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
@@ -26,7 +27,7 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const allowlist = (process.env.WHATSAPP_REGISTRATION_ALLOWLIST || '').split(',')
     .map(value => normalizeWhatsAppSender(value.trim(), value.trim()) || value.trim())
     .filter(Boolean)
-  if (!allowlist.includes(phone)) {
+  if (allowlist.length > 0 && !allowlist.includes(phone)) {
     console.info('whatsapp-registration', { stage: 'not-allowlisted' })
     return
   }
@@ -40,9 +41,11 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const whapiToken = (await loadWhatsApp(db)).token
   if (!whapiToken) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
-    return
+    throw new Error('whapi-token-missing')
   }
-  const send = async (body: string) => { await submitWhapi(whapiToken, phone, body) }
+  const send = async (body: string) => {
+    if ((await submitWhapi(whapiToken, phone, body)).status !== 'accepted') throw new Error('whapi-send-failed')
+  }
   const sendConfirmation = async (body: string) => {
     const result = await submitWhapiButtons(whapiToken, phone, body)
     if (result.status !== 'accepted') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
@@ -54,6 +57,39 @@ async function handleRegistrationMessage(db: any, payload: any) {
 
   const registerCommand = /^\/register(?:\s+([A-Z0-9]{6}))?$/i.exec(registrationCommand)
   if (registerCommand) {
+    // Persist request limits across function instances and allow retries of the same webhook.
+    const requestId = typeof message.id === 'string' ? message.id : ''
+    if (!requestId) throw new Error('message-id-required')
+    const rateRef = db.collection(C.WHATSAPP_INBOX).doc(`registration-rate-${createHash('sha256').update(phone).digest('hex')}`)
+    const allowed = await db.runTransaction(async (transaction: any) => {
+      const rate = (await transaction.get(rateRef)).data()
+      const now = Date.now()
+      if (rate?.requestId === requestId) return true
+      const inWindow = rate && now - rate.windowStartedAtMs < 60 * 60_000
+      if (rate && (now - rate.lastRequestAtMs < 60_000 || (inWindow && rate.count >= 5))) return false
+      transaction.set(rateRef, { requestId, lastRequestAtMs: now,
+        windowStartedAtMs: inWindow ? rate.windowStartedAtMs : now, count: inWindow ? rate.count + 1 : 1 })
+      return true
+    })
+    // Silently drop excess requests to avoid amplification through outbound replies.
+    if (!allowed) return
+    const [phoneProfiles, legacyPhoneProfiles] = await Promise.all([
+      db.collection(C.USERS).where('profile.phone', '==', phone).limit(1).get(),
+      db.collection(C.USERS).where('phone', '==', phone).limit(1).get(),
+    ])
+    let phoneRegistered = !phoneProfiles.empty || !legacyPhoneProfiles.empty
+    if (!phoneRegistered) {
+      try {
+        await getAuth().getUserByPhoneNumber(phone)
+        phoneRegistered = true
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+      }
+    }
+    if (phoneRegistered) {
+      await send('This WhatsApp number is already registered. To recover the account, use the password reset option on the website.')
+      return
+    }
     const referralCode = registerCommand[1]?.toUpperCase()
     if (referralCode && (await db.collection(C.USERS).where('memberId', '==', referralCode).limit(1).get()).empty) {
       await send('This referral code is invalid. Please check the code and send /register REFERRALCODE again.')
@@ -63,14 +99,31 @@ async function handleRegistrationMessage(db: any, payload: any) {
       await send('This WhatsApp number is already registered. To recover the account, use the password reset option on the website.')
       return
     }
+    if (existing && !expired && ['awaiting-form', 'awaiting-final-confirm'].includes(existing.step)) {
+      await send(existing.step === 'awaiting-final-confirm'
+        ? 'Your registration details are awaiting confirmation. Please tap Confirm in the previous message or reply CONFIRM.'
+        : 'Your registration link is still valid. Please use Open Registration in the previous message. To restart, send CANCEL first.')
+      return
+    }
     const registrationToken = createRegistrationToken()
     await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode)
     const baseUrl = process.env.URL || 'https://macanudosocials.com'
     const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
     const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
     const formMessage = 'Welcome to Macanudo Socials. Tap Open Registration to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
-    const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Open Registration', formUrl)
-    if (button.status !== 'accepted') await send(`${formMessage}\n${formUrl}`)
+    try {
+      const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Open Registration', formUrl)
+      if (button.status !== 'accepted') await send(`${formMessage}\n${formUrl}`)
+    } catch (error) {
+      // Failed delivery must not leave the user stuck with an inaccessible valid link.
+      await db.runTransaction(async (transaction: any) => {
+        const current = (await transaction.get(ref)).data()
+        if (current?.registrationTokenHash === registrationTokenHash(registrationToken) && current.step === 'awaiting-form') {
+          transaction.set(ref, { step: 'expired', expiresAtMs: Date.now() }, { merge: true })
+        }
+      })
+      throw error
+    }
     return
   }
   if (command.startsWith('/register')) {
@@ -134,12 +187,36 @@ export const eventHandler: EventHandler = async event => {
     if (eventType === 'messages' && ['post', 'put'].includes(eventMethod)) {
       const message = Array.isArray(payload.messages) ? payload.messages[0] : null
       const messageId = typeof message?.id === 'string' ? message.id : ''
-      if (messageId) {
-        const inboxRef = db.collection(C.WHATSAPP_INBOX).doc(createHash('sha256').update(`${channelId}:${messageId}`).digest('hex'))
-        if ((await inboxRef.get()).exists) return reply(200)
-        await inboxRef.set({ messageId, channelId, receivedAt: Timestamp.now() })
+      const owner = randomBytes(16).toString('hex')
+      const inboxRef = messageId ? db.collection(C.WHATSAPP_INBOX).doc(createHash('sha256').update(`${channelId}:${messageId}`).digest('hex')) : null
+      if (inboxRef) {
+        const claim = await db.runTransaction(async (transaction: any) => {
+          const snapshot = await transaction.get(inboxRef)
+          const entry = snapshot.data()
+          if (snapshot.exists && (!entry.status || entry.status === 'completed')) return 'completed'
+          if (entry?.status === 'processing' && entry.leaseUntilMs > Date.now()) return 'busy'
+          transaction.set(inboxRef, { messageId, channelId, status: 'processing', owner,
+            leaseUntilMs: Date.now() + 120_000, receivedAt: Timestamp.now() }, { merge: true })
+          return 'claimed'
+        })
+        if (claim === 'completed') return reply(200)
+        if (claim === 'busy') return reply(503)
       }
-      await handleRegistrationMessage(db, payload)
+      const finish = async (status: string) => {
+        if (!inboxRef) return
+        await db.runTransaction(async (transaction: any) => {
+          if ((await transaction.get(inboxRef)).data()?.owner === owner) {
+            transaction.set(inboxRef, { status, leaseUntilMs: 0, updatedAt: Timestamp.now() }, { merge: true })
+          }
+        })
+      }
+      try {
+        await handleRegistrationMessage(db, payload)
+        await finish('completed')
+      } catch (error) {
+        await finish('failed')
+        throw error
+      }
       await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
       return reply(200)
     }

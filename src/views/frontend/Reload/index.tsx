@@ -25,7 +25,7 @@ const ReloadPage: React.FC = () => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
-  const amountOptions = [MINIMUM_RELOAD_AMOUNT_RM, 500, 1000];
+  const amountOptions = [MINIMUM_RELOAD_AMOUNT_RM, 300, 500];
 
   // 支付配置
   const { data: appConfig } = useFirestoreDoc(getAppConfig);

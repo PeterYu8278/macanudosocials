@@ -1,7 +1,14 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
-const m = vi.hoisted(() => ({ documents: new Map<string, any>(), writes: 0, fail: false }))
+import { createHash } from 'node:crypto'
+const m = vi.hoisted(() => ({ documents: new Map<string, any>(), writes: 0, fail: false,
+  authPhone: vi.fn(), send: vi.fn(), urlButton: vi.fn() }))
+vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ getUserByPhoneNumber: m.authPhone }) }))
+vi.mock('../functions/_shared/whatsapp', () => ({
+  loadWhatsApp: async () => ({ token: 'test-token' }), submitWhapi: m.send,
+  submitWhapiUrlButton: m.urlButton, submitWhapiButtons: vi.fn(), submitWhapiQuickReply: vi.fn(),
+}))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }))
 vi.mock('firebase-admin/firestore', () => {
   const snapshot = (path: string) => ({ id: path.split('/').at(-1), exists: m.documents.has(path), data: () => m.documents.get(path) })
@@ -14,9 +21,11 @@ vi.mock('firebase-admin/firestore', () => {
       if (m.fail) throw new Error('database unavailable')
       return snapshot(`${name}/${id}`)
     }, set: async (value: any, options: any) => set(`${name}/${id}`, value, options) }),
-    where: (field: string, _op: string, value: any) => ({ limit: (count: number) => ({ get: async () => ({
-      docs: [...m.documents.entries()].filter(([path, data]) => path.startsWith(`${name}/`) && data[field] === value).slice(0, count).map(([path]) => snapshot(path)),
-    }) }) }),
+    where: (field: string, _op: string, value: any) => ({ limit: (count: number) => ({ get: async () => {
+      const docs = [...m.documents.entries()].filter(([path, data]) => path.startsWith(`${name}/`) &&
+        field.split('.').reduce((current, key) => current?.[key], data) === value).slice(0, count).map(([path]) => snapshot(path))
+      return { docs, empty: docs.length === 0 }
+    } }) }),
   }), runTransaction: async (callback: any) => callback({ get: async (ref: any) => snapshot(ref.path),
     set: (ref: any, value: any, options: any) => set(ref.path, value, options),
     update: (ref: any, value: any) => set(ref.path, value, { merge: true }) }) }
@@ -37,11 +46,122 @@ const task = () => m.documents.get(`${C.WHATSAPP_TASKS}/task-one`)
 describe('Whapi delivery callbacks', () => {
   beforeEach(() => {
     m.documents.clear(); m.writes = 0; m.fail = false
+    m.authPhone.mockReset().mockRejectedValue({ code: 'auth/user-not-found' })
+    m.send.mockReset().mockResolvedValue({ status: 'accepted' })
+    m.urlButton.mockReset().mockResolvedValue({ status: 'accepted' })
     vi.stubEnv('WHAPI_WEBHOOK_SECRET', secret)
     m.documents.set(`${C.WHATSAPP_CONFIG}/settings`, { config: { whapi: { channelId: 'channel-one' } } })
     m.documents.set(`${C.WHATSAPP_TASKS}/task-one`, { provider: 'whapi', channelId: 'channel-one', messageId: 'provider-message', status: 'accepted' })
   })
   afterEach(() => vi.unstubAllEnvs())
+  const register = (text = '/register', allowlist = '60123456789', id = 'register-message') => {
+    vi.stubEnv('WHATSAPP_REGISTRATION_ENABLED', 'true')
+    vi.stubEnv('WHATSAPP_REGISTRATION_ALLOWLIST', allowlist)
+    return request({ channel_id: 'channel-one', event: { type: 'messages', event: 'post' },
+      messages: [{ id, chat_id: '60123456789@s.whatsapp.net', text: { body: text } }] })
+  }
+  it('opens registration with an empty allowlist and restricts a configured allowlist', async () => {
+    expect((await register('/register', '60198765432')).status).toBe(200)
+    expect(m.urlButton).not.toHaveBeenCalled()
+    expect((await register('/register', '', 'open-message')).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+  })
+  it('retains the global registration switch when the allowlist is empty', async () => {
+    vi.stubEnv('WHATSAPP_REGISTRATION_ENABLED', 'false')
+    vi.stubEnv('WHATSAPP_REGISTRATION_ALLOWLIST', '')
+    await request({ channel_id: 'channel-one', event: { type: 'messages', event: 'post' },
+      messages: [{ id: 'disabled-message', chat_id: '60123456789@s.whatsapp.net', text: { body: '/register' } }] })
+    expect(m.urlButton).not.toHaveBeenCalled()
+    expect(m.authPhone).not.toHaveBeenCalled()
+  })
+  it('opens registration when the allowlist is not configured', async () => {
+    vi.stubEnv('WHATSAPP_REGISTRATION_ENABLED', 'true')
+    vi.stubEnv('WHATSAPP_REGISTRATION_ALLOWLIST', undefined)
+    expect((await request({ channel_id: 'channel-one', event: { type: 'messages', event: 'post' },
+      messages: [{ id: 'unset-message', chat_id: '60123456789@s.whatsapp.net', text: { body: '/register' } }] })).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+  })
+  it('defers an in-flight duplicate and recovers an expired processing lease', async () => {
+    const key = createHash('sha256').update('channel-one:register-message').digest('hex')
+    const entry = { status: 'processing', owner: 'other', leaseUntilMs: Date.now() + 120_000 }
+    m.documents.set(`${C.WHATSAPP_INBOX}/${key}`, entry)
+    expect((await register()).status).toBe(503)
+    expect(m.urlButton).not.toHaveBeenCalled()
+    entry.leaseUntilMs = Date.now() - 1
+    expect((await register()).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+    expect(m.documents.get(`${C.WHATSAPP_INBOX}/${key}`).status).toBe('completed')
+  })
+  it('keeps referral validation before issuing a link', async () => {
+    expect((await register('/register ABC123')).status).toBe(200)
+    expect(m.urlButton).not.toHaveBeenCalled()
+    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('referral code is invalid'))
+  })
+  it('throttles repeated requests and reuses the valid session after the cooldown', async () => {
+    await register()
+    const sessions = () => [...m.documents.entries()].filter(([path]) => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))
+    const tokenHash = sessions()[0][1].registrationTokenHash
+    await register('/register', '', 'second-message')
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+    expect(m.send).not.toHaveBeenCalled()
+    const rate = [...m.documents.entries()].find(([path]) => path.includes('/registration-rate-'))![1]
+    rate.lastRequestAtMs -= 61_000
+    await register('/register', '', 'third-message')
+    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('still valid'))
+    expect(sessions()[0][1].registrationTokenHash).toBe(tokenHash)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+  })
+  it('enforces the hourly limit even after a cancelled session', async () => {
+    await register()
+    const rate = [...m.documents.entries()].find(([path]) => path.includes('/registration-rate-'))![1]
+    rate.count = 5
+    rate.lastRequestAtMs -= 61_000
+    const session = [...m.documents.entries()].find(([path]) => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))![1]
+    session.step = 'cancelled'
+    await register('/register', '', 'limited-message')
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+  })
+  it('retries the same message after a lookup failure and deduplicates success', async () => {
+    m.authPhone.mockRejectedValueOnce({ code: 'auth/internal-error' })
+    expect((await register()).status).toBe(503)
+    expect((await register()).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+    expect((await register()).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(1)
+  })
+  it('expires an undelivered link and allows the failed webhook to retry', async () => {
+    m.urlButton.mockResolvedValueOnce({ status: 'failed' })
+    m.send.mockResolvedValueOnce({ status: 'failed' })
+    expect((await register()).status).toBe(503)
+    const session = [...m.documents.entries()].find(([path]) => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))![1]
+    expect(session.step).toBe('expired')
+    expect((await register()).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledTimes(2)
+  })
+  it.each(['profile.phone', 'phone'])('blocks an existing %s before issuing a registration link', async field => {
+    m.documents.set(`${C.USERS}/member`, field === 'phone' ? { phone: '+60123456789' } : { profile: { phone: '+60123456789' } })
+    expect((await register('/register ABC123')).status).toBe(200)
+    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'))
+    expect(m.urlButton).not.toHaveBeenCalled()
+    expect([...m.documents.keys()].some(path => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))).toBe(false)
+  })
+  it('blocks a phone registered only in Firebase Auth', async () => {
+    m.authPhone.mockResolvedValue({ uid: 'existing-user' })
+    expect((await register()).status).toBe(200)
+    expect(m.authPhone).toHaveBeenCalledWith('+60123456789')
+    expect(m.urlButton).not.toHaveBeenCalled()
+    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'))
+  })
+  it('sends the welcome registration link for an unregistered phone', async () => {
+    expect((await register()).status).toBe(200)
+    expect(m.urlButton).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('Welcome to Macanudo Socials'),
+      'Open Registration', expect.stringContaining('whatsapp-registration-form?token='))
+  })
+  it('does not issue a link when the Auth lookup fails', async () => {
+    m.authPhone.mockRejectedValue({ code: 'auth/internal-error' })
+    expect((await register()).status).toBe(503)
+    expect(m.urlButton).not.toHaveBeenCalled()
+  })
   it('fails closed for missing/short secrets or invalid authentication', async () => {
     expect((await request(payload(), 'wrong')).status).toBe(401)
     vi.stubEnv('WHAPI_WEBHOOK_SECRET', '')
