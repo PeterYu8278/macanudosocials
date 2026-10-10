@@ -1,7 +1,7 @@
 /**
  * 功能可见性配置服务
  */
-import { doc, getDoc, getDocFromCache, setDoc, updateDoc, Timestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocFromCache, setDoc, updateDoc, Timestamp } from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { FeatureVisibilityConfig } from '../../types';

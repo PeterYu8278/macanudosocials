@@ -18,7 +18,7 @@ import {
   documentId,
   QueryConstraint,
   runTransaction
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { User, Brand, Cigar, Event, Order, Transaction, InboundOrder, OutboundOrder, InventoryMovement, AuditLogModule } from '../../types';

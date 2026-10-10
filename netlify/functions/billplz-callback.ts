@@ -106,6 +106,7 @@ export const eventHandler: Handler = async (event) => {
           // Update Points
           transaction.update(userRef, {
             'membership.points': FieldValue.increment(points),
+            ...(userDoc.data()?.role === 'guest' && { role: 'member' }),
             updatedAt: FieldValue.serverTimestamp()
           });
 

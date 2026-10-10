@@ -4,6 +4,8 @@
  */
 
 export const GLOBAL_COLLECTIONS = {
+  FIRESTORE_METRICS: '_firestoreMetrics',
+  FIRESTORE_METRIC_INGRESS: '_firestoreMetricIngress',
   /** 用户集合 */
   USERS: 'users',
   STORES: 'stores',

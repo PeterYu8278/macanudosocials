@@ -1,4 +1,5 @@
 import type { Context, HandlerEvent, HandlerResponse } from '@netlify/functions'
+import { withFirestoreMonitoring } from './firestoreMonitoring'
 
 export type EventHandler = (event: HandlerEvent) => Promise<HandlerResponse>
 
@@ -15,14 +16,14 @@ export function toWebFunction(handler: EventHandler) {
       const values = multiQuery[key] ||= []
       values.push(value)
     })
-    const result = await handler({
+    const result = await withFirestoreMonitoring(url.pathname.split('/').pop() || 'unknown', async () => handler({
       rawUrl: request.url, rawQuery: url.search.slice(1), path: url.pathname,
       httpMethod: request.method, headers,
       multiValueHeaders: Object.fromEntries(Object.entries(headers).map(([key, value]) => [key, [value]])),
       queryStringParameters: url.search ? query : null,
       multiValueQueryStringParameters: url.search ? multiQuery : null,
       body: request.body === null ? null : await request.text(), isBase64Encoded: false,
-    })
+    }))
     const responseHeaders = new Headers()
     for (const [key, value] of Object.entries(result.headers || {})) responseHeaders.set(key, String(value))
     for (const [key, values] of Object.entries(result.multiValueHeaders || {})) {

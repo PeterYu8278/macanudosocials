@@ -1,5 +1,5 @@
 // 积分配置服务
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc } from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import type { PointsConfig } from '../../types';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';

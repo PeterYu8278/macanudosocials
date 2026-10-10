@@ -45,6 +45,21 @@ describe('reload reviewer attribution', () => {
     expect(mocks.updateDoc).toHaveBeenCalledWith(expect.objectContaining({ id: 'reload-1' }), expect.objectContaining({ status: 'rejected', verifiedBy: 'reviewer-2', verifiedByName: 'Bob' }));
   });
 
+  it('promotes a guest to member when the reload is credited without activating Annual Pass', async () => {
+    mocks.getDoc.mockResolvedValueOnce(pendingRecord()).mockResolvedValueOnce({ exists: () => true,
+      data: () => ({ role: 'guest', status: 'inactive', membership: { points: 10 } }) });
+    expect((await verifyReloadRecord('reload-1', 'reviewer-1')).success).toBe(true);
+    expect(mocks.updateDoc.mock.calls[0][1]).toMatchObject({ role: 'member', 'membership.points': 110 });
+    expect(mocks.updateDoc.mock.calls[0][1]).not.toHaveProperty('status');
+  });
+
+  it.each(['member', 'vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'])('preserves the %s role on reload', async role => {
+    mocks.getDoc.mockResolvedValueOnce(pendingRecord()).mockResolvedValueOnce({ exists: () => true,
+      data: () => ({ role, membership: { points: 10 } }) });
+    expect((await verifyReloadRecord('reload-1', 'reviewer-1')).success).toBe(true);
+    expect(mocks.updateDoc.mock.calls[0][1]).not.toHaveProperty('role');
+  });
+
   it('keeps callers without a reviewer name compatible without writing undefined', async () => {
     mocks.getDoc.mockResolvedValueOnce(pendingRecord());
     expect(await rejectReloadRecord('reload-1', 'reviewer-2')).toEqual({ success: true });
@@ -78,9 +93,9 @@ describe('reload amount validation', () => {
     expect(mocks.addDoc).not.toHaveBeenCalled();
   });
 
-  it('retains the RM300 member minimum', async () => {
+  it('retains the RM200 member minimum', async () => {
     expect((await createReloadRecord('member', 42)).success).toBe(false);
-    expect((await createReloadRecord('member', 300)).success).toBe(true);
+    expect((await createReloadRecord('member', 200)).success).toBe(true);
   });
 
   it('does not permit members to use manual mode', async () => {

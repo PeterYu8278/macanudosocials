@@ -9,7 +9,7 @@ import {
   Timestamp,
   startAt,
   endAt
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { useAuthStore } from '../../store/modules/auth';

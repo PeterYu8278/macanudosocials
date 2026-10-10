@@ -11,7 +11,7 @@ import {
   orderBy,
   Timestamp,
   runTransaction
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { convertFirestoreTimestamps } from './auth';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';

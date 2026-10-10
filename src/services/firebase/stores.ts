@@ -10,7 +10,7 @@ import {
   query,
   where,
   Timestamp
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import type { Store } from '../../types';
 import { convertFirestoreTimestamps } from './auth';

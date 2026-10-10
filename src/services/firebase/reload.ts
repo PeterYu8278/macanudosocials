@@ -17,7 +17,7 @@ import {
   type QuerySnapshot,
   type DocumentData,
   type QueryDocumentSnapshot
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { auth, db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { ReloadRecord, User } from '../../types';
@@ -141,6 +141,7 @@ export const verifyReloadRecord = async (
     // 更新用户积分
     await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
       'membership.points': newPoints,
+      ...(userData.role === 'guest' && { role: 'member' }),
       updatedAt: Timestamp.fromDate(new Date())
     });
 

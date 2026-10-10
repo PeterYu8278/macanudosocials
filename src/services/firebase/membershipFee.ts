@@ -16,7 +16,7 @@ import {
   Timestamp,
   type QueryDocumentSnapshot,
   type DocumentData
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { MembershipFeeConfig, MembershipFeeRecord, User } from '../../types';
@@ -377,7 +377,7 @@ export const deductMembershipFee = async (
       await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
         'membership.points': newPoints,
         status: 'active', // 激活 Annual Pass
-        role: userData.role === 'guest' ? 'member' : userData.role,
+        role: ['guest', 'member'].includes(userData.role) ? 'vip' : userData.role,
         updatedAt: Timestamp.fromDate(now)
       });
 

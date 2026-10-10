@@ -128,9 +128,11 @@ service cloud.firestore {
                            || request.resource.data.membership.points <= resource.data.membership.points))
                     || isAdmin()
                     || (isStoreAdmin()
-                        && request.resource.data.role == resource.data.role
+                        && (request.resource.data.role == resource.data.role
+                            || (resource.data.role == 'guest' && request.resource.data.role == 'member')
+                            || (resource.data.role in ['guest', 'member'] && request.resource.data.role == 'vip'))
                         && request.resource.data.diff(resource.data).affectedKeys()
-                             .hasOnly(['membership', 'status', 'referral', 'updatedAt'])));
+                             .hasOnly(['membership', 'status', 'role', 'referral', 'updatedAt'])));
 
       // 删除：仅管理员
       allow delete: if hasRole('superAdmin') || hasRole('developer');

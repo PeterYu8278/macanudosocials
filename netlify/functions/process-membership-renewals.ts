@@ -97,7 +97,7 @@ const processRenewals = async () => {
           'membership.activeFrom': nowTimestamp,
           'membership.activeUntil': Timestamp.fromDate(nextDueDate),
           status: 'active',
-          role: user.role === 'guest' ? 'member' : user.role,
+          role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,
           updatedAt: nowTimestamp,
         };
 

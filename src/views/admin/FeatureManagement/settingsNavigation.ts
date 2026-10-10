@@ -1,6 +1,6 @@
 export const SETTINGS_SECTIONS = ['appearance', 'login', 'communication', 'payment', 'ai', 'environment', 'monitoring'] as const;
 export type SettingsSection = typeof SETTINGS_SECTIONS[number];
-export type ContentTab = 'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'login' | 'ai' | 'communications' | 'payment' | 'env';
+export type ContentTab = 'frontend' | 'admin' | 'cigar-database' | 'tools' | 'app' | 'login' | 'ai' | 'communications' | 'payment' | 'env' | 'monitoring';
 export type CommunicationChannel = 'whatsapp' | 'push' | 'email';
 
 const sectionTabs: Record<SettingsSection, ContentTab> = {

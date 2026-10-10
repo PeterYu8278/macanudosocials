@@ -1,4 +1,4 @@
-import { collection, getDocs, limit, orderBy, query } from 'firebase/firestore'
+import { collection, getDocs, limit, orderBy, query } from '@/services/firebase/monitoredFirestore'
 import { db } from '../../config/firebase'
 
 export interface NotificationDeliveryRecord {

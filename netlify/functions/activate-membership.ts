@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring';
 
 const headers = {
   'Content-Type': 'application/json',
@@ -148,9 +148,10 @@ export const eventHandler: Handler = async event => {
         throw new Error('MEMBERSHIP_RECORD_ALREADY_PROCESSED');
       }
 
-      const renewalType = recordSnapshot.data()?.renewalType === 'renewal'
-        ? 'renewal'
-        : user.role === 'guest' ? 'initial' : 'renewal';
+      const recordedType = recordSnapshot.data()?.renewalType;
+      const renewalType = recordedType === 'initial' || recordedType === 'renewal'
+        ? recordedType
+        : user.membership?.activeFrom || user.membership?.activeUntil ? 'renewal' : 'initial';
       const newPoints = currentPoints - amount;
       const activeUntil = new Date(now);
       activeUntil.setFullYear(activeUntil.getFullYear() + 1);
@@ -161,7 +162,7 @@ export const eventHandler: Handler = async event => {
         'membership.activeFrom': nowTimestamp,
         'membership.activeUntil': Timestamp.fromDate(activeUntil),
         status: 'active',
-        role: user.role === 'guest' ? 'member' : user.role,
+        role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,
         updatedAt: nowTimestamp,
       };
 
