@@ -141,21 +141,29 @@ describe('Whapi delivery callbacks', () => {
   it.each(['profile.phone', 'phone'])('blocks an existing %s before issuing a registration link', async field => {
     m.documents.set(`${C.USERS}/member`, field === 'phone' ? { phone: '+60123456789' } : { profile: { phone: '+60123456789' } })
     expect((await register('/register ABC123')).status).toBe(200)
-    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'))
-    expect(m.urlButton).not.toHaveBeenCalled()
+    expect(m.urlButton).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'),
+      'Login now', expect.stringContaining('/?open=login'))
     expect([...m.documents.keys()].some(path => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))).toBe(false)
   })
   it('blocks a phone registered only in Firebase Auth', async () => {
     m.authPhone.mockResolvedValue({ uid: 'existing-user' })
     expect((await register()).status).toBe(200)
     expect(m.authPhone).toHaveBeenCalledWith('+60123456789')
-    expect(m.urlButton).not.toHaveBeenCalled()
-    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'))
+    expect(m.urlButton).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('already registered'),
+      'Login now', expect.stringContaining('/?open=login'))
+    expect(new URL(m.urlButton.mock.calls[0][4]).searchParams.get('phone')).toBe('+60123456789')
+  })
+  it('falls back to a login link if the Login now button is rejected', async () => {
+    m.authPhone.mockResolvedValue({ uid: 'existing-user' })
+    m.urlButton.mockResolvedValueOnce({ status: 'failed' })
+    expect((await register()).status).toBe(200)
+    expect(m.send).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('/?open=login'))
+    expect([...m.documents.keys()].some(path => path.startsWith(`${C.WHATSAPP_REGISTRATION_SESSIONS}/`))).toBe(false)
   })
   it('sends the welcome registration link for an unregistered phone', async () => {
     expect((await register()).status).toBe(200)
     expect(m.urlButton).toHaveBeenCalledWith('test-token', '+60123456789', expect.stringContaining('Welcome to Macanudo Socials'),
-      'Open Registration', expect.stringContaining('whatsapp-registration-form?token='))
+      'Register now', expect.stringContaining('whatsapp-registration-form?token='))
   })
   it('does not issue a link when the Auth lookup fails', async () => {
     m.authPhone.mockRejectedValue({ code: 'auth/internal-error' })

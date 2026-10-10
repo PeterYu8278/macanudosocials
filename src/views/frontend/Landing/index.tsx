@@ -78,11 +78,12 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     }
   )
   const openRegisterFromUrl = new URLSearchParams(window.location.search).get('open') === 'register'
+  const openLoginFromUrl = new URLSearchParams(window.location.search).get('open') === 'login'
   const [scrolled, setScrolled] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992)
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
   const [salonModalVisible, setSalonModalVisible] = useState(false)
-  const [authModalVisible, setAuthModalVisible] = useState(loginOnly || openRegisterFromUrl)
+  const [authModalVisible, setAuthModalVisible] = useState(loginOnly || openRegisterFromUrl || openLoginFromUrl)
   const [authMode, setAuthMode] = useState<'login' | 'register'>(openRegisterFromUrl ? 'register' : 'login')
   const [authLoading, setAuthLoading] = useState(false)
   const [resetPasswordVisible, setResetPasswordVisible] = useState(false)
@@ -92,13 +93,19 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const [loginError, setLoginError] = useState<string>('')
 
   useEffect(() => {
-    if (loginOnly || prefersReducedMotion || isMobile) return
+    if (!openLoginFromUrl) return
+    const phone = normalizePhoneNumber(new URLSearchParams(window.location.search).get('phone') || '')
+    if (phone) loginForm.setFieldsValue({ email: phone })
+  }, [loginForm, openLoginFromUrl])
+
+  useEffect(() => {
+    if (loginOnly || openLoginFromUrl || prefersReducedMotion || isMobile) return
 
     const timer = setTimeout(() => {
       setSalonModalVisible(true)
     }, 1500)
     return () => clearTimeout(timer)
-  }, [isMobile, loginOnly, prefersReducedMotion])
+  }, [isMobile, loginOnly, openLoginFromUrl, prefersReducedMotion])
 
   useEffect(() => {
     if (!loginOnly || openRegisterFromUrl) return

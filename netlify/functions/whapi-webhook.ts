@@ -46,6 +46,12 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const send = async (body: string) => {
     if ((await submitWhapi(whapiToken, phone, body)).status !== 'accepted') throw new Error('whapi-send-failed')
   }
+  const sendLogin = async () => {
+    const loginUrl = `${(process.env.URL || 'https://macanudosocials.com').replace(/\/$/, '')}/?open=login&phone=${encodeURIComponent(phone)}`
+    const body = 'This WhatsApp number is already registered. Tap Login now to sign in. If you forgot your password, use the password reset option on the website.'
+    const result = await submitWhapiUrlButton(whapiToken, phone, body, 'Login now', loginUrl)
+    if (result.status !== 'accepted') await send(`${body}\n${loginUrl}`)
+  }
   const sendConfirmation = async (body: string) => {
     const result = await submitWhapiButtons(whapiToken, phone, body)
     if (result.status !== 'accepted') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
@@ -87,7 +93,7 @@ async function handleRegistrationMessage(db: any, payload: any) {
       }
     }
     if (phoneRegistered) {
-      await send('This WhatsApp number is already registered. To recover the account, use the password reset option on the website.')
+      await sendLogin()
       return
     }
     const referralCode = registerCommand[1]?.toUpperCase()
@@ -96,13 +102,13 @@ async function handleRegistrationMessage(db: any, payload: any) {
       return
     }
     if (existing && !expired && existing.step === 'completed') {
-      await send('This WhatsApp number is already registered. To recover the account, use the password reset option on the website.')
+      await sendLogin()
       return
     }
     if (existing && !expired && ['awaiting-form', 'awaiting-final-confirm'].includes(existing.step)) {
       await send(existing.step === 'awaiting-final-confirm'
         ? 'Your registration details are awaiting confirmation. Please tap Confirm in the previous message or reply CONFIRM.'
-        : 'Your registration link is still valid. Please use Open Registration in the previous message. To restart, send CANCEL first.')
+        : 'Your registration link is still valid. Please use Register now in the previous message. To restart, send CANCEL first.')
       return
     }
     const registrationToken = createRegistrationToken()
@@ -110,9 +116,9 @@ async function handleRegistrationMessage(db: any, payload: any) {
     const baseUrl = process.env.URL || 'https://macanudosocials.com'
     const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
     const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
-    const formMessage = 'Welcome to Macanudo Socials. Tap Open Registration to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
+    const formMessage = 'Welcome to Macanudo Socials. Tap Register now to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
     try {
-      const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Open Registration', formUrl)
+      const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Register now', formUrl)
       if (button.status !== 'accepted') await send(`${formMessage}\n${formUrl}`)
     } catch (error) {
       // Failed delivery must not leave the user stuck with an inaccessible valid link.
