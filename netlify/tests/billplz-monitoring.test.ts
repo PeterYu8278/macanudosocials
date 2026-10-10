@@ -5,6 +5,7 @@ import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
 const m = vi.hoisted(() => ({ docs: new Map<string, any>(), writes: vi.fn(), metrics: vi.fn(), checkout: vi.fn() }));
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}] }));
 vi.mock('../functions/_shared/pendingVisitCheckout', () => ({ settlePendingVisitCheckout: m.checkout }));
+vi.mock('../functions/_shared/membershipPayment', () => ({ handleMembershipBill: async () => false }));
 vi.mock('firebase-admin/firestore', () => {
   const ref = (path: string): any => ({ path, get: async () => snapshot(path) });
   const snapshot = (path: string): any => ({ id: path.split('/').at(-1), ref: ref(path), exists: m.docs.has(path), data: () => m.docs.get(path) });
@@ -32,7 +33,7 @@ vi.mock('firebase-admin/firestore', () => {
 import handler from '../functions/billplz-callback';
 const callback = (valid = true) => {
   const params = new URLSearchParams({ id: 'test-bill', paid: 'true', state: 'paid' });
-  const values = [...params.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value).join('|');
+  const values = [...params.entries()].map(([key, value]) => `${key}${value}`).sort().join('|');
   params.set('x_signature', valid ? createHmac('sha256', 'test-signature-key').update(values).digest('hex') : 'invalid');
   return handler(new Request('https://example.com/.netlify/functions/billplz-callback', {
     method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString(),

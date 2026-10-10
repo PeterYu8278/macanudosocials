@@ -4,6 +4,8 @@
  */
 
 export const GLOBAL_COLLECTIONS = {
+  MEMBERSHIP_PAYMENTS: '_membershipPayments',
+  MEMBERSHIP_PAYMENT_LOCKS: '_membershipPaymentLocks',
   FIRESTORE_METRICS: '_firestoreMetrics',
   FIRESTORE_METRIC_INGRESS: '_firestoreMetricIngress',
   /** 用户集合 */

@@ -1,4 +1,19 @@
 {
+  "annualPassPayment": {
+    "reloadAmount": "Reload amount",
+    "feeOnly": "Annual fee only",
+    "reloadOption": "Reload RM {{amount}} + annual fee",
+    "breakdown": "Reload RM {{reload}} + Annual fee RM {{fee}} = RM {{total}}",
+    "payAndActivate": "Pay & Activate Annual Pass",
+    "resuming": "Resuming your existing Annual Pass payment.",
+    "creating": "Your payment is being created. Please try again shortly or contact staff if it remains pending.",
+    "unavailable": "Annual Pass payment is unavailable. Please try again or contact staff.",
+    "pendingTitle": "Payment confirmation pending",
+    "pendingDescription": "Your Annual Pass payment has not been confirmed yet. Check again before making another payment.",
+    "successDescription": "Your Annual Pass is active and your wallet has been updated.",
+    "creditedTitle": "Payment credited to your wallet",
+    "creditedDescription": "Your account was already active or suspended. The full payment was credited to your wallet without another annual fee. Contact staff for assistance."
+  },
   "whatsappManagement": {
     "consentLabel": "WhatsApp notifications",
     "title": "WhatsApp",

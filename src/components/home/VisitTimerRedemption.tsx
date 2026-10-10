@@ -1,12 +1,12 @@
 // 合并后的驻店计时器和兑换模块组件
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 'antd';
+import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col, Select, Alert } from 'antd';
 import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction, subscribeToVisitSession } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
 import { getUserMembershipPeriod } from '../../services/firebase/membershipFee';
-import { activateMembership } from '../../services/membershipActivation';
+import { activateMembership, createMembershipPayment, getMembershipPaymentQuote, type MembershipPaymentQuote } from '../../services/membershipActivation';
 import { getUserData } from '../../services/firebase/auth';
 import StoreSelect from '../common/StoreSelect';
 import { useNavigate } from 'react-router-dom';
@@ -51,6 +51,37 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [membershipModalVisible, setMembershipModalVisible] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState<'membership' | 'daypass' | null>(null);
+  const [membershipQuote, setMembershipQuote] = useState<MembershipPaymentQuote | null>(null);
+  const [membershipQuoteError, setMembershipQuoteError] = useState(false);
+  const [membershipReload, setMembershipReload] = useState(100);
+  useEffect(() => {
+    if (!membershipModalVisible || selectedAccess !== 'membership') return;
+    let cancelled = false;
+    setMembershipQuote(null);
+    setMembershipQuoteError(false);
+    getMembershipPaymentQuote().then(quote => {
+      if (!cancelled) {
+        setMembershipQuote(quote);
+        setAnnualFeeAmount(quote.annualFee);
+        setMembershipReload(quote.reloadAmount ?? (quote.renewal ? 0 : 100));
+        if (quote.pending && quote.storeId) setSelectedStoreId(quote.storeId);
+      }
+    }).catch(() => { if (!cancelled) setMembershipQuoteError(true); });
+    return () => { cancelled = true; };
+  }, [membershipModalVisible, selectedAccess, user?.id]);
+  const handleMembershipPayment = async () => {
+    if (loading || !membershipQuote) return;
+    if (!selectedStoreId) { message.warning(t('reload.pleaseSelectStore')); return; }
+    setLoading(true);
+    try {
+      const payment = await createMembershipPayment(membershipReload, selectedStoreId);
+      if (payment.resumed) message.info(t('annualPassPayment.resuming'));
+      window.location.assign(payment.paymentUrl);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'PAYMENT_UNAVAILABLE';
+      message.error(t(code === 'PAYMENT_CREATING' ? 'annualPassPayment.creating' : 'annualPassPayment.unavailable'));
+    } finally { setLoading(false); }
+  };
   useEffect(() => {
     if (!user?.id) { setDayPassEnabled(false); return; }
     return onSnapshot(doc(db, GLOBAL_COLLECTIONS.CONFIG, 'points'), snapshot => {
@@ -1170,10 +1201,29 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
           return (
             <div style={{ marginTop: 24 }}>
+              {selectedAccess === 'membership' && !hasEnoughPoints && (
+                <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+                  {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')} />}
+                  {membershipQuote?.pending && <Alert type="info" message={t('annualPassPayment.resuming')} />}
+                  <Select
+                    aria-label={t('annualPassPayment.reloadAmount')}
+                    style={{ width: '100%' }}
+                    loading={!membershipQuote && !membershipQuoteError}
+                    disabled={loading || !membershipQuote || membershipQuote.pending}
+                    value={membershipReload}
+                    onChange={setMembershipReload}
+                    options={[
+                      ...(membershipQuote?.renewal ? [{ value: 0, label: t('annualPassPayment.feeOnly') }] : []),
+                      ...[100, 200, 500].map(value => ({ value, label: t('annualPassPayment.reloadOption', { amount: value }) })),
+                    ]}
+                  />
+                  {membershipQuote && <Text>{t('annualPassPayment.breakdown', { fee: membershipQuote.annualFee.toFixed(2), reload: membershipReload.toFixed(2), total: (membershipQuote.annualFee + membershipReload).toFixed(2) })}</Text>}
+                </Space>
+              )}
               <button
                 type="button"
-                onClick={hasEnoughPoints ? (selectedAccess === 'membership' ? handleActivateMembership : handleBuyDayPass) : () => navigate('/reload')}
-                disabled={loading}
+                onClick={hasEnoughPoints ? (selectedAccess === 'membership' ? handleActivateMembership : handleBuyDayPass) : selectedAccess === 'membership' ? handleMembershipPayment : () => navigate('/reload')}
+                disabled={loading || (selectedAccess === 'membership' && !membershipQuote)}
                 style={{
                   width: '100%',
                   height: 48,
@@ -1195,7 +1245,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 {!hasEnoughPoints && <WalletOutlined />}
                 {hasEnoughPoints
                   ? (selectedAccess === 'membership' ? t('visitTimer.confirmActivation') : t('visitTimer.confirmPurchase'))
-                  : `${t('visitTimer.reloadPoints')} (${t('visitTimer.short')}: ${cost - currentPoints})`
+                  : selectedAccess === 'membership' ? t('annualPassPayment.payAndActivate') : `${t('visitTimer.reloadPoints')} (${t('visitTimer.short')}: ${cost - currentPoints})`
                 }
               </button>
             </div>
