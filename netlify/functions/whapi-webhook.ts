@@ -1,6 +1,6 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
+import { initializeFirestore, Timestamp } from './_shared/firestoreMonitoring'
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'

@@ -34,21 +34,46 @@ export async function withFirestoreMonitoring<T>(feature: string, work: () => Pr
   return context.run({ feature, rows: new Map() }, async () => {
     try { return await work(); }
     finally {
-      try { await persistMetrics([...context.getStore()!.rows.values()], 'backend'); }
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      try {
+        // A quota incident must not hold authentication/payment responses in SDK retries.
+        await Promise.race([
+          persistMetrics([...context.getStore()!.rows.values()], 'backend'),
+          new Promise<void>(resolve => { timer = setTimeout(resolve, 1500); }),
+        ]);
+      }
       catch { /* Best effort: do not change the business response on quota failure. */ }
+      finally { if (timer) clearTimeout(timer); }
     }
   });
 }
 
 const original = new WeakMap<object, object>();
 const unwrap = (value: any) => value && typeof value === 'object' ? original.get(value) ?? value : value;
+const collectionPath = (value: any): string => value?.path?.split('/').filter((_: string, index: number) => index % 2 === 0).join('/')
+  || value?._queryOptions?.collectionId || 'unknown';
+
+function observeSnapshot(snapshot: any): any {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  return new Proxy(snapshot, {
+    get(target, key) {
+      if (key === 'ref') return instrument(target.ref);
+      if (key === 'docs') return target.docs.map(observeSnapshot);
+      if (key === 'forEach') return (callback: (doc: any) => void, thisArg?: any) =>
+        target.forEach((doc: any) => callback.call(thisArg, observeSnapshot(doc)));
+      const value = target[key];
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
+}
 function instrument(target: any, pending?: Array<[string, 'writes' | 'deletes']>): any {
   const proxy = new Proxy(target, {
     get(object, key) {
       const fn = object[key];
+      if (['parent', 'firestore'].includes(String(key)) && fn && typeof fn === 'object') return instrument(fn);
       if (typeof fn !== 'function') return fn;
       return (...args: any[]) => {
-        const collection = object.path?.split('/').filter((_: string, i: number) => i % 2 === 0).join('/') || object._queryOptions?.collectionId || 'unknown';
+        const collection = collectionPath(object);
         if (key === 'runTransaction') {
           let writes: Array<[string, 'writes' | 'deletes']> = [];
           return fn.call(object, (tx: any) => { writes = []; return args[0](instrument(tx, writes)); }, ...args.slice(1))
@@ -56,20 +81,22 @@ function instrument(target: any, pending?: Array<[string, 'writes' | 'deletes']>
             .catch((error: unknown) => { new Set(writes.map(([name]) => name)).forEach(name => record(name, 'failures')); throw error; });
         }
         if (key === 'batch') return instrument(fn.apply(object, args), []);
-        if (key === 'commit' && pending) return fn.apply(object, args).then((result: any) => {
+        if (key === 'commit' && pending) return Promise.resolve().then(() => fn.apply(object, args)).then((result: any) => {
           pending.forEach(([name, kind]) => record(name, kind)); return result;
         }).catch((error: unknown) => { pending.forEach(([name]) => record(name, 'failures')); throw error; });
         const isRead = key === 'get' || key === 'getAll';
         const isWrite = ['set', 'create', 'update', 'delete', 'add'].includes(String(key));
-        const collectionName = pending && args[0]?.path ? args[0].path.split('/').filter((_: string, i: number) => i % 2 === 0).join('/') : collection;
-        const result = fn.apply(object, args.map(unwrap));
+        const collectionName = pending && args[0] ? collectionPath(args[0]) : collection;
+        let result;
+        try { result = fn.apply(object, args.map(unwrap)); }
+        catch (error) { if (isRead || isWrite) record(collectionName, 'failures'); throw error; }
         if (isWrite && pending) { pending.push([collectionName, key === 'delete' ? 'deletes' : 'writes']); return proxy; }
         if ((isRead || isWrite) && result?.then) return result.then((value: any) => {
-          if (Array.isArray(value)) value.forEach((snapshot: any) => record(snapshot.ref?.parent?.path || collectionName, 'reads'));
+          if (Array.isArray(value)) value.forEach((snapshot: any) => record(collectionPath(snapshot.ref), 'reads'));
           else record(collectionName, isRead ? 'reads' : key === 'delete' ? 'deletes' : 'writes', isRead ? value.size ?? 1 : 1);
-          return value;
+          return isRead ? Array.isArray(value) ? value.map(observeSnapshot) : observeSnapshot(value) : value;
         }).catch((error: unknown) => { record(collectionName, 'failures'); throw error; });
-        if (result && typeof result === 'object' && (result.path || result.where || result.commit)) return instrument(result, pending);
+        if (result && typeof result === 'object' && (result.path || result.where || result._queryOptions || result.commit)) return instrument(result, pending);
         return result;
       };
     },

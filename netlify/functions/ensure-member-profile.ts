@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getFirestore, Timestamp } from './_shared/firestoreMonitoring'
 import { randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { MemberIdentityError } from './_shared/memberIdentity'

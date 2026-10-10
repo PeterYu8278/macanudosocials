@@ -104,7 +104,7 @@
   },
   "systemMonitoring": {
     "observed": "Application-observed Firestore operations (UTC)",
-    "observedNote": "Best-effort telemetry starts after deployment, not billing usage. Firebase service calls are covered; direct view/store SDK calls, mobile apps and unconnected backend functions are not covered. Cache reads are separate; listeners count changed documents. Browser reports are authenticated self-reports, batched every 60 seconds; failed reports may be lost. Monitoring adds writes and dashboard reads. No historical backfill or automatic alerts.",
+    "observedNote": "Best-effort telemetry starts after deployment, not billing usage. Frontend Firebase services and all Firestore-backed Netlify functions are connected, including payments, authentication, notifications, WhatsApp and scheduled jobs. Direct view/store SDK calls and mobile apps are not covered. Cache reads are separate; listeners count changed documents. Browser reports are authenticated self-reports, batched every 60 seconds; failed reports may be lost. Monitoring's own collections are excluded; it adds writes and dashboard reads. No historical backfill or automatic alerts.",
     "range": "Time range",
     "days": "Last {{count}} day(s)",
     "allSource": "All sources",

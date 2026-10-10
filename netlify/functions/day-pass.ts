@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from './_shared/firestoreMonitoring';
 import { executeDayPass } from './_shared/dayPass';
 
 const reply = (statusCode: number, code: string, extra = {}) => ({

@@ -1,6 +1,6 @@
 import { toWebFunction } from './_shared/webFunction';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring';
 
 const getAdminDb = () => {
   if (!getApps().length) {

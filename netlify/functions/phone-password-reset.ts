@@ -2,7 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { initializeFirestore } from 'firebase-admin/firestore'
+import { initializeFirestore } from './_shared/firestoreMonitoring'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
 

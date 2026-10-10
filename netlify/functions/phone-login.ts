@@ -2,7 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore } from './_shared/firestoreMonitoring'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 
 const reply = (statusCode: number, body: Record<string, unknown>) => ({

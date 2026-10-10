@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { initializeFirestore } from 'firebase-admin/firestore'
+import { initializeFirestore } from './_shared/firestoreMonitoring'
 import { toWebFunction } from './_shared/webFunction'
 import { runScheduledWhatsApp } from './_shared/scheduledWhatsApp'
 

@@ -4,7 +4,7 @@
  */
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from './_shared/firestoreMonitoring';
 import { createHmac } from 'crypto';
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections';
 import { settlePendingVisitCheckout } from './_shared/pendingVisitCheckout';

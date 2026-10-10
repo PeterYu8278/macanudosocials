@@ -2,7 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore, Timestamp } from 'firebase-admin/firestore'
+import { getFirestore, Timestamp } from './_shared/firestoreMonitoring'
 import { authorizeMemberChange, MemberIdentityError, resolveMemberAccount } from './_shared/memberIdentity'
 import { deliverMemberEmail, emailDeliveryConfig } from './_shared/memberEmailDelivery'
 import { lockMemberIdentity } from './_shared/memberIdentityLock'

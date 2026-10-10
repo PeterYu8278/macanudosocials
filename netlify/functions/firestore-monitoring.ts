@@ -8,7 +8,7 @@ import { persistMetrics, type MetricRow } from './_shared/firestoreMonitoring';
 const json = (status: number, body: unknown) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
 });
-export default async function handler(request: Request) {
+async function handler(request: Request) {
   try {
     if (!['GET', 'POST'].includes(request.method)) return json(405, { error: 'METHOD_NOT_ALLOWED' });
     const token = request.headers.get('authorization')?.match(/^Bearer (.+)$/)?.[1];
@@ -61,3 +61,4 @@ export default async function handler(request: Request) {
     return json(503, { error: 'MONITORING_UNAVAILABLE' });
   }
 }
+export default handler;

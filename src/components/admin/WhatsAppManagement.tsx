@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { useAuthStore } from '../../store/modules/auth'
 import { whatsappRequest } from '../../services/api/whatsapp'
 import { normalizePhoneNumber } from '../../utils/phoneNormalization'
+import { formatWhatsAppMessage } from '../../utils/whatsappMessage'
 import { defaultWhatsAppSettings, type WhatsAppManagementState } from '../../types/whatsapp'
 import './WhatsAppManagement.css'
 
@@ -84,7 +85,7 @@ export default function WhatsAppManagement() {
     try {
       const result = await whatsappRequest(action, { phone, text: values.text, requestId })
       setLastStatus(result.status)
-      if (popup) popup.location.href = `https://wa.me/${phone.slice(1)}?text=${encodeURIComponent(values.text)}`
+      if (popup) popup.location.href = `https://wa.me/${phone.slice(1)}?text=${encodeURIComponent(formatWhatsAppMessage(values.text))}`
     } catch (reason) { popup?.close(); showError(reason) } finally { setBusy(false) }
   }
   if (!state) return <div className="whatsapp-management"><Button loading>{t('common.loading')}</Button></div>

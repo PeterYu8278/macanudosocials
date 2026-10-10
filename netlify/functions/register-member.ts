@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { initializeFirestore, Timestamp, FieldValue, type Firestore } from 'firebase-admin/firestore'
+import { initializeFirestore, Timestamp, FieldValue, type Firestore } from './_shared/firestoreMonitoring'
 import { createHash, randomInt, randomUUID } from 'node:crypto'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'

@@ -2,7 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { Timestamp, getFirestore } from 'firebase-admin/firestore'
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring'
 import { mergeLegacyRedemptionEntries } from '../../src/utils/legacyRedemptionArtifacts'
 import { addUnknownReferralEntries } from '../../src/utils/legacyReferralPlaceholders'
 import { forEachMigrationMember } from '../../src/utils/legacyMigrationConcurrency'

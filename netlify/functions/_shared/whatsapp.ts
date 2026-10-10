@@ -1,4 +1,5 @@
 import type { Firestore } from 'firebase-admin/firestore'
+import { formatWhatsAppMessage } from '../../../src/utils/whatsappMessage'
 import { createHash } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { defaultWhatsAppSettings, type WhatsAppSettings } from '../../../src/types/whatsapp'
@@ -23,7 +24,7 @@ export async function loadWhatsApp(db: Firestore) {
 export async function submitWhapi(token: string, phone: string, text: string) {
   const response = await fetch('https://gate.whapi.cloud/messages/text', {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ to: phone.replace(/^\+/, ''), body: text }), signal: AbortSignal.timeout(10000),
+    body: JSON.stringify({ to: phone.replace(/^\+/, ''), body: formatWhatsAppMessage(text) }), signal: AbortSignal.timeout(10000),
   })
   // A failed/invalid response can follow a successful submission. Never automatically resend.
   if (!response.ok) return { status: response.status >= 500 ? 'unknown' : 'failed', messageId: '' }
@@ -36,7 +37,7 @@ export async function submitWhapiButtons(token: string, phone: string, text: str
   const response = await fetch('https://gate.whapi.cloud/messages/interactive', {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'button', to: phone.replace(/^\+/, ''), body: { text },
+      type: 'button', to: phone.replace(/^\+/, ''), body: { text: formatWhatsAppMessage(text) },
       action: { buttons: [
         { type: 'quick_reply', title: 'Confirm', id: 'register_confirm' },
         { type: 'quick_reply', title: 'Cancel', id: 'register_cancel' },
@@ -53,7 +54,7 @@ export async function submitWhapiQuickReply(token: string, phone: string, text: 
   const response = await fetch('https://gate.whapi.cloud/messages/interactive', {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'button', to: phone.replace(/^\+/, ''), body: { text },
+      type: 'button', to: phone.replace(/^\+/, ''), body: { text: formatWhatsAppMessage(text) },
       action: { buttons: [{ type: 'quick_reply', title: title.slice(0, 20), id }] },
     }), signal: AbortSignal.timeout(10000),
   })
@@ -67,7 +68,7 @@ export async function submitWhapiUrlButton(token: string, phone: string, text: s
   const response = await fetch('https://gate.whapi.cloud/messages/interactive', {
     method: 'POST', headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      type: 'button', to: phone.replace(/^\+/, ''), body: { text },
+      type: 'button', to: phone.replace(/^\+/, ''), body: { text: formatWhatsAppMessage(text) },
       action: { buttons: [{ type: 'url', title: title.slice(0, 25), id: 'open_email', url }] },
     }), signal: AbortSignal.timeout(10000),
   })

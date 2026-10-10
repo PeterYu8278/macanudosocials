@@ -2,7 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore } from './_shared/firestoreMonitoring'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 
 const reply = (statusCode: number, code?: string) => ({

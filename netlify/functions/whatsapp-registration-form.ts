@@ -1,5 +1,5 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
+import { initializeFirestore, Timestamp } from './_shared/firestoreMonitoring'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
 import { encryptRegistrationPassword, maskEmail, registrationTokenHash, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
