@@ -8,6 +8,7 @@ export const GLOBAL_COLLECTIONS = {
   MEMBERSHIP_PAYMENT_STATUSES: '_membershipPaymentStatuses',
   MEMBERSHIP_PAYMENT_LOCKS: '_membershipPaymentLocks',
   FIRESTORE_METRICS: '_firestoreMetrics',
+  FIRESTORE_HOURLY_METRICS: '_firestoreMetricsHourly',
   FIRESTORE_METRIC_INGRESS: '_firestoreMetricIngress',
   /** 用户集合 */
   USERS: 'users',

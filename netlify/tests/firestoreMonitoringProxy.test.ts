@@ -1,22 +1,40 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ set: vi.fn(), persist: vi.fn(), commit: vi.fn(), get: vi.fn(), queryGet: vi.fn(), getAll: vi.fn(), batchSet: vi.fn(), batchCommit: vi.fn() }));
+const m = vi.hoisted(() => ({ set: vi.fn(), persist: vi.fn(), hourlyPersist: vi.fn(), commit: vi.fn(), get: vi.fn(), queryGet: vi.fn(), getAll: vi.fn(), batchSet: vi.fn(), batchCommit: vi.fn() }));
 vi.mock('firebase-admin/firestore', () => {
   const ref = (path: string): any => ({ path, get: m.get, set: m.set, parent: collection(path.split('/').slice(0, -1).join('/')), collection: (id: string) => collection(`${path}/${id}`) });
   const collection = (path: string): any => ({ path, doc: (id: string) => ref(`${path}/${id}`), get: m.queryGet,
     where: () => ({ _queryOptions: { collectionId: path.split('/').filter((_: string, i: number) => i % 2 === 0).join('/') }, get: m.queryGet }) });
   return { FieldValue: { increment: (n: number) => n, serverTimestamp: () => 'timestamp' },
     getFirestore: () => ({ collection, getAll: m.getAll,
-      batch: () => ({ set: (...args: any[]) => args[0].path.startsWith('_firestoreMetrics/') ? m.persist(...args) : m.batchSet(...args),
+      batch: () => ({ set: (...args: any[]) => args[0].path.startsWith('_firestoreMetrics/') ? m.persist(...args)
+        : args[0].path.startsWith('_firestoreMetricsHourly/') ? m.hourlyPersist(...args) : m.batchSet(...args),
         commit: () => m.commit() }),
       runTransaction: async (fn: any) => { await fn({ get: (r: any) => r.get(), set: m.set }); return fn({ get: (r: any) => r.get(), set: m.set }); },
     }),
   };
 });
-import { getFirestore, withFirestoreMonitoring } from '../functions/_shared/firestoreMonitoring';
+import { getFirestore, persistMetrics, withFirestoreMonitoring } from '../functions/_shared/firestoreMonitoring';
 describe('Server monitoring isolation', () => {
   beforeEach(() => { vi.clearAllMocks(); m.commit.mockResolvedValue(undefined); m.set.mockResolvedValue(undefined); });
   afterEach(() => { vi.unstubAllEnvs(); vi.useRealTimers(); });
+  it('persists daily and hourly UTC totals in one batch with stable IDs within each bucket', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-11T23:59:00Z'));
+    const row = { collection: 'users', feature: 'home', reads: 5, writes: 2, deletes: 0, failures: 1, cacheReads: 3 };
+    await persistMetrics([row], 'frontend');
+    expect(m.persist.mock.calls[0][1]).toMatchObject({ date: '2026-10-11', reads: 5 });
+    expect(m.hourlyPersist.mock.calls[0][1]).toMatchObject({ date: '2026-10-11', hour: '2026-10-11T23', reads: 5 });
+    vi.setSystemTime(new Date('2026-10-12T00:00:00Z'));
+    await persistMetrics([row], 'frontend');
+    expect(m.hourlyPersist.mock.calls[1][1].hour).toBe('2026-10-12T00');
+    expect(m.hourlyPersist.mock.calls[1][0].path).not.toBe(m.hourlyPersist.mock.calls[0][0].path);
+    expect(m.commit).toHaveBeenCalledTimes(2);
+  });
+  it('excludes hourly monitoring collections from recursive reporting', async () => {
+    vi.stubEnv('NODE_ENV', 'production'); m.get.mockResolvedValue({ exists: true });
+    await withFirestoreMonitoring('lookup', async () => { await getFirestore().collection('_firestoreMetricsHourly').doc('hour').get(); });
+    expect(m.persist).not.toHaveBeenCalled(); expect(m.hourlyPersist).not.toHaveBeenCalled();
+  });
   it('preserves transaction retries, records writes once, and excludes IDs', async () => {
     vi.stubEnv('NODE_ENV', 'production');
     m.get.mockResolvedValue({ exists: true });

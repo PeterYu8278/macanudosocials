@@ -152,6 +152,12 @@
     "saveAi": "Save AI Settings"
   },
   "systemMonitoring": {
+    "granularity": "Time resolution",
+    "perHour": "Per hour",
+    "perDay": "Per day",
+    "hour": "UTC hour",
+    "hourlyOperations": "Operations per hour (UTC)",
+    "hourlyEmpty": "No hourly reports for this period. Hourly collection starts after deployment.",
     "trend": "Observed operation trends",
     "dailyOperations": "Operations per day (UTC)",
     "observed": "Application-observed Firestore operations (UTC)",

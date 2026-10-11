@@ -1,22 +1,37 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ persist: vi.fn(), role: 'developer', verify: vi.fn(), receivedAt: 0 }));
+const m = vi.hoisted(() => ({ persist: vi.fn(), role: 'developer', verify: vi.fn(), receivedAt: 0, collections: [] as string[] }));
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}] }));
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: m.verify }) }));
 vi.mock('../functions/_shared/firestoreMonitoring', () => ({ persistMetrics: m.persist }));
-vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({ collection: () => ({
+vi.mock('firebase-admin/firestore', () => ({ getFirestore: () => ({ collection: (name: string) => { m.collections.push(name); return ({
   doc: () => ({ get: async () => ({ data: () => ({ role: m.role }) }) }),
   where: () => ({ limit: () => ({ get: async () => ({ docs: [], size: 0 }) }) }),
-}), runTransaction: async (fn: any) => fn({ get: async () => ({ data: () => ({ receivedAt: m.receivedAt }) }), set: vi.fn() }) }) }));
+}); }, runTransaction: async (fn: any) => fn({ get: async () => ({ data: () => ({ receivedAt: m.receivedAt }) }), set: vi.fn() }) }) }));
 import handler from '../functions/firestore-monitoring';
 const request = (method: string, body?: unknown, token = 'token') => new Request('https://test/.netlify/functions/firestore-monitoring', {
   method, headers: token ? { Authorization: `Bearer ${token}` } : {}, ...(body ? { body: JSON.stringify(body) } : {}),
 });
 describe('Monitoring access boundary', () => {
-  beforeEach(() => { vi.clearAllMocks(); m.role = 'developer'; m.receivedAt = 0; m.verify.mockResolvedValue({ uid: crypto.randomUUID() }); });
+  beforeEach(() => { vi.clearAllMocks(); m.collections = []; m.role = 'developer'; m.receivedAt = 0; m.verify.mockResolvedValue({ uid: crypto.randomUUID() }); });
   it('requires authentication', async () => { expect((await handler(request('GET', undefined, ''))).status).toBe(401); });
   it('rejects non-admin dashboard access', async () => { m.role = 'member'; expect((await handler(request('GET'))).status).toBe(403); });
   it('allows developer dashboard access', async () => { expect((await handler(request('GET'))).status).toBe(200); });
+  it('uses hourly storage only when requested and keeps the default daily query compatible', async () => {
+    expect((await handler(request('GET'))).status).toBe(200);
+    expect(m.collections).toContain('_firestoreMetrics');
+    m.collections = [];
+    expect((await handler(new Request('https://test/.netlify/functions/firestore-monitoring?granularity=hour&days=7', {
+      headers: { Authorization: 'Bearer token' },
+    }))).status).toBe(200);
+    expect(m.collections).toContain('_firestoreMetricsHourly');
+    expect(m.collections).not.toContain('_firestoreMetrics');
+  });
+  it('rejects an unsupported resolution', async () => {
+    expect((await handler(new Request('https://test/.netlify/functions/firestore-monitoring?granularity=minute', {
+      headers: { Authorization: 'Bearer token' },
+    }))).status).toBe(400);
+  });
   it('rejects invalid counters and private telemetry recursion', async () => {
     expect((await handler(request('POST', { rows: [{ collection: '_firestoreMetrics', feature: 'home' }] }))).status).toBe(400);
     expect(m.persist).not.toHaveBeenCalled();

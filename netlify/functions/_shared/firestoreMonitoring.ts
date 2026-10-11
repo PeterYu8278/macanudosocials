@@ -19,13 +19,17 @@ export function record(collection: string, kind: typeof counters[number], count 
 export async function persistMetrics(rows: MetricRow[], source: 'frontend' | 'backend') {
   if (!rows.length) return;
   const db = rawFirestore();
-  const date = new Date().toISOString().slice(0, 10);
+  const time = new Date().toISOString();
+  const date = time.slice(0, 10);
+  const hour = time.slice(0, 13);
   const batch = db.batch();
   for (const row of rows) {
     const id = createHash('sha256').update(`${date}:${source}:${row.collection}:${row.feature}`).digest('hex');
     const values: Record<string, unknown> = { date, source, collection: row.collection, feature: row.feature, updatedAt: FieldValue.serverTimestamp() };
     counters.forEach(key => { values[key] = FieldValue.increment(row[key]); });
     batch.set(db.collection(GLOBAL_COLLECTIONS.FIRESTORE_METRICS).doc(id), values, { merge: true });
+    const hourlyId = createHash('sha256').update(`${hour}:${source}:${row.collection}:${row.feature}`).digest('hex');
+    batch.set(db.collection(GLOBAL_COLLECTIONS.FIRESTORE_HOURLY_METRICS).doc(hourlyId), { ...values, hour }, { merge: true });
   }
   await batch.commit();
 }

@@ -152,6 +152,12 @@
     "saveAi": "保存 AI 设置"
   },
   "systemMonitoring": {
+    "granularity": "时间粒度",
+    "perHour": "每小时",
+    "perDay": "每日",
+    "hour": "UTC 小时",
+    "hourlyOperations": "每小时操作次数（UTC）",
+    "hourlyEmpty": "此期间暂无小时数据，小时汇总将在部署后开始采集。",
     "trend": "应用监控操作趋势",
     "dailyOperations": "每日操作次数（UTC）",
     "observed": "应用观测的 Firestore 操作量（UTC）",

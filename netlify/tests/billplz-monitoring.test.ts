@@ -57,9 +57,12 @@ describe('Payment callback with monitoring enabled', () => {
     expect((await callback()).status).toBe(200);
     expect(m.writes).toHaveBeenCalledWith(`${C.USERS}/private-user`, expect.objectContaining({ role: 'member', 'membership.points': 200 }));
     expect(m.checkout).toHaveBeenCalledTimes(1);
-    expect(m.metrics.mock.calls.map(([, row]) => [row.collection, row.writes])).toEqual([
-      [C.APP_CONFIG, 0], [C.RELOAD_RECORDS, 1], [C.USERS, 1], [C.POINTS_RECORDS, 1],
-    ]);
+    for (const collectionId of [C.FIRESTORE_METRICS, C.FIRESTORE_HOURLY_METRICS]) {
+      expect(m.metrics.mock.calls.filter(([ref]) => ref.path.startsWith(`${collectionId}/`))
+        .map(([, row]) => [row.collection, row.writes])).toEqual([
+        [C.APP_CONFIG, 0], [C.RELOAD_RECORDS, 1], [C.USERS, 1], [C.POINTS_RECORDS, 1],
+      ]);
+    }
     expect(JSON.stringify(m.metrics.mock.calls)).not.toContain('private-user');
   });
   it('does not credit a sequentially repeated paid callback twice', async () => {

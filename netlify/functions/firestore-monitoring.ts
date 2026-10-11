@@ -53,8 +53,11 @@ async function handler(request: Request) {
     const params = new URL(request.url).searchParams;
     const days = Number(params.get('days') || 1);
     if (![1, 7, 30].includes(days)) return json(400, { error: 'INVALID_RANGE' });
+    const granularity = params.get('granularity') || 'day';
+    if (!['day', 'hour'].includes(granularity)) return json(400, { error: 'INVALID_GRANULARITY' });
     const start = new Date(Date.now() - (days - 1) * 86_400_000).toISOString().slice(0, 10);
-    const snapshot = await db.collection(GLOBAL_COLLECTIONS.FIRESTORE_METRICS).where('date', '>=', start).limit(2001).get();
+    const collectionId = granularity === 'hour' ? GLOBAL_COLLECTIONS.FIRESTORE_HOURLY_METRICS : GLOBAL_COLLECTIONS.FIRESTORE_METRICS;
+    const snapshot = await db.collection(collectionId).where('date', '>=', start).limit(2001).get();
     return json(200, { rows: snapshot.docs.slice(0, 2000).map(doc => ({ id: doc.id, ...doc.data() })), truncated: snapshot.size > 2000 });
   } catch (error) {
     console.error('[firestore-monitoring]', error instanceof Error ? error.message : 'Unavailable');
