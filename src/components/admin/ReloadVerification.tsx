@@ -148,9 +148,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         reviewer.id,
         finalProofUrl || undefined,
         values.notes,
-        reviewer.displayName,
-        values.actualAmount,
-        values.creditOnly
+        reviewer.displayName
       );
 
       if (result.success) {
@@ -715,22 +713,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               <div>{t('pointsConfig.reloadVerification.pointsEquivalent', { points: currentRecord.pointsEquivalent })}</div>
             </div>
 
-            {currentRecord?.membershipOrderId && <Form.Item name="actualAmount"
-              label={t('annualPassPayment.actualAmount')}
-              rules={[{ required: true, type: 'number', min: 0.01 }, {
-                validator: (_, value) => value === currentRecord.requestedAmount ? Promise.resolve()
-                  : Promise.reject(new Error(t('annualPassPayment.amountMismatch'))),
-              }]}>
-              <InputNumber min={0.01} precision={2} prefix="RM" style={{ width: '100%' }} />
-            </Form.Item>}
-            {currentRecord?.membershipOrderId && <Form.Item name="creditOnly" valuePropName="checked">
-              <Checkbox>{t('annualPassPayment.creditOnlyReview')}</Checkbox>
-            </Form.Item>}
             <Form.Item
               name="proof"
-              rules={currentRecord?.membershipOrderId ? [{ validator: (_, value) =>
-                value?.some((file: any) => file.originFileObj)
-                  ? Promise.resolve() : Promise.reject(new Error(t('annualPassPayment.proofRequired'))) }] : []}
               label={<span style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('pointsConfig.reloadVerification.uploadProofLabel')}</span>}
               valuePropName="fileList"
               getValueFromEvent={(e) => {

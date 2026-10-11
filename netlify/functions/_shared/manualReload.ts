@@ -63,7 +63,6 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
     }
     const gross = Number(record.requestedAmount);
     if (!Number.isFinite(gross) || gross <= 0 || Math.round(gross * 100) / 100 !== gross) throw new Error('INVALID_AMOUNT');
-    if (order && (input.actualAmount !== gross || !input.proof?.trim())) throw new Error('PAYMENT_PROOF_REQUIRED');
     if (input.actualAmount !== undefined && input.actualAmount !== gross) throw new Error('PAYMENT_AMOUNT_MISMATCH');
     // Ordinary manual reloads retain the existing whole-point conversion.
     const credit = order ? gross : Math.round(gross);

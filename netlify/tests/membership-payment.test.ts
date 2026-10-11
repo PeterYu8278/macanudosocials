@@ -136,9 +136,18 @@ describe('Annual Pass payment', () => {
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
     expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(1);
   });
-  it.each(['missingProof', 'amountMismatch', 'wrongStore', 'memberRole', 'active', 'suspended'])('blocks invalid manual approval: %s', async failure => {
+  it('approves a membership package without proof or a separate actual amount, like an ordinary reload', async () => {
     const body = await manualPackage();
-    if (failure === 'missingProof') body.proof = '';
+    const response = await review({ action: 'approve', recordId: body.recordId });
+    expect(response.status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'active', membership: { points: 180 } });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'completed', actualAmount: 250, verifiedBy: 'operator' });
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('fulfilled');
+    expect((await review({ action: 'approve', recordId: body.recordId })).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(180);
+  });
+  it.each(['amountMismatch', 'wrongStore', 'memberRole', 'active', 'suspended'])('blocks invalid manual approval: %s', async failure => {
+    const body = await manualPackage();
     if (failure === 'amountMismatch') body.actualAmount = 100;
     if (failure === 'wrongStore') m.docs.get(`${C.USERS}/operator`).storeId = 'other';
     if (failure === 'memberRole') m.docs.get(`${C.USERS}/operator`).role = 'member';
