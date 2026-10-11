@@ -14,6 +14,7 @@ const reply = (statusCode: number, data: Record<string, unknown>) => ({
 export const eventHandler: EventHandler = async event => {
   if (!['GET', 'POST'].includes(event.httpMethod)) return reply(405, { success: false });
   let stage = 'initialize';
+  let configurationIssues: string[] = [];
   try {
     if (!getApps().length) {
       if (!process.env.FIREBASE_SERVICE_ACCOUNT) throw new Error('SERVICE_UNAVAILABLE');
@@ -36,6 +37,12 @@ export const eventHandler: EventHandler = async event => {
     stage = 'read_payment_config';
     const appConfig = (await db.collection(C.APP_CONFIG).doc('default').get()).data();
     const gateway = appConfig?.payment?.billplz;
+    configurationIssues = [
+      ...(gateway?.enabled !== true ? ['enabled'] : []),
+      ...['apiKey', 'collectionId', 'xSignatureKey'].filter(key =>
+        typeof gateway?.[key] !== 'string' || !gateway[key].trim()),
+    ];
+    const paymentAvailable = configurationIssues.length === 0;
     const baseUrl = gateway?.isSandbox !== false ? 'https://www.billplz-sandbox.com/api/v3' : 'https://www.billplz.com/api/v3';
     const gatewayOptions = { headers: { Authorization: `Basic ${Buffer.from(`${gateway?.apiKey}:`).toString('base64')}` }, timeout: 15000 };
 
@@ -73,11 +80,11 @@ export const eventHandler: EventHandler = async event => {
         const pending = existing.data();
         if (pending?.status === 'pending') return reply(200, {
           success: true, annualFee: pending.annualFee, renewal: pending.renewalType === 'renewal',
-          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100, accountStatus: user.status,
+          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100, accountStatus: user.status, paymentAvailable,
         });
         if (pending?.status === 'creating') throw new Error('PAYMENT_CREATING');
       }
-      return reply(200, { success: true, annualFee: fee, renewal, accountStatus: user.status });
+      return reply(200, { success: true, annualFee: fee, renewal, accountStatus: user.status, paymentAvailable });
     }
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { throw new Error('INVALID_REQUEST'); }
@@ -86,7 +93,7 @@ export const eventHandler: EventHandler = async event => {
     stage = 'validate_store';
     if (!(await db.collection(C.STORES).doc(body.storeId.trim()).get()).exists) throw new Error('STORE_REQUIRED');
     stage = 'validate_gateway';
-    if (!gateway?.enabled || !gateway.apiKey || !gateway.collectionId || !gateway.xSignatureKey) throw new Error('PAYMENT_UNAVAILABLE');
+    if (!paymentAvailable) throw new Error('PAYMENT_CONFIGURATION_INCOMPLETE');
     const totalCents = (renewal ? 0 : Math.round(fee * 100)) + reloadAmount * 100;
     const lockRef = db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(userSnapshot.id);
     const newOrderRef = db.collection(C.MEMBERSHIP_PAYMENTS).doc();
@@ -150,13 +157,15 @@ export const eventHandler: EventHandler = async event => {
       // Never log raw gateway errors: they can contain credentials and customer data.
       const safeCode = typeof error?.code === 'number' ? error.code
         : typeof error?.code === 'string' && /^[A-Z_0-9]{1,64}$/.test(error.code) ? error.code
-        : ['SERVICE_UNAVAILABLE', 'PAYMENT_UNAVAILABLE'].includes(code) ? code : 'dependency_error';
+        : ['SERVICE_UNAVAILABLE', 'PAYMENT_UNAVAILABLE', 'PAYMENT_CONFIGURATION_INCOMPLETE'].includes(code) ? code : 'dependency_error';
       console.error('[membership-payment] Failed', {
         stage, method: event.httpMethod, code: safeCode,
+        ...(stage === 'validate_gateway' && { configurationIssues }),
         ...(Number.isInteger(error?.response?.status) && { upstreamStatus: error.response.status }),
       });
     }
-    return reply(known.includes(code) ? 409 : 503, { success: false, code: known.includes(code) ? code : 'PAYMENT_UNAVAILABLE' });
+    return reply(known.includes(code) ? 409 : 503, { success: false,
+      code: known.includes(code) || code === 'PAYMENT_CONFIGURATION_INCOMPLETE' ? code : 'PAYMENT_UNAVAILABLE' });
   }
 };
 

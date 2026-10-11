@@ -83,6 +83,43 @@ describe('Annual Pass payment', () => {
     m.auth.mockRejectedValue(new Error('expired'));
     expect((await request()).status).toBe(401);
   });
+  it.each(['enabled', 'apiKey', 'collectionId', 'xSignatureKey'])('reports missing %s without creating an order or leaking configuration values', async field => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    delete m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz[field];
+    try {
+      expect(await (await request()).json()).toMatchObject({ paymentAvailable: false });
+      const response = await request({ reloadAmount: 100, storeId: 'store' });
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({ code: 'PAYMENT_CONFIGURATION_INCOMPLETE' });
+      expect(log).toHaveBeenCalledWith('[membership-payment] Failed', {
+        stage: 'validate_gateway', method: 'POST', code: 'PAYMENT_CONFIGURATION_INCOMPLETE', configurationIssues: [field],
+      });
+      expect(m.post).not.toHaveBeenCalled();
+      expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
+      expect(JSON.stringify(log.mock.calls)).not.toContain('signature');
+    } finally { log.mockRestore(); }
+  });
+  it('does not redirect member payments to the platform subscription gateway', async () => {
+    const config = m.docs.get(`${C.APP_CONFIG}/default`);
+    config.paymentPlatform = structuredClone(config.payment);
+    delete config.payment;
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      expect(await (await request()).json()).toMatchObject({ paymentAvailable: false });
+      expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(503);
+      expect(m.post).not.toHaveBeenCalled();
+    } finally { log.mockRestore(); }
+  });
+  it('reports a ready gateway without exposing keys in the quote', async () => {
+    const quote = await (await request()).json();
+    expect(quote.paymentAvailable).toBe(true);
+    expect(quote).not.toHaveProperty('apiKey');
+    expect(quote).not.toHaveProperty('xSignatureKey');
+  });
+  it('rejects blank credentials rather than creating a doomed invoice', async () => {
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.apiKey = '   ';
+    expect(await (await request()).json()).toMatchObject({ paymentAvailable: false });
+  });
   it('logs the failing gateway stage without exposing credentials and retains the reservation', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     m.post.mockRejectedValueOnce(Object.assign(new Error('secret customer token'), {

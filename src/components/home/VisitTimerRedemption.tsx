@@ -1,7 +1,7 @@
 // 合并后的驻店计时器和兑换模块组件
 import React, { useState, useEffect } from 'react';
 import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col, Select, Alert, Button, Spin } from 'antd';
-import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
+import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction, subscribeToVisitSession } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
@@ -95,7 +95,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       window.location.assign(payment.paymentUrl);
     } catch (error) {
       const code = error instanceof Error ? error.message : 'PAYMENT_UNAVAILABLE';
-      message.error(t(code === 'PAYMENT_CREATING' ? 'annualPassPayment.creating' : 'annualPassPayment.unavailable'));
+      message.error(t(code === 'PAYMENT_CREATING' ? 'annualPassPayment.creating'
+        : code === 'PAYMENT_TIMEOUT' ? 'annualPassPayment.timeout'
+        : code === 'PAYMENT_CONFIGURATION_INCOMPLETE' ? 'annualPassPayment.configurationIncomplete' : 'annualPassPayment.unavailable'));
     } finally { setLoading(false); }
   };
   useEffect(() => {
@@ -677,7 +679,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                         boxShadow: '0 4px 12px rgba(196, 141, 58, 0.3)'
                       }}
                     >
-                      {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
+                      {loading && <LoadingOutlined spin />}
                       {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
                       {t(label)}
                     </button>
@@ -784,7 +786,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                                   : undefined
                     }
                   >
-                    {loading && <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
+                    {loading && <LoadingOutlined spin />}
                     {buttonIcon}
                     {buttonText}
                   </button>
@@ -1251,6 +1253,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
             <div style={{ marginTop: 24 }}>
               {needsMembershipPayment && (
                 <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+                  {membershipQuote?.paymentAvailable === false && <Alert type="warning"
+                    message={t('annualPassPayment.configurationIncomplete')}
+                    action={<Button size="small" icon={<ReloadOutlined />} onClick={() => setMembershipRetry(value => value + 1)}>
+                      {t('annualPassPayment.retryStatus')}
+                    </Button>}
+                  />}
                   {membershipQuote?.pending && <Alert type="info" message={t('annualPassPayment.resuming')} />}
                   {membershipQuote?.renewal && <Select
                     aria-label={t('annualPassPayment.reloadAmount')}
@@ -1272,7 +1280,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               <button
                 type="button"
                 onClick={selectedAccess === 'membership' ? (needsMembershipPayment ? handleMembershipPayment : handleActivateMembership) : hasEnoughPoints ? handleBuyDayPass : () => navigate('/reload')}
-                disabled={loading || (selectedAccess === 'membership' && !membershipQuote)}
+                disabled={loading || (selectedAccess === 'membership' && !membershipQuote)
+                  || (needsMembershipPayment && membershipQuote?.paymentAvailable === false)}
+                aria-busy={loading}
                 style={{
                   width: '100%',
                   height: 48,
@@ -1290,8 +1300,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   gap: 8
                 }}
               >
-                {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                {(needsMembershipPayment || !hasEnoughPoints) && <WalletOutlined />}
+                {loading ? <LoadingOutlined spin /> : (needsMembershipPayment || !hasEnoughPoints) && <WalletOutlined />}
                 {needsMembershipPayment
                   ? membershipQuote?.pending
                     ? t('annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })

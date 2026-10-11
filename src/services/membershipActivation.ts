@@ -9,18 +9,40 @@ export interface MembershipPaymentQuote {
   storeId?: string;
   total?: number;
   accountStatus?: string;
+  paymentAvailable?: boolean;
 }
 
 async function membershipPaymentRequest(query: string, body?: { reloadAmount: number; storeId: string }) {
-  if (!auth.currentUser) throw new Error('UNAUTHENTICATED');
-  const response = await fetch(`/.netlify/functions/membership-payment${query}`, {
-    method: body ? 'POST' : 'GET',
-    headers: { Authorization: `Bearer ${await auth.currentUser.getIdToken()}`, 'Content-Type': 'application/json' },
-    ...(body && { body: JSON.stringify(body) }),
+  const currentUser = auth.currentUser;
+  if (!currentUser) throw new Error('UNAUTHENTICATED');
+  const controller = new AbortController();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_resolve, reject) => {
+    timer = setTimeout(() => {
+      reject(new Error('PAYMENT_TIMEOUT'));
+      controller.abort();
+    }, 30_000);
   });
-  const result = await response.json();
-  if (!response.ok || !result.success) throw new Error(result.code || 'PAYMENT_UNAVAILABLE');
-  return result;
+  try {
+    const request = (async () => {
+      const token = await currentUser.getIdToken();
+      // A token lookup may finish after the deadline. Do not start a late payment.
+      if (controller.signal.aborted) throw new Error('PAYMENT_TIMEOUT');
+      const response = await fetch(`/.netlify/functions/membership-payment${query}`, {
+        method: body ? 'POST' : 'GET', signal: controller.signal,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        ...(body && { body: JSON.stringify(body) }),
+      });
+      const result = await response.json();
+      if (!response.ok || !result.success) throw new Error(result.code || 'PAYMENT_UNAVAILABLE');
+      return result;
+    })();
+    // Aborting the browser request does not cancel server-side bill creation.
+    // Leave retries explicit so the existing server order lock can recover it.
+    return await Promise.race([request, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
 }
 
 export const getMembershipPaymentQuote = async (): Promise<MembershipPaymentQuote> => membershipPaymentRequest('');

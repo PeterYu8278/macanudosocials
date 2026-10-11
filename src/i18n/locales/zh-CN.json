@@ -11,6 +11,8 @@
     "renewalReload": "仅支付 RM {{amount}}。钱包余额足够时才扣除年费 RM {{fee}} 并续费。",
     "firstPaymentRequired": "首次开通 Annual Pass 需支付 RM100 充值额加年费。",
     "firstPackage": "首次开通：充值 RM {{reload}} + 年费 RM {{fee}}",
+    "timeout": "付款请求超时，账单可能已创建。请重试以检查现有订单，勿重复付款。",
+    "configurationIncomplete": "在线付款尚未配置完成或启用，请联系工作人员启用 Billplz 并补齐支付配置。",
     "annualFeeBenefit": "• RM {{fee}} 年费",
     "creditBenefit": "• {{amount}} 积分",
     "payFirstPackage": "支付 RM {{total}} 并开通",

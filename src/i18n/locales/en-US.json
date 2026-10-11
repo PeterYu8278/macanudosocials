@@ -11,6 +11,8 @@
     "renewalReload": "Pay RM {{amount}}. Annual fee RM {{fee}} is deducted from your wallet only when the balance is sufficient.",
     "firstPaymentRequired": "First Annual Pass activation requires RM100 reload plus the annual fee.",
     "firstPackage": "First Annual Pass: Reload RM {{reload}} + annual fee RM {{fee}}",
+    "timeout": "The payment request timed out. An invoice may already exist. Retry to check the existing order; do not pay twice.",
+    "configurationIncomplete": "Online payment is not configured or enabled. Please contact staff to enable Billplz and complete its payment settings.",
     "annualFeeBenefit": "• RM {{fee}} Annual Fee",
     "creditBenefit": "• {{amount}} Credit",
     "payFirstPackage": "Pay RM {{total}} & Activate",
