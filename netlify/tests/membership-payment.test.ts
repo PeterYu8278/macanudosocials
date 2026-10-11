@@ -89,27 +89,34 @@ describe('Annual Pass payment', () => {
     expect(await (await request()).json()).toMatchObject({ renewal: true });
   });
   it('rejects fee-only first activation and arbitrary recharge amounts', async () => {
-    for (const reloadAmount of [0, 300, -1, '200']) {
+    for (const reloadAmount of [0, 200, 300, 500, -1, '100']) {
       expect((await request({ reloadAmount, storeId: 'store' })).status).toBe(409);
     }
     expect(m.post).not.toHaveBeenCalled();
   });
   it.each([100, 200, 500])('accepts RM%s recharge plus the annual fee', async reloadAmount => {
+    m.docs.get(`${C.USERS}/user`).membership.activeFrom = '2025-01-01';
     expect((await request({ reloadAmount, storeId: 'store' })).status).toBe(200);
     expect(m.post.mock.calls[0][1]).toMatchObject({ amount: (reloadAmount + 150) * 100 });
   });
-  it('creates RM350 on the server and reuses an existing checkout', async () => {
-    expect((await request({ reloadAmount: 200, storeId: 'store', annualFee: 1 })).status).toBe(200);
-    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: 35000 });
-    expect(await (await request({ reloadAmount: 200, storeId: 'store' })).json()).toMatchObject({ resumed: true });
+  it('creates the fixed RM100 plus fee package even with sufficient points and reuses it', async () => {
+    m.docs.get(`${C.USERS}/user`).membership.points = 1000;
+    expect((await request({ reloadAmount: 100, storeId: 'store', annualFee: 1 })).status).toBe(200);
+    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: 25000 });
+    expect(await (await request({ reloadAmount: 100, storeId: 'store' })).json()).toMatchObject({ resumed: true });
     expect(m.post).toHaveBeenCalledTimes(1);
     m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 180;
-    expect(await (await request()).json()).toMatchObject({ annualFee: 150, reloadAmount: 200, pending: true });
+    expect(await (await request()).json()).toMatchObject({ annualFee: 150, reloadAmount: 100, pending: true });
   });
   it('allows fee-only payment after historical activation', async () => {
     m.docs.get(`${C.USERS}/user`).membership.activeUntil = '2025-01-01';
     expect((await request({ reloadAmount: 0, storeId: 'store' })).status).toBe(200);
     expect(m.post.mock.calls[0][1]).toMatchObject({ amount: 15000 });
+  });
+  it('uses the configured RM199 annual fee for a RM299 first package', async () => {
+    m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
+    expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(200);
+    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: 29900 });
   });
   it('rejects active, suspended and invalid-store checkouts', async () => {
     expect((await request({ reloadAmount: 200, storeId: 'missing' })).status).toBe(409);

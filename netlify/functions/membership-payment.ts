@@ -71,7 +71,6 @@ export const eventHandler: EventHandler = async event => {
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { throw new Error('INVALID_REQUEST'); }
     const reloadAmount = body.reloadAmount;
-    if (![100, 200, 500].includes(reloadAmount) && !(renewal && reloadAmount === 0)) throw new Error('INVALID_RELOAD_AMOUNT');
     if (typeof body.storeId !== 'string' || !body.storeId.trim() || body.storeId.includes('/')) throw new Error('STORE_REQUIRED');
     if (!(await db.collection(C.STORES).doc(body.storeId.trim()).get()).exists) throw new Error('STORE_REQUIRED');
     if (!gateway?.enabled || !gateway.apiKey || !gateway.collectionId || !gateway.xSignatureKey) throw new Error('PAYMENT_UNAVAILABLE');
@@ -89,6 +88,9 @@ export const eventHandler: EventHandler = async event => {
         if (existing.exists && ['creating', 'pending'].includes(existing.data()!.status)) {
           return { id: existing.id, existing: existing.data()! };
         }
+      }
+      if (renewal ? ![0, 100, 200, 500].includes(reloadAmount) : reloadAmount !== 100) {
+        throw new Error('INVALID_RELOAD_AMOUNT');
       }
       const now = Timestamp.now();
       tx.set(newOrderRef, {

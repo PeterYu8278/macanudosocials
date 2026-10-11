@@ -1,4 +1,5 @@
 import { auth } from '../config/firebase';
+import i18n from 'i18next';
 
 export interface MembershipPaymentQuote {
   annualFee: number;
@@ -41,6 +42,8 @@ const getActivationError = (result: ActivationResponse) => {
   switch (result.code) {
     case 'ALREADY_ACTIVE':
       return 'Annual Pass is already active';
+    case 'FIRST_PAYMENT_REQUIRED':
+      return i18n.t('annualPassPayment.firstPaymentRequired');
     case 'ACCOUNT_SUSPENDED':
       return 'This account is suspended';
     case 'INSUFFICIENT_POINTS':

@@ -1,5 +1,8 @@
 {
   "annualPassPayment": {
+    "firstPaymentRequired": "First Annual Pass activation requires RM100 reload plus the annual fee.",
+    "firstPackage": "First Annual Pass: Reload RM {{reload}} + annual fee RM {{fee}}",
+    "payFirstPackage": "Pay RM {{total}} & Activate",
     "reloadAmount": "Reload amount",
     "feeOnly": "Annual fee only",
     "reloadOption": "Reload RM {{amount}} + annual fee",

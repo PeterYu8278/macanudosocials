@@ -12,7 +12,7 @@ vi.mock('firebase-admin/firestore', () => {
     Timestamp: class { static fromDate(date: Date) { return date } },
     getFirestore: () => ({ doc: ref, collection: (name: string) => ({
       doc: (id = 'new-record') => ref(`${name}/${id}`),
-      where: () => ({ limit: () => ({ get: async () => ({ docs: m.record ? [snapshot('membershipFeeRecords/pending')] : [] }) }) }),
+      where: () => ({ where() { return this }, limit: () => ({ get: async () => ({ empty: !m.record, docs: m.record ? [snapshot('membershipFeeRecords/pending')] : [] }) }) }),
     }), runTransaction: async (fn: any) => fn({ get: async (reference: any) => snapshot(reference.path), update: m.update, set: m.set }) }),
   }
 })
@@ -24,22 +24,27 @@ const activate = () => handler(new Request('https://example.com/.netlify/functio
 describe('Annual Pass role progression', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    m.user = { role: 'member', status: 'inactive', membership: { points: 200 } }
+    m.user = { role: 'member', status: 'inactive', membership: { points: 200, activeFrom: new Date('2025-01-01') } }
     m.record = undefined
   })
-  it('activates a first-time member as VIP without granting the renewal waiver', async () => {
-    expect((await activate()).status).toBe(200)
-    const update = m.update.mock.calls[0][1]
-    expect(update).toMatchObject({ role: 'vip', status: 'active', 'membership.points': 50 })
-    expect(update['membership.activeFrom']).toBeInstanceOf(Date)
-    expect(update['membership.activeUntil'].getFullYear()).toBe(update['membership.activeFrom'].getFullYear() + 1)
-    expect(update).not.toHaveProperty('membership.nextFirstVisitWaiverExpiresAt')
-    expect(m.set.mock.calls.some(([, data]) => data.renewalType === 'initial' && data.status === 'paid')).toBe(true)
+  it('requires the first-payment package even when the wallet can afford the annual fee', async () => {
+    delete m.user.membership.activeFrom
+    const response = await activate()
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'FIRST_PAYMENT_REQUIRED' })
+    expect(m.update).not.toHaveBeenCalled()
+    expect(m.set).not.toHaveBeenCalled()
   })
   it('keeps the renewal classification for a member with prior Annual Pass dates', async () => {
     m.user.membership.activeFrom = new Date('2025-01-01')
     expect((await activate()).status).toBe(200)
     expect(m.update.mock.calls[0][1]['membership.nextFirstVisitWaiverExpiresAt']).toBeInstanceOf(Date)
+  })
+  it('allows wallet renewal with a paid history record even if legacy activation dates are missing', async () => {
+    delete m.user.membership.activeFrom
+    m.record = { userId: 'member', status: 'paid', renewalType: 'initial' }
+    expect((await activate()).status).toBe(200)
+    expect(m.update.mock.calls[0][1]).toMatchObject({ 'membership.points': 50, role: 'vip' })
   })
   it.each(['vip', 'storeAdmin', 'admin', 'superAdmin', 'developer'])('preserves the %s role', async role => {
     m.user.role = role

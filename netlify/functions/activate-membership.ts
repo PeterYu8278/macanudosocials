@@ -2,6 +2,7 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { Timestamp, getFirestore } from './_shared/firestoreMonitoring';
+import { hasAnnualHistory } from './_shared/membershipPayment';
 
 const headers = {
   'Content-Type': 'application/json',
@@ -89,6 +90,7 @@ export const eventHandler: Handler = async event => {
   try {
     const userSnapshot = await getAuthenticatedUser(event.headers.authorization);
     const db = getFirestore();
+    const annualHistory = await hasAnnualHistory(db, userSnapshot.id, userSnapshot.data());
     let body: Record<string, unknown> = {};
     if (event.body) {
       try {
@@ -132,6 +134,9 @@ export const eventHandler: Handler = async event => {
       const user = freshUserSnapshot.data()!;
       if (user.status === 'active') throw new Error('ALREADY_ACTIVE');
       if (user.status === 'suspended') throw new Error('ACCOUNT_SUSPENDED');
+      if (!annualHistory && !user.membership?.activeFrom && !user.membership?.activeUntil && !user.membership?.firstActivatedAt) {
+        throw new Error('FIRST_PAYMENT_REQUIRED');
+      }
 
       const now = new Date();
       const nowTimestamp = Timestamp.fromDate(now);
@@ -148,10 +153,7 @@ export const eventHandler: Handler = async event => {
         throw new Error('MEMBERSHIP_RECORD_ALREADY_PROCESSED');
       }
 
-      const recordedType = recordSnapshot.data()?.renewalType;
-      const renewalType = recordedType === 'initial' || recordedType === 'renewal'
-        ? recordedType
-        : user.membership?.activeFrom || user.membership?.activeUntil ? 'renewal' : 'initial';
+      const renewalType: 'initial' | 'renewal' = 'renewal';
       const newPoints = currentPoints - amount;
       const activeUntil = new Date(now);
       activeUntil.setFullYear(activeUntil.getFullYear() + 1);
@@ -215,18 +217,6 @@ export const eventHandler: Handler = async event => {
         });
       }
 
-      if (renewalType === 'initial' && user.referral?.referredByUserId) {
-        const referralRef = db.doc(`users/${user.referral.referredByUserId}/referrals/${freshUserSnapshot.id}`);
-        transaction.set(referralRef, {
-          referredUserId: freshUserSnapshot.id,
-          referredUserName: user.displayName || '',
-          referredUserMemberId: user.memberId || null,
-          membershipActivatedAt: nowTimestamp,
-          createdAt: user.referral.referralDate || nowTimestamp,
-          updatedAt: nowTimestamp,
-        }, { merge: true });
-      }
-
       return { amount, balance: newPoints, activeUntil: activeUntil.toISOString() };
     });
 
@@ -239,7 +229,7 @@ export const eventHandler: Handler = async event => {
     }
     if (code === 'UNAUTHENTICATED') return reply(401, { success: false, code });
     if (code === 'USER_NOT_FOUND') return reply(404, { success: false, code });
-    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED') {
+    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED' || code === 'FIRST_PAYMENT_REQUIRED') {
       return reply(409, { success: false, code });
     }
     if (code === 'INSUFFICIENT_POINTS') {

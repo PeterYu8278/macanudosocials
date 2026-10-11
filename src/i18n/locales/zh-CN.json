@@ -1,5 +1,8 @@
 {
   "annualPassPayment": {
+    "firstPaymentRequired": "首次开通 Annual Pass 需支付 RM100 充值额加年费。",
+    "firstPackage": "首次开通：充值 RM {{reload}} + 年费 RM {{fee}}",
+    "payFirstPackage": "支付 RM {{total}} 并开通",
     "reloadAmount": "充值金额",
     "feeOnly": "仅支付年费",
     "reloadOption": "充值 RM {{amount}} + 年费",

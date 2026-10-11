@@ -74,7 +74,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     if (!selectedStoreId) { message.warning(t('reload.pleaseSelectStore')); return; }
     setLoading(true);
     try {
-      const payment = await createMembershipPayment(membershipReload, selectedStoreId);
+      const reloadAmount = membershipQuote.renewal || membershipQuote.pending ? membershipReload : 100;
+      const payment = await createMembershipPayment(reloadAmount, selectedStoreId);
       if (payment.resumed) message.info(t('annualPassPayment.resuming'));
       window.location.assign(payment.paymentUrl);
     } catch (error) {
@@ -1132,6 +1133,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               <div style={{ color: selectedAccess === 'membership' ? '#FDE08D' : '#fff', fontWeight: 800, fontSize: 16, marginBottom: 8 }}>
                 {t('visitTimer.annualMembership')}
               </div>
+              {membershipQuote && !membershipQuote.renewal && (
+                <Text style={{ color: '#FDE08D' }}>{t('annualPassPayment.firstPackage', {
+                  reload: membershipQuote.pending ? membershipReload : 100,
+                  fee: membershipQuote.annualFee.toFixed(2),
+                })}</Text>
+              )}
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, lineHeight: 1.4, whiteSpace: 'pre-line' }} className="benefit-list">
                 {t('visitTimer.benefits.membership')}
               </div>
@@ -1144,7 +1151,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 WebkitBackgroundClip: 'text',
                 color: 'transparent'
               }}>
-                {annualFeeAmount} {t('visitTimer.points')}
+                {membershipQuote && !membershipQuote.renewal
+                  ? `RM ${(membershipQuote.annualFee + membershipReload).toFixed(2)}`
+                  : <>{annualFeeAmount} {t('visitTimer.points')}</>}
               </div>
               <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, letterSpacing: 1 }}>{t('visitTimer.yearly')}</div>
             </div>
@@ -1198,14 +1207,15 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
           const currentPoints = user?.membership?.points || 0;
           const cost = selectedAccess === 'membership' ? (annualFeeAmount || 0) : (dayPassConfig?.cost || 100);
           const hasEnoughPoints = currentPoints >= cost;
+          const needsMembershipPayment = selectedAccess === 'membership' && (!membershipQuote?.renewal || !hasEnoughPoints);
 
           return (
             <div style={{ marginTop: 24 }}>
-              {selectedAccess === 'membership' && !hasEnoughPoints && (
+              {needsMembershipPayment && (
                 <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
                   {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')} />}
                   {membershipQuote?.pending && <Alert type="info" message={t('annualPassPayment.resuming')} />}
-                  <Select
+                  {membershipQuote?.renewal && <Select
                     aria-label={t('annualPassPayment.reloadAmount')}
                     style={{ width: '100%' }}
                     loading={!membershipQuote && !membershipQuoteError}
@@ -1216,13 +1226,13 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       ...(membershipQuote?.renewal ? [{ value: 0, label: t('annualPassPayment.feeOnly') }] : []),
                       ...[100, 200, 500].map(value => ({ value, label: t('annualPassPayment.reloadOption', { amount: value }) })),
                     ]}
-                  />
+                  />}
                   {membershipQuote && <Text>{t('annualPassPayment.breakdown', { fee: membershipQuote.annualFee.toFixed(2), reload: membershipReload.toFixed(2), total: (membershipQuote.annualFee + membershipReload).toFixed(2) })}</Text>}
                 </Space>
               )}
               <button
                 type="button"
-                onClick={hasEnoughPoints ? (selectedAccess === 'membership' ? handleActivateMembership : handleBuyDayPass) : selectedAccess === 'membership' ? handleMembershipPayment : () => navigate('/reload')}
+                onClick={selectedAccess === 'membership' ? (needsMembershipPayment ? handleMembershipPayment : handleActivateMembership) : hasEnoughPoints ? handleBuyDayPass : () => navigate('/reload')}
                 disabled={loading || (selectedAccess === 'membership' && !membershipQuote)}
                 style={{
                   width: '100%',
@@ -1242,8 +1252,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 }}
               >
                 {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                {!hasEnoughPoints && <WalletOutlined />}
-                {hasEnoughPoints
+                {(needsMembershipPayment || !hasEnoughPoints) && <WalletOutlined />}
+                {needsMembershipPayment
+                  ? membershipQuote && !membershipQuote.renewal
+                    ? t('annualPassPayment.payFirstPackage', { total: (membershipQuote.annualFee + membershipReload).toFixed(2) })
+                    : t('annualPassPayment.payAndActivate')
+                  : hasEnoughPoints
                   ? (selectedAccess === 'membership' ? t('visitTimer.confirmActivation') : t('visitTimer.confirmPurchase'))
                   : selectedAccess === 'membership' ? t('annualPassPayment.payAndActivate') : `${t('visitTimer.reloadPoints')} (${t('visitTimer.short')}: ${cost - currentPoints})`
                 }
