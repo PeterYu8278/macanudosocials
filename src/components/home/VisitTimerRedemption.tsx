@@ -665,7 +665,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   <>
                     <button
                       type="button"
-                      onClick={() => needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
+                      onClick={() => needsRenewalReload || membershipAction === 'resume'
+                        ? navigate('/reload') : setMembershipModalVisible(true)}
                       disabled={loading || blocked}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
@@ -1267,8 +1268,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       {t('annualPassPayment.retryStatus')}
                     </Button>}
                   />}
-                  {membershipQuote?.paymentMethod === 'manual' && <Alert type="info" message={t(membershipQuote.pending
-                    ? 'annualPassPayment.manualPending' : 'annualPassPayment.manualAvailable')} />}
+                  {membershipQuote?.paymentMethod === 'manual' && membershipQuote.pending && <Alert type="info"
+                    message={t('annualPassPayment.manualPending')} />}
                   {membershipQuote?.pending && membershipQuote.paymentMethod !== 'manual' && <Alert type="info" message={t('annualPassPayment.resuming')} />}
                   {membershipQuote?.renewal && <Select
                     aria-label={t('annualPassPayment.reloadAmount')}
