@@ -13,6 +13,7 @@ const reply = (statusCode: number, data: Record<string, unknown>) => ({
 
 export const eventHandler: EventHandler = async event => {
   if (!['GET', 'POST'].includes(event.httpMethod)) return reply(405, { success: false });
+  let stage = 'initialize';
   try {
     if (!getApps().length) {
       if (!process.env.FIREBASE_SERVICE_ACCOUNT) throw new Error('SERVICE_UNAVAILABLE');
@@ -23,6 +24,7 @@ export const eventHandler: EventHandler = async event => {
     let identity;
     try { identity = await getAuth().verifyIdToken(token); }
     catch { return reply(401, { success: false, code: 'UNAUTHENTICATED' }); }
+    stage = 'read_user';
     const db = getFirestore();
     let userSnapshot = await db.collection(C.USERS).doc(identity.uid).get();
     if (!userSnapshot.exists && identity.email) {
@@ -31,6 +33,7 @@ export const eventHandler: EventHandler = async event => {
     }
     if (!userSnapshot.exists) throw new Error('USER_NOT_FOUND');
     let user = userSnapshot.data()!;
+    stage = 'read_payment_config';
     const appConfig = (await db.collection(C.APP_CONFIG).doc('default').get()).data();
     const gateway = appConfig?.payment?.billplz;
     const baseUrl = gateway?.isSandbox !== false ? 'https://www.billplz-sandbox.com/api/v3' : 'https://www.billplz.com/api/v3';
@@ -44,6 +47,7 @@ export const eventHandler: EventHandler = async event => {
       let order = snapshot.data()!;
       // Recover a delayed/missed callback using the gateway's authenticated bill status.
       if (order.status === 'pending' && gateway?.apiKey) {
+        stage = 'verify_bill';
         const bill = (await axios.get(`${baseUrl}/bills/${encodeURIComponent(order.billplzId)}`, gatewayOptions)).data;
         if (bill.paid === true && bill.id === order.billplzId && Number(bill.amount) === order.totalCents) {
           await fulfillMembershipPayment(db, orderId, bill.id, Number(bill.paid_amount));
@@ -53,12 +57,16 @@ export const eventHandler: EventHandler = async event => {
       return reply(200, { success: true, status: order.status, balance: order.balance ?? null });
     }
 
+    stage = 'reconcile_membership';
     await reconcileMembershipStatus(db, userSnapshot.id, user);
     userSnapshot = await userSnapshot.ref.get();
     user = userSnapshot.data()!;
+    stage = 'read_annual_history';
     const renewal = await hasAnnualHistory(db, userSnapshot.id, user);
+    stage = 'read_annual_fee';
     const fee = annualFee((await db.collection(C.CONFIG).doc('membershipFee').get()).data());
     if (event.httpMethod === 'GET') {
+      stage = 'read_payment_lock';
       const lock = await db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(userSnapshot.id).get();
       if (lock.exists) {
         const existing = await db.collection(C.MEMBERSHIP_PAYMENTS).doc(lock.data()!.orderId).get();
@@ -75,12 +83,15 @@ export const eventHandler: EventHandler = async event => {
     try { body = JSON.parse(event.body || '{}'); } catch { throw new Error('INVALID_REQUEST'); }
     const reloadAmount = body.reloadAmount;
     if (typeof body.storeId !== 'string' || !body.storeId.trim() || body.storeId.includes('/')) throw new Error('STORE_REQUIRED');
+    stage = 'validate_store';
     if (!(await db.collection(C.STORES).doc(body.storeId.trim()).get()).exists) throw new Error('STORE_REQUIRED');
+    stage = 'validate_gateway';
     if (!gateway?.enabled || !gateway.apiKey || !gateway.collectionId || !gateway.xSignatureKey) throw new Error('PAYMENT_UNAVAILABLE');
     const totalCents = (renewal ? 0 : Math.round(fee * 100)) + reloadAmount * 100;
     const lockRef = db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(userSnapshot.id);
     const newOrderRef = db.collection(C.MEMBERSHIP_PAYMENTS).doc();
     const callbackProof = randomBytes(32).toString('hex');
+    stage = 'reserve_payment';
     const reservation = await db.runTransaction(async tx => {
       const [freshUser, lock] = await Promise.all([tx.get(userSnapshot.ref), tx.get(lockRef)]);
       if (!freshUser.exists) throw new Error('USER_NOT_FOUND');
@@ -112,6 +123,7 @@ export const eventHandler: EventHandler = async event => {
     const requestOrigin = new URL(event.rawUrl).origin;
     const origin = process.env.URL || (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin) ? requestOrigin : 'https://macanudosocials.com');
     // Keep ambiguous creation failures locked: retrying could otherwise create a second payable bill.
+    stage = 'create_bill';
     const bill = (await axios.post(`${baseUrl}/bills`, {
       collection_id: gateway.collectionId, name: user.displayName || 'Member', email: user.email || '',
       mobile: user.phone || '', amount: totalCents,
@@ -121,6 +133,7 @@ export const eventHandler: EventHandler = async event => {
       redirect_url: `${origin}/payment/result?membershipOrder=${encodeURIComponent(reservation.id)}`,
     }, gatewayOptions)).data;
     if (!bill.id || !bill.url || Number(bill.amount) !== totalCents) throw new Error('PAYMENT_UNAVAILABLE');
+    stage = 'save_bill';
     await db.runTransaction(async tx => {
       const current = await tx.get(newOrderRef);
       // A very fast callback may already have fulfilled this order before bill creation returns.
@@ -133,7 +146,16 @@ export const eventHandler: EventHandler = async event => {
   } catch (error: any) {
     const code = error?.message || 'PAYMENT_UNAVAILABLE';
     const known = ['USER_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'INVALID_REQUEST', 'INVALID_RELOAD_AMOUNT', 'STORE_REQUIRED', 'ALREADY_ACTIVE', 'ACCOUNT_SUSPENDED', 'PAYMENT_CREATING', 'MEMBERSHIP_STATUS_UNVERIFIED'];
-    if (!known.includes(code)) console.error('[membership-payment] Failed', { code: error?.code || 'dependency_error' });
+    if (!known.includes(code)) {
+      // Never log raw gateway errors: they can contain credentials and customer data.
+      const safeCode = typeof error?.code === 'number' ? error.code
+        : typeof error?.code === 'string' && /^[A-Z_0-9]{1,64}$/.test(error.code) ? error.code
+        : ['SERVICE_UNAVAILABLE', 'PAYMENT_UNAVAILABLE'].includes(code) ? code : 'dependency_error';
+      console.error('[membership-payment] Failed', {
+        stage, method: event.httpMethod, code: safeCode,
+        ...(Number.isInteger(error?.response?.status) && { upstreamStatus: error.response.status }),
+      });
+    }
     return reply(known.includes(code) ? 409 : 503, { success: false, code: known.includes(code) ? code : 'PAYMENT_UNAVAILABLE' });
   }
 };

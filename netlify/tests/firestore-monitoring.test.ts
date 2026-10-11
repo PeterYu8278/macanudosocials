@@ -29,7 +29,9 @@ describe('Monitoring access boundary', () => {
   it('rejects reports during the shared ingestion cooldown', async () => {
     m.receivedAt = Date.now();
     const row = { collection: 'orders', feature: 'shop', reads: 3, writes: 1, deletes: 0, failures: 0, cacheReads: 0 };
-    expect((await handler(request('POST', { rows: [row] }))).status).toBe(429);
+    const response = await handler(request('POST', { rows: [row] }));
+    expect(response.status).toBe(429);
+    expect(response.headers.get('Retry-After')).toBe('30');
     expect(m.persist).not.toHaveBeenCalled();
   });
   it('rejects excessive report sizes', async () => {

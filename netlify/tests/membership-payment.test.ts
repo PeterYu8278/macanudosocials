@@ -83,6 +83,22 @@ describe('Annual Pass payment', () => {
     m.auth.mockRejectedValue(new Error('expired'));
     expect((await request()).status).toBe(401);
   });
+  it('logs the failing gateway stage without exposing credentials and retains the reservation', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    m.post.mockRejectedValueOnce(Object.assign(new Error('secret customer token'), {
+      code: 'ERR_BAD_REQUEST', response: { status: 422, data: { secret: 'private' } },
+    }));
+    try {
+      expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(503);
+      expect(log).toHaveBeenCalledWith('[membership-payment] Failed', {
+        stage: 'create_bill', method: 'POST', code: 'ERR_BAD_REQUEST', upstreamStatus: 422,
+      });
+      expect(JSON.stringify(log.mock.calls)).not.toContain('secret');
+      expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(true);
+      expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(409);
+      expect(m.post).toHaveBeenCalledTimes(1);
+    } finally { log.mockRestore(); }
+  });
   it('marks an expired active membership inactive without debiting the wallet', async () => {
     m.docs.get(`${C.USERS}/user`).status = 'active';
     m.docs.get(`${C.USERS}/user`).membership.activeUntil = new Date(Date.now() - 86400000);

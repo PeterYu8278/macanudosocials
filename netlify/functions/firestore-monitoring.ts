@@ -5,8 +5,8 @@ import { createHash } from 'node:crypto';
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections';
 import { persistMetrics, type MetricRow } from './_shared/firestoreMonitoring';
 
-const json = (status: number, body: unknown) => new Response(JSON.stringify(body), {
-  status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
+const json = (status: number, body: unknown, extraHeaders: Record<string, string> = {}) => new Response(JSON.stringify(body), {
+  status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extraHeaders },
 });
 async function handler(request: Request) {
   try {
@@ -44,7 +44,7 @@ async function handler(request: Request) {
         tx.set(lease, { receivedAt: now });
         return true;
       });
-      if (!accepted) return json(429, { error: 'RATE_LIMITED' });
+      if (!accepted) return json(429, { error: 'RATE_LIMITED' }, { 'Retry-After': '30' });
       await persistMetrics(rows.map(row => Object.fromEntries(['collection', 'feature', ...keys].map(key => [key, row[key as keyof MetricRow]])) as unknown as MetricRow), 'frontend');
       return json(200, { ok: true });
     }
