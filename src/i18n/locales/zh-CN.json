@@ -1,5 +1,9 @@
 {
   "annualPassPayment": {
+    "renew": "续费 Annual Pass",
+    "pendingAmount": "继续已有付款：RM {{amount}}",
+    "reloadOnly": "充值 RM {{amount}}",
+    "renewalReload": "仅支付 RM {{amount}}。钱包余额足够时才扣除年费 RM {{fee}} 并续费。",
     "firstPaymentRequired": "首次开通 Annual Pass 需支付 RM100 充值额加年费。",
     "firstPackage": "首次开通：充值 RM {{reload}} + 年费 RM {{fee}}",
     "payFirstPackage": "支付 RM {{total}} 并开通",
@@ -15,7 +19,7 @@
     "pendingDescription": "Annual Pass 付款尚未确认，请再次查询，不要重复付款。",
     "successDescription": "Annual Pass 已开通，钱包余额已更新。",
     "creditedTitle": "付款已存入钱包",
-    "creditedDescription": "账户已开通或已停用，本次付款全额存入钱包，未重复扣除年费。如需帮助，请联系工作人员。"
+    "creditedDescription": "本次付款已全额存入钱包，未扣除年费，也未通过本次付款续费 Annual Pass。请检查余额及账户状态后再操作。"
   },
   "whatsappManagement": {
     "consentLabel": "接收 WhatsApp 通知",

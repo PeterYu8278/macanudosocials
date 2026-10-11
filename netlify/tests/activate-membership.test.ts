@@ -38,7 +38,7 @@ describe('Annual Pass role progression', () => {
   it('keeps the renewal classification for a member with prior Annual Pass dates', async () => {
     m.user.membership.activeFrom = new Date('2025-01-01')
     expect((await activate()).status).toBe(200)
-    expect(m.update.mock.calls[0][1]['membership.nextFirstVisitWaiverExpiresAt']).toBeInstanceOf(Date)
+    expect(m.update.mock.calls[0][1]['membership.nextFirstVisitWaiverExpiresAt']).toBeNull()
   })
   it('allows wallet renewal with a paid history record even if legacy activation dates are missing', async () => {
     delete m.user.membership.activeFrom

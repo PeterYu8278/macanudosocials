@@ -1,5 +1,9 @@
 {
   "annualPassPayment": {
+    "renew": "Renew Annual Pass",
+    "pendingAmount": "Continue existing payment: RM {{amount}}",
+    "reloadOnly": "Reload RM {{amount}}",
+    "renewalReload": "Pay RM {{amount}}. Annual fee RM {{fee}} is deducted from your wallet only when the balance is sufficient.",
     "firstPaymentRequired": "First Annual Pass activation requires RM100 reload plus the annual fee.",
     "firstPackage": "First Annual Pass: Reload RM {{reload}} + annual fee RM {{fee}}",
     "payFirstPackage": "Pay RM {{total}} & Activate",
@@ -15,7 +19,7 @@
     "pendingDescription": "Your Annual Pass payment has not been confirmed yet. Check again before making another payment.",
     "successDescription": "Your Annual Pass is active and your wallet has been updated.",
     "creditedTitle": "Payment credited to your wallet",
-    "creditedDescription": "Your account was already active or suspended. The full payment was credited to your wallet without another annual fee. Contact staff for assistance."
+    "creditedDescription": "The full payment was credited to your wallet without an annual fee deduction. Annual Pass was not renewed by this payment. Check your balance and account status before trying again."
   },
   "whatsappManagement": {
     "consentLabel": "WhatsApp notifications",

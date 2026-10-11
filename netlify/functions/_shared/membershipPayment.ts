@@ -45,8 +45,9 @@ export async function fulfillMembershipPayment(db: Firestore, orderId: string, b
     const currentPoints = Number(user.membership?.points || 0);
     if (!Number.isFinite(currentPoints)) throw new Error('INVALID_POINTS_BALANCE');
     // Another activation or suspension must not lose a completed payment or charge a second year.
-    const creditOnly = user.status === 'active' || user.status === 'suspended';
     const total = order.totalCents / 100;
+    const creditOnly = user.status === 'active' || user.status === 'suspended'
+      || (order.paymentMode === 'renewal_reload' && currentPoints + total < order.annualFee);
     const balance = currentPoints + total - (creditOnly ? 0 : order.annualFee);
     const feeRef = pendingFees.docs.find(doc => doc.data().renewalType === order.renewalType)?.ref
       || pendingFees.docs[0]?.ref
@@ -58,14 +59,14 @@ export async function fulfillMembershipPayment(db: Firestore, orderId: string, b
         status: 'active', role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,
         'membership.activeFrom': timestamp, 'membership.activeUntil': Timestamp.fromDate(until),
         ...(order.renewalType === 'initial' ? { 'membership.firstActivatedAt': timestamp } : {
-          'membership.nextFirstVisitWaiverExpiresAt': Timestamp.fromDate(new Date(now.getTime() + 30 * 86400000)),
+          'membership.nextFirstVisitWaiverExpiresAt': null,
         }),
       });
     }
     tx.update(userRef, update);
     if (order.reloadAmount > 0 || creditOnly) tx.set(db.collection(C.RELOAD_RECORDS).doc(`membership_${orderId}`), {
       userId: order.userId, userName: user.displayName || '', requestedAmount: total,
-      pointsEquivalent: total, walletAmount: creditOnly ? total : order.reloadAmount,
+      pointsEquivalent: total, walletAmount: creditOnly || order.paymentMode === 'renewal_reload' ? total : order.reloadAmount,
       annualFeeAmount: creditOnly ? 0 : order.annualFee, paymentPurpose: 'annual_pass',
       billplzId: billId, status: 'completed', storeId: order.storeId,
       verifiedBy: 'system_billplz', verifiedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,

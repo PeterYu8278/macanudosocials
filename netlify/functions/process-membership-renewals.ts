@@ -102,9 +102,7 @@ const processRenewals = async () => {
         };
 
         if (record.renewalType === 'renewal') {
-          const waiverExpiresAt = new Date(now);
-          waiverExpiresAt.setDate(waiverExpiresAt.getDate() + 30);
-          userUpdate['membership.nextFirstVisitWaiverExpiresAt'] = Timestamp.fromDate(waiverExpiresAt);
+          userUpdate['membership.nextFirstVisitWaiverExpiresAt'] = null;
         }
 
         transaction.update(userRef, userUpdate);

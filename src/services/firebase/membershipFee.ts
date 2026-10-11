@@ -436,12 +436,9 @@ export const deductMembershipFee = async (
         }
       }
 
-      // 如果是续费，设置首次驻店免扣费到期时间（续费后30天内）
       if (record.renewalType === 'renewal') {
-        const waiverExpiresAt = new Date(now);
-        waiverExpiresAt.setDate(waiverExpiresAt.getDate() + 30);
         await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
-          'membership.nextFirstVisitWaiverExpiresAt': Timestamp.fromDate(waiverExpiresAt),
+          'membership.nextFirstVisitWaiverExpiresAt': null,
           updatedAt: Timestamp.fromDate(now)
         });
       }

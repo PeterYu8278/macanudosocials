@@ -94,10 +94,10 @@ describe('Annual Pass payment', () => {
     }
     expect(m.post).not.toHaveBeenCalled();
   });
-  it.each([100, 200, 500])('accepts RM%s recharge plus the annual fee', async reloadAmount => {
+  it.each([100, 200, 500])('charges only RM%s recharge for renewal', async reloadAmount => {
     m.docs.get(`${C.USERS}/user`).membership.activeFrom = '2025-01-01';
     expect((await request({ reloadAmount, storeId: 'store' })).status).toBe(200);
-    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: (reloadAmount + 150) * 100 });
+    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: reloadAmount * 100 });
   });
   it('creates the fixed RM100 plus fee package even with sufficient points and reuses it', async () => {
     m.docs.get(`${C.USERS}/user`).membership.points = 1000;
@@ -108,10 +108,10 @@ describe('Annual Pass payment', () => {
     m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 180;
     expect(await (await request()).json()).toMatchObject({ annualFee: 150, reloadAmount: 100, pending: true });
   });
-  it('allows fee-only payment after historical activation', async () => {
+  it('rejects fee-only payment after historical activation', async () => {
     m.docs.get(`${C.USERS}/user`).membership.activeUntil = '2025-01-01';
-    expect((await request({ reloadAmount: 0, storeId: 'store' })).status).toBe(200);
-    expect(m.post.mock.calls[0][1]).toMatchObject({ amount: 15000 });
+    expect((await request({ reloadAmount: 0, storeId: 'store' })).status).toBe(409);
+    expect(m.post).not.toHaveBeenCalled();
   });
   it('uses the configured RM199 annual fee for a RM299 first package', async () => {
     m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
@@ -137,14 +137,38 @@ describe('Annual Pass payment', () => {
     expect(m.docs.get(`${C.POINTS_RECORDS}/membership_payment_fee`).amount).toBe(150);
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
   });
-  it('fee-only renewal preserves wallet and records renewal waiver', async () => {
+  it('honors a legacy fee-only bill without granting a renewal waiver', async () => {
     seedOrder(true, 0);
     m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/due`, { userId: 'user', status: 'pending', renewalType: 'renewal' });
     await fulfillMembershipPayment(m.db, 'payment', 'bill', 15000);
     expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
-    expect(m.docs.get(`${C.USERS}/user`).membership.nextFirstVisitWaiverExpiresAt).toBeInstanceOf(Date);
+    expect(m.docs.get(`${C.USERS}/user`).membership.nextFirstVisitWaiverExpiresAt).toBeNull();
     expect(m.docs.get(`${C.MEMBERSHIP_FEE_RECORDS}/due`).status).toBe('paid');
     expect(m.docs.has(`${C.RELOAD_RECORDS}/membership_payment`)).toBe(false);
+  });
+  it('renews from existing balance plus RM100 reload without charging the fee externally', async () => {
+    m.docs.get(`${C.USERS}/user`).membership = { points: 101, activeUntil: '2025-01-01', nextFirstVisitWaiverExpiresAt: new Date() };
+    m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
+    const result = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    expect(m.post.mock.calls[0][1].amount).toBe(10000);
+    await Promise.all([1, 2].map(() => fulfillMembershipPayment(m.db, result.orderId, 'bill', 10000)));
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'active', role: 'vip', membership: { points: 2, nextFirstVisitWaiverExpiresAt: null } });
+    expect(m.docs.get(`${C.POINTS_RECORDS}/membership_${result.orderId}_fee`).amount).toBe(199);
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${result.orderId}`).requestedAmount).toBe(100);
+  });
+  it('credits an insufficient reload once without renewing, then permits a second reload', async () => {
+    m.docs.get(`${C.USERS}/user`).membership.activeUntil = '2025-01-01';
+    m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
+    const first = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    await fulfillMembershipPayment(m.db, first.orderId, 'bill', 10000);
+    await fulfillMembershipPayment(m.db, first.orderId, 'bill', 10000);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'inactive', membership: { points: 180 } });
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${first.orderId}`).status).toBe('credited');
+    expect(m.docs.has(`${C.POINTS_RECORDS}/membership_${first.orderId}_fee`)).toBe(false);
+    const second = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    expect(second.orderId).not.toBe(first.orderId);
+    await fulfillMembershipPayment(m.db, second.orderId, 'bill', 10000);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'active', membership: { points: 81 } });
   });
   it('handles a signed callback even when bill creation has not persisted the bill ID yet', async () => {
     seedOrder();

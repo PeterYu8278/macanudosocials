@@ -62,7 +62,7 @@ export const eventHandler: EventHandler = async event => {
         const pending = existing.data();
         if (pending?.status === 'pending') return reply(200, {
           success: true, annualFee: pending.annualFee, renewal: pending.renewalType === 'renewal',
-          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId,
+          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100,
         });
         if (pending?.status === 'creating') throw new Error('PAYMENT_CREATING');
       }
@@ -74,7 +74,7 @@ export const eventHandler: EventHandler = async event => {
     if (typeof body.storeId !== 'string' || !body.storeId.trim() || body.storeId.includes('/')) throw new Error('STORE_REQUIRED');
     if (!(await db.collection(C.STORES).doc(body.storeId.trim()).get()).exists) throw new Error('STORE_REQUIRED');
     if (!gateway?.enabled || !gateway.apiKey || !gateway.collectionId || !gateway.xSignatureKey) throw new Error('PAYMENT_UNAVAILABLE');
-    const totalCents = Math.round(fee * 100) + reloadAmount * 100;
+    const totalCents = (renewal ? 0 : Math.round(fee * 100)) + reloadAmount * 100;
     const lockRef = db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(userSnapshot.id);
     const newOrderRef = db.collection(C.MEMBERSHIP_PAYMENTS).doc();
     const callbackProof = randomBytes(32).toString('hex');
@@ -89,13 +89,14 @@ export const eventHandler: EventHandler = async event => {
           return { id: existing.id, existing: existing.data()! };
         }
       }
-      if (renewal ? ![0, 100, 200, 500].includes(reloadAmount) : reloadAmount !== 100) {
+      if (renewal ? ![100, 200, 500].includes(reloadAmount) : reloadAmount !== 100) {
         throw new Error('INVALID_RELOAD_AMOUNT');
       }
       const now = Timestamp.now();
       tx.set(newOrderRef, {
         userId: userSnapshot.id, annualFee: fee, reloadAmount, totalCents,
         renewalType: renewal ? 'renewal' : 'initial', storeId: body.storeId.trim(),
+        paymentMode: renewal ? 'renewal_reload' : 'initial_package',
         status: 'creating', callbackProof, createdAt: now, updatedAt: now,
       });
       tx.set(lockRef, { orderId: newOrderRef.id, createdAt: now });
@@ -111,7 +112,7 @@ export const eventHandler: EventHandler = async event => {
     const bill = (await axios.post(`${baseUrl}/bills`, {
       collection_id: gateway.collectionId, name: user.displayName || 'Member', email: user.email || '',
       mobile: user.phone || '', amount: totalCents,
-      description: `Annual Pass: RM ${fee} + Reload RM ${reloadAmount} (${reservation.id})`,
+      description: renewal ? `Annual Pass renewal reload: RM ${reloadAmount} (${reservation.id})` : `Annual Pass: RM ${fee} + Reload RM ${reloadAmount} (${reservation.id})`,
       reference_1_label: 'Membership payment', reference_1: reservation.id,
       callback_url: `${origin}/.netlify/functions/billplz-callback?membershipOrder=${encodeURIComponent(reservation.id)}&membershipProof=${callbackProof}`,
       redirect_url: `${origin}/payment/result?membershipOrder=${encodeURIComponent(reservation.id)}`,

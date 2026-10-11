@@ -7,6 +7,7 @@ export interface MembershipPaymentQuote {
   pending?: boolean;
   reloadAmount?: number;
   storeId?: string;
+  total?: number;
 }
 
 async function membershipPaymentRequest(query: string, body?: { reloadAmount: number; storeId: string }) {
