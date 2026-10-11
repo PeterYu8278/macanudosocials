@@ -55,6 +55,12 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [membershipQuoteError, setMembershipQuoteError] = useState(false);
   const [membershipReload, setMembershipReload] = useState(100);
   useEffect(() => {
+    if (user?.status === 'active') {
+      setMembershipModalVisible(false);
+      setSelectedAccess(null);
+    }
+  }, [user?.status]);
+  useEffect(() => {
     if (!user?.id || (!membershipModalVisible && user.status !== 'inactive')) return;
     let cancelled = false;
     setMembershipQuote(null);

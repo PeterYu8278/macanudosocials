@@ -8,6 +8,7 @@ import MobileBottomNav from './components/layout/MobileBottomNav'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import RoleSimulator from './components/common/RoleSimulator'
 import { useAuthStore } from './store/modules/auth'
+import { useAutomaticMembershipRenewal } from './hooks/useAutomaticMembershipRenewal'
 import { getAppConfig } from './services/firebase/appConfig'
 import { applyDynamicIcons } from './utils/dynamicManifest'
 import { saveAppConfigToIndexedDB } from './utils/indexedDB'
@@ -66,6 +67,7 @@ const RegisterRedirect: React.FC = () => {
 
 const AppContent: React.FC = () => {
   const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
+  useAutomaticMembershipRenewal()
   const location = useLocation()
   const previousUserId = useRef<string | null>(null)
   const loginLandingPath = getLoginLandingPath(user?.role)
