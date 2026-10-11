@@ -91,7 +91,15 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     try {
       const reloadAmount = membershipQuote.renewal || membershipQuote.pending ? membershipReload : 100;
       const payment = await createMembershipPayment(reloadAmount, selectedStoreId);
+      if (payment.paymentMethod === 'manual') {
+        message.success(t('annualPassPayment.manualSubmitted'));
+        setMembershipModalVisible(false);
+        setMembershipRetry(value => value + 1);
+        navigate('/reload');
+        return;
+      }
       if (payment.resumed) message.info(t('annualPassPayment.resuming'));
+      if (!payment.paymentUrl) throw new Error('PAYMENT_UNAVAILABLE');
       window.location.assign(payment.paymentUrl);
     } catch (error) {
       const code = error instanceof Error ? error.message : 'PAYMENT_UNAVAILABLE';
@@ -1259,7 +1267,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       {t('annualPassPayment.retryStatus')}
                     </Button>}
                   />}
-                  {membershipQuote?.pending && <Alert type="info" message={t('annualPassPayment.resuming')} />}
+                  {membershipQuote?.paymentMethod === 'manual' && <Alert type="info" message={t(membershipQuote.pending
+                    ? 'annualPassPayment.manualPending' : 'annualPassPayment.manualAvailable')} />}
+                  {membershipQuote?.pending && membershipQuote.paymentMethod !== 'manual' && <Alert type="info" message={t('annualPassPayment.resuming')} />}
                   {membershipQuote?.renewal && <Select
                     aria-label={t('annualPassPayment.reloadAmount')}
                     style={{ width: '100%' }}
@@ -1273,13 +1283,15 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                     ]}
                   />}
                   {membershipQuote && (membershipQuote.pending || membershipQuote.renewal) && <Text>{membershipQuote.pending
-                    ? t('annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
+                    ? t(membershipQuote.paymentMethod === 'manual' ? 'annualPassPayment.manualPendingAmount' : 'annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
                     : t('annualPassPayment.renewalReload', { amount: membershipReload.toFixed(2), fee: membershipQuote.annualFee.toFixed(2) })}</Text>}
                 </Space>
               )}
               <button
                 type="button"
-                onClick={selectedAccess === 'membership' ? (needsMembershipPayment ? handleMembershipPayment : handleActivateMembership) : hasEnoughPoints ? handleBuyDayPass : () => navigate('/reload')}
+                onClick={selectedAccess === 'membership' ? (needsMembershipPayment
+                  ? membershipQuote?.pending && membershipQuote.paymentMethod === 'manual' ? () => navigate('/reload') : handleMembershipPayment
+                  : handleActivateMembership) : hasEnoughPoints ? handleBuyDayPass : () => navigate('/reload')}
                 disabled={loading || (selectedAccess === 'membership' && !membershipQuote)
                   || (needsMembershipPayment && membershipQuote?.paymentAvailable === false)}
                 aria-busy={loading}
@@ -1302,7 +1314,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               >
                 {loading ? <LoadingOutlined spin /> : (needsMembershipPayment || !hasEnoughPoints) && <WalletOutlined />}
                 {needsMembershipPayment
-                  ? membershipQuote?.pending
+                  ? membershipQuote?.paymentMethod === 'manual'
+                    ? t(membershipQuote.pending ? 'annualPassPayment.viewManualRequest' : 'annualPassPayment.submitManualRequest',
+                      { amount: (membershipQuote.total ?? (membershipQuote.renewal ? membershipReload : membershipQuote.annualFee + 100)).toFixed(2) })
+                  : membershipQuote?.pending
                     ? t('annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
                     : membershipQuote && !membershipQuote.renewal
                     ? t('annualPassPayment.payFirstPackage', { total: (membershipQuote.annualFee + membershipReload).toFixed(2) })

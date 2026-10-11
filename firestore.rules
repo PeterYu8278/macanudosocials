@@ -343,14 +343,19 @@ service cloud.firestore {
       // 读取：用户可以查看自己的充值记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isPointsOperator();
 
-      // 创建：所有已登录用户均可为自己提交充值申请（route 对所有角色开放）
-      allow create: if isPointsOperator() || (isSignedIn() && request.resource.data.userId == request.auth.uid);
+      // Only legacy online pending records may be created by the client. Manual requests use Admin transactions.
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid
+        && request.resource.data.status == 'pending'
+        && request.resource.data.requestedAmount in [100, 200, 500]
+        && request.resource.data.pointsEquivalent == request.resource.data.requestedAmount
+        && request.resource.data.billplzId is string
+        && !request.resource.data.keys().hasAny(['membershipOrderId', 'verifiedBy', 'verifiedAt', 'pointsRecordId']);
 
-      // 更新：任意管理员可以审核充值
-      allow update: if isPointsOperator();
+      // Approval/rejection/cancellation must go through the authenticated server transaction.
+      allow update: if false;
 
-      // 删除：任意管理员可删除任意记录；用户只能删除自己的 pending 记录（撤销申请）
-      allow delete: if isPointsOperator() || (isOwner(resource.data.userId) && resource.data.status == 'pending');
+      // Preserve the review audit trail, including cancellations.
+      allow delete: if false;
     }
     
     // ================================

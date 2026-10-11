@@ -5,9 +5,6 @@ import {
   getDoc, 
   getDocs, 
   addDoc, 
-  setDoc,
-  updateDoc,
-  deleteDoc,
   query, 
   where, 
   orderBy, 
@@ -21,10 +18,8 @@ import {
 import { auth, db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { ReloadRecord, User } from '../../types';
-import { createPointsRecord } from './pointsRecords';
-import { getPointsConfig } from './pointsConfig';
-import { calculateReferralPointsFromArray } from '../../utils/referral';
-import { MINIMUM_RELOAD_AMOUNT_RM } from '../../utils/visitCheckout';
+import { WALLET_RELOAD_OPTIONS } from '../../utils/reloadAmount';
+import i18n from 'i18next';
 
 // 充值汇率（1 RM = 多少积分）
 const RELOAD_EXCHANGE_RATE = 1; // 1 RM = 1 积分（可根据配置调整）
@@ -41,21 +36,22 @@ export const createReloadRecord = async (
   options?: { manual?: boolean }
 ): Promise<{ success: boolean; recordId?: string; error?: string }> => {
   try {
-    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0) {
-      return { success: false, error: '金额必须大于 0' };
+    if (!Number.isFinite(requestedAmount) || requestedAmount <= 0
+      || Math.round(requestedAmount * 100) / 100 !== requestedAmount
+      || (options?.manual && billplzId)) return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
+    if (!billplzId) {
+      const currentUser = auth.currentUser;
+      if (!currentUser) return { success: false, error: i18n.t('auth.pleaseLogin') };
+      const response = await fetch('/.netlify/functions/reload-review', {
+        method: 'POST', headers: { Authorization: `Bearer ${await currentUser.getIdToken()}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'create', userId, amount: requestedAmount, storeId, operatorManual: options?.manual === true }),
+      });
+      const result = await response.json();
+      return result.success ? { success: true, recordId: result.recordId }
+        : { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
     }
-
-    if (options?.manual) {
-      const operatorId = auth.currentUser?.uid;
-      if (!operatorId || billplzId) {
-        return { success: false, error: '无权创建手动充值记录' };
-      }
-      const operator = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, operatorId));
-      if (!operator.exists() || !['admin', 'superAdmin', 'developer', 'storeAdmin'].includes(operator.data().role)) {
-        return { success: false, error: '无权创建手动充值记录' };
-      }
-    } else if (requestedAmount < MINIMUM_RELOAD_AMOUNT_RM) {
-      return { success: false, error: `最低充值金额为 RM ${MINIMUM_RELOAD_AMOUNT_RM}` };
+    if (!WALLET_RELOAD_OPTIONS.includes(requestedAmount) || !storeId) {
+      return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
     }
 
     const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId));
@@ -95,313 +91,32 @@ export const createReloadRecord = async (
 /**
  * 验证充值记录（管理员操作）
  */
+async function reviewReload(recordId: string, action: 'approve' | 'reject' | 'cancel', proof?: string, notes?: string, actualAmount?: number, creditOnly?: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const currentUser = auth.currentUser;
+    if (!currentUser) return { success: false, error: 'UNAUTHENTICATED' };
+    const response = await fetch('/.netlify/functions/reload-review', {
+      method: 'POST', headers: { Authorization: `Bearer ${await currentUser.getIdToken()}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recordId, action, proof, notes, actualAmount, creditOnly }),
+    });
+    const result = await response.json();
+    return result.success ? { success: true } : { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
+  } catch {
+    return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
+  }
+}
+
 export const verifyReloadRecord = async (
-  recordId: string,
-  verifiedBy: string,
-  verificationProof?: string,
-  adminNotes?: string,
-  verifiedByName?: string
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const recordDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
-    if (!recordDoc.exists()) {
-      return { success: false, error: '充值记录不存在' };
-    }
+  recordId: string, _verifiedBy: string, verificationProof?: string, adminNotes?: string,
+  _verifiedByName?: string, actualAmount?: number, creditOnly?: boolean
+) => reviewReload(recordId, 'approve', verificationProof, adminNotes, actualAmount, creditOnly);
 
-    const recordData = recordDoc.data();
-    const record: ReloadRecord = {
-      id: recordDoc.id,
-      ...recordData,
-      verifiedAt: recordData.verifiedAt?.toDate?.() || recordData.verifiedAt,
-      createdAt: recordData.createdAt?.toDate?.() || new Date(recordData.createdAt),
-      updatedAt: recordData.updatedAt?.toDate?.() || new Date(recordData.updatedAt)
-    } as ReloadRecord;
+export const cancelReloadRecord = async (recordId: string, _userId: string) =>
+  reviewReload(recordId, 'cancel');
 
-    if (record.status !== 'pending') {
-      return { success: false, error: '该充值记录已处理' };
-    }
-
-    // 获取用户信息
-    const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId));
-    if (!userDoc.exists()) {
-      return { success: false, error: '用户不存在' };
-    }
-
-    const userData = userDoc.data() as User;
-    const currentPoints = userData.membership?.points || 0;
-    let newPoints = currentPoints + record.pointsEquivalent;
-
-    // 如果用户积分为负数，先回填到0或正数
-    if (currentPoints < 0) {
-      // 负数回填逻辑：新积分 = 原有积分 + 充值积分
-      // 例如：-50 + 100 = 50
-      newPoints = currentPoints + record.pointsEquivalent;
-    }
-
-    // 更新用户积分
-    await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
-      'membership.points': newPoints,
-      ...(userData.role === 'guest' && { role: 'member' }),
-      updatedAt: Timestamp.fromDate(new Date())
-    });
-
-    // 创建积分记录
-    const pointsRecord = await createPointsRecord({
-      userId: record.userId,
-      userName: record.userName,
-      type: 'earn',
-      amount: record.pointsEquivalent,
-      source: 'reload',
-      description: `充值 ${record.requestedAmount} RM (${record.pointsEquivalent} 积分)`,
-      relatedId: recordId,
-      balance: newPoints,
-      createdBy: verifiedBy
-    });
-
-    const now = new Date();
-
-    // ✅ 检查是否为首次充值，发放首充奖励
-    try {
-      // 查询该用户是否有其他已完成的充值记录（不包括当前这条）
-      const completedReloadsQuery = query(
-        collection(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS),
-        where('userId', '==', record.userId),
-        where('status', '==', 'completed')
-      );
-      const completedReloadsSnapshot = await getDocs(completedReloadsQuery);
-      
-      // 如果没有其他已完成的充值记录，说明这是首充
-      const isFirstReload = completedReloadsSnapshot.empty;
-      
-      if (isFirstReload) {
-        // 检查用户是否有引荐人
-        const referrerId = userData.referral?.referredByUserId;
-        
-        if (referrerId) {
-          // 获取积分配置
-          const pointsConfig = await getPointsConfig();
-          
-          if (pointsConfig?.reload) {
-            const referrerReward = pointsConfig.reload.referrerFirstReload || 0;
-            const referredReward = pointsConfig.reload.referredFirstReload || 0;
-            
-            // 1. 给被引荐人（当前用户）增加首充奖励积分
-            if (referredReward > 0) {
-              const referredNewPoints = newPoints + referredReward;
-              await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
-                'membership.points': referredNewPoints,
-                updatedAt: Timestamp.fromDate(new Date())
-              });
-              
-              // 创建被引荐人的首充奖励积分记录
-              await createPointsRecord({
-                userId: record.userId,
-                userName: record.userName,
-                type: 'earn',
-                amount: referredReward,
-                source: 'reload',
-                description: `首次充值奖励`,
-                relatedId: recordId,
-                balance: referredNewPoints,
-                createdBy: verifiedBy
-              });
-              
-              // 更新 newPoints 以便后续更新充值记录时使用正确的余额
-              newPoints = referredNewPoints;
-              
-            }
-            
-            // 2. 给引荐人增加首充奖励积分
-            if (referrerReward > 0) {
-              const referrerDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, referrerId));
-              if (referrerDoc.exists()) {
-                const referrerData = referrerDoc.data() as User;
-                const referrerCurrentPoints = referrerData.membership?.points || 0;
-                const referrerNewPoints = referrerCurrentPoints + referrerReward;
-                
-                // 更新引荐人的 referrals 数组，添加首充奖励信息
-                const existingReferrals = referrerData.referral?.referrals || [];
-                const referralIndex = existingReferrals.findIndex(
-                  (r: any) => (typeof r === 'string' ? r === record.userId : r.userId === record.userId)
-                );
-                
-                const referralData = {
-                  userId: record.userId,
-                  userName: record.userName,
-                  memberId: userData.memberId || null,
-                  firstReloadReward: referrerReward,
-                  firstReloadDate: Timestamp.fromDate(new Date()),
-                  firstReloadRecordId: recordId
-                };
-                
-                let updatedReferrals: any[];
-                if (referralIndex >= 0) {
-                  // 如果已存在，更新记录（兼容旧数据格式 string）
-                  updatedReferrals = [...existingReferrals];
-                  updatedReferrals[referralIndex] = {
-                    ...(typeof existingReferrals[referralIndex] === 'string' 
-                      ? { userId: existingReferrals[referralIndex] } 
-                      : existingReferrals[referralIndex]),
-                    ...referralData
-                  };
-                } else {
-                  // 如果不存在，添加新记录
-                  updatedReferrals = [...existingReferrals, referralData];
-                }
-                
-                // 从 referrals 数组计算 referralPoints 总和
-                const calculatedReferralPoints = calculateReferralPointsFromArray(updatedReferrals);
-                
-                await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, referrerId), {
-                  'membership.points': referrerNewPoints,
-                  'membership.referralPoints': calculatedReferralPoints,
-                  'referral.referrals': updatedReferrals,
-                  updatedAt: Timestamp.fromDate(new Date())
-                });
-                
-                // 创建引荐人的首充奖励积分记录
-                await createPointsRecord({
-                  userId: referrerId,
-                  userName: referrerData.displayName,
-                  type: 'earn',
-                  amount: referrerReward,
-                  source: 'reload',
-                  description: `引荐用户首次充值奖励 (${record.userName})`,
-                  relatedId: recordId,
-                  balance: referrerNewPoints,
-                  createdBy: verifiedBy
-                });
-                
-                // 记录到引荐人的 referrals 子集合
-                try {
-                  const referralsRef = collection(db, GLOBAL_COLLECTIONS.USERS, referrerId, 'referrals');
-                  const referralDocRef = doc(referralsRef, record.userId);
-                  
-                  // 检查是否已存在引荐记录
-                  const existingDoc = await getDoc(referralDocRef);
-                  
-                  if (existingDoc.exists()) {
-                    // 更新现有记录
-                    await updateDoc(referralDocRef, {
-                      firstReloadReward: referrerReward,
-                      firstReloadAt: Timestamp.fromDate(new Date()),
-                      firstReloadRecordId: recordId,
-                      updatedAt: Timestamp.fromDate(new Date())
-                    });
-                  } else {
-                    // 创建新记录
-                    const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId));
-                    const referredUserData = userDoc.exists() ? userDoc.data() as User : null;
-                    
-                    await setDoc(referralDocRef, {
-                      referredUserId: record.userId,
-                      referredUserName: record.userName,
-                      referredUserMemberId: referredUserData?.memberId || null,
-                      firstReloadReward: referrerReward,
-                      firstReloadAt: Timestamp.fromDate(new Date()),
-                      firstReloadRecordId: recordId,
-                      createdAt: Timestamp.fromDate(referredUserData?.referral?.referralDate || new Date()),
-                      updatedAt: Timestamp.fromDate(new Date())
-                    });
-                  }
-                } catch (referralError) {
-                  // 记录失败不影响主流程
-                }
-              }
-            }
-          }
-        }
-      }
-    } catch (firstReloadError) {
-      // 首充奖励发放失败不应该影响充值验证流程
-    }
-
-    // 更新充值记录状态为已完成（积分已到账）
-    await updateDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId), {
-      status: 'completed',
-      verifiedAt: Timestamp.fromDate(now),
-      verifiedBy,
-      ...(verifiedByName?.trim() && { verifiedByName: verifiedByName.trim() }),
-      verificationProof: verificationProof || null,
-      adminNotes: adminNotes || null,
-      pointsRecordId: pointsRecord?.id || null,
-      updatedAt: Timestamp.fromDate(now)
-    });
-
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || '验证充值记录失败' };
-  }
-};
-
-/**
- * 用户撤销充值记录（用户操作）- 直接删除记录
- */
-export const cancelReloadRecord = async (
-  recordId: string,
-  userId: string
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const recordDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
-    if (!recordDoc.exists()) {
-      return { success: false, error: '充值记录不存在' };
-    }
-
-    const recordData = recordDoc.data();
-    
-    // 验证记录属于当前用户
-    if (recordData.userId !== userId) {
-      return { success: false, error: '无权操作此充值记录' };
-    }
-
-    // 只能撤销 pending 状态的记录
-    if (recordData.status !== 'pending') {
-      return { success: false, error: '该充值记录已处理，无法撤销' };
-    }
-
-    // 直接删除记录
-    await deleteDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
-
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || '撤销充值记录失败' };
-  }
-};
-
-/**
- * 拒绝充值记录（管理员操作）
- */
 export const rejectReloadRecord = async (
-  recordId: string,
-  rejectedBy: string,
-  adminNotes?: string,
-  verifiedByName?: string
-): Promise<{ success: boolean; error?: string }> => {
-  try {
-    const recordDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId));
-    if (!recordDoc.exists()) {
-      return { success: false, error: '充值记录不存在' };
-    }
-
-    const recordData = recordDoc.data();
-    if (recordData.status !== 'pending') {
-      return { success: false, error: '该充值记录已处理' };
-    }
-
-    const now = new Date();
-    await updateDoc(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, recordId), {
-      status: 'rejected',
-      verifiedBy: rejectedBy,
-      ...(verifiedByName?.trim() && { verifiedByName: verifiedByName.trim() }),
-      adminNotes: adminNotes || null,
-      updatedAt: Timestamp.fromDate(now)
-    });
-
-    return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message || '拒绝充值记录失败' };
-  }
-};
+  recordId: string, _rejectedBy: string, adminNotes?: string, _verifiedByName?: string
+) => reviewReload(recordId, 'reject', undefined, adminNotes);
 
 /**
  * 获取用户的充值记录

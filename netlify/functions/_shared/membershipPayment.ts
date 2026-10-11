@@ -69,6 +69,7 @@ export async function fulfillMembershipPayment(db: Firestore, orderId: string, b
     const orderSnapshot = await tx.get(orderRef);
     if (!orderSnapshot.exists) throw new Error('PAYMENT_NOT_FOUND');
     const order = orderSnapshot.data()!;
+    if (order.paymentMethod === 'manual') throw new Error('INVALID_PAYMENT_METHOD');
     if (!billId || (order.billplzId && order.billplzId !== billId) || order.totalCents !== paidCents) throw new Error('PAYMENT_AMOUNT_MISMATCH');
     if (['fulfilled', 'credited'].includes(order.status)) return order.status;
     if (!['creating', 'pending'].includes(order.status)) throw new Error('PAYMENT_NOT_READY');

@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App, Tooltip } from 'antd';
 import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
-import { processPendingMembershipFees } from '../../services/firebase/scheduledJobs';
 import dayjs from 'dayjs';
 import { uploadFile } from '../../services/cloudinary/create';
 import { getAllStores } from '../../services/firebase/stores';
@@ -131,8 +130,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       let finalProofUrl = proofUrl;
       
       // 如果有上传的文件，先上传到Cloudinary
-      if (values.proof && values.proof.fileList && values.proof.fileList.length > 0) {
-        const file = values.proof.fileList[0].originFileObj;
+      if (values.proof?.length > 0) {
+        const file = values.proof[0].originFileObj;
         if (file) {
           const uploadResult = await uploadFile(file, { 
             folder: 'jep-cigar/reload-proofs',
@@ -149,7 +148,9 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         reviewer.id,
         finalProofUrl || undefined,
         values.notes,
-        reviewer.displayName
+        reviewer.displayName,
+        values.actualAmount,
+        values.creditOnly
       );
 
       if (result.success) {
@@ -160,16 +161,6 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         loadRecords();
         onRefresh?.();
         
-        // 充值验证成功后，自动检查并扣除年费
-        try {
-          const deductionResult = await processPendingMembershipFees();
-          if (deductionResult.success && deductionResult.processed > 0) {
-            // 静默执行，不显示消息
-          }
-        } catch (error: any) {
-          console.error('[ReloadVerification] 充值后自动扣除年费失败:', error);
-          // 静默失败，不显示错误消息
-        }
       } else {
         message.error(result.error || t('pointsConfig.reloadVerification.verifyFailed'));
       }
@@ -302,6 +293,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       render: (amount: number, record: ReloadRecord) => (
         <div>
           <div>{amount} RM</div>
+          {record.membershipOrderId && <Tag color="gold">{t(`annualPassPayment.${record.paymentPurpose === 'initial_package' ? 'initialPackageLabel' : 'renewalReloadLabel'}`)}</Tag>}
+          {record.membershipOrderId && <div>{t('annualPassPayment.reviewBreakdown', {
+            reload: record.walletAmount, fee: record.annualFeeAmount,
+          })}</div>}
           <div style={{ fontSize: 12, color: '#999' }}>
             {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
           </div>
@@ -544,6 +539,10 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                       <div style={{ fontSize: 18, fontWeight: 700, color: '#f4af25', marginBottom: 4 }}>
                         {record.requestedAmount} RM
                       </div>
+                      {record.membershipOrderId && <div style={{ marginBottom: 6 }}>
+                        <Tag color="gold">{t(`annualPassPayment.${record.paymentPurpose === 'initial_package' ? 'initialPackageLabel' : 'renewalReloadLabel'}`)}</Tag>
+                        {t('annualPassPayment.reviewBreakdown', { reload: record.walletAmount, fee: record.annualFeeAmount })}
+                      </div>}
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
                         {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
                       </div>
@@ -716,8 +715,22 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               <div>{t('pointsConfig.reloadVerification.pointsEquivalent', { points: currentRecord.pointsEquivalent })}</div>
             </div>
 
+            {currentRecord?.membershipOrderId && <Form.Item name="actualAmount"
+              label={t('annualPassPayment.actualAmount')}
+              rules={[{ required: true, type: 'number', min: 0.01 }, {
+                validator: (_, value) => value === currentRecord.requestedAmount ? Promise.resolve()
+                  : Promise.reject(new Error(t('annualPassPayment.amountMismatch'))),
+              }]}>
+              <InputNumber min={0.01} precision={2} prefix="RM" style={{ width: '100%' }} />
+            </Form.Item>}
+            {currentRecord?.membershipOrderId && <Form.Item name="creditOnly" valuePropName="checked">
+              <Checkbox>{t('annualPassPayment.creditOnlyReview')}</Checkbox>
+            </Form.Item>}
             <Form.Item
               name="proof"
+              rules={currentRecord?.membershipOrderId ? [{ validator: (_, value) =>
+                value?.some((file: any) => file.originFileObj)
+                  ? Promise.resolve() : Promise.reject(new Error(t('annualPassPayment.proofRequired'))) }] : []}
               label={<span style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('pointsConfig.reloadVerification.uploadProofLabel')}</span>}
               valuePropName="fileList"
               getValueFromEvent={(e) => {

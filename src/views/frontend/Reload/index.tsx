@@ -1,5 +1,5 @@
 // 用户充值页面
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, Button, Typography, Space, Spin, Tag, App } from 'antd';
 import { WalletOutlined, ReloadOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
@@ -12,7 +12,10 @@ import dayjs from 'dayjs';
 import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { useTranslation } from 'react-i18next';
 import StoreSelect from '../../../components/common/StoreSelect';
-import { MINIMUM_RELOAD_AMOUNT_RM } from '../../../utils/visitCheckout';
+import { MINIMUM_WALLET_RELOAD_RM as MINIMUM_RELOAD_AMOUNT_RM, WALLET_RELOAD_OPTIONS } from '../../../utils/reloadAmount';
+import { doc, onSnapshot } from '../../../services/firebase/monitoredFirestore';
+import { db } from '../../../config/firebase';
+import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections';
 
 const { Title, Text } = Typography;
 
@@ -25,7 +28,7 @@ const ReloadPage: React.FC = () => {
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
-  const amountOptions = [MINIMUM_RELOAD_AMOUNT_RM, 300, 500];
+  const amountOptions = WALLET_RELOAD_OPTIONS;
 
   // 支付配置
   const { data: appConfig } = useFirestoreDoc(getAppConfig);
@@ -50,6 +53,13 @@ const ReloadPage: React.FC = () => {
     },
     [user?.id]
   );
+
+  useEffect(() => {
+    if (!pendingRecord?.id) return;
+    return onSnapshot(doc(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS, pendingRecord.id), snapshot => {
+      if (!snapshot.exists() || snapshot.data().status !== 'pending') refreshPendingRecord();
+    }, () => {});
+  }, [pendingRecord?.id, refreshPendingRecord]);
 
   const handleReload = async (amount: number) => {
     if (!user?.id) {
@@ -265,14 +275,17 @@ const ReloadPage: React.FC = () => {
                 </Text>
                 <Text style={{ color: '#c0c0c0', fontSize: 14, display: 'block', marginBottom: 8 }}>
                   {t('reload.estimatedPoints')} <Text strong style={{ color: '#FFD700' }}>
-                    {pendingRecord.pointsEquivalent} {t('visitTimer.points')}
+                    {pendingRecord.walletAmount ?? pendingRecord.pointsEquivalent} {t('visitTimer.points')}
                   </Text>
                 </Text>
                 <Text style={{ color: '#999999', fontSize: 12, display: 'block' }}>
                   {t('reload.submittedAt')} {dayjs(pendingRecord.createdAt).format('YYYY-MM-DD HH:mm:ss')}
                 </Text>
               </div>
-              <Tag color="orange" style={{ 
+              {pendingRecord.membershipOrderId && <Text style={{ display: 'block', marginBottom: 12 }}>
+                {t('annualPassPayment.reviewBreakdown', { reload: pendingRecord.walletAmount, fee: pendingRecord.annualFeeAmount })}
+              </Text>}
+              <Tag color="orange" style={{
                 fontSize: 14,
                 padding: '4px 12px',
                 borderRadius: 4,
@@ -288,6 +301,7 @@ const ReloadPage: React.FC = () => {
                   size="large"
                   icon={<CloseCircleOutlined />}
                   onClick={handleCancelReload}
+                  disabled={Boolean(pendingRecord.billplzId)}
                   loading={loading}
                   style={{
                     height: 40,

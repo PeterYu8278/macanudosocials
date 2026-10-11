@@ -802,6 +802,11 @@ export interface MembershipFeeRecord {
 
 // 充值记录
 export interface ReloadRecord {
+  membershipOrderId?: string;
+  paymentMethod?: 'manual' | 'billplz';
+  paymentPurpose?: 'initial_package' | 'renewal_reload' | 'annual_pass';
+  walletAmount?: number;
+  annualFeeAmount?: number;
   id: string;
   userId: string;
   userName?: string;

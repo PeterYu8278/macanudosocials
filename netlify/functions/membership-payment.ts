@@ -42,7 +42,8 @@ export const eventHandler: EventHandler = async event => {
       ...['apiKey', 'collectionId', 'xSignatureKey'].filter(key =>
         typeof gateway?.[key] !== 'string' || !gateway[key].trim()),
     ];
-    const paymentAvailable = configurationIssues.length === 0;
+    const paymentMethod = gateway?.enabled === false ? 'manual' : 'billplz';
+    const paymentAvailable = paymentMethod === 'manual' || configurationIssues.length === 0;
     const baseUrl = gateway?.isSandbox !== false ? 'https://www.billplz-sandbox.com/api/v3' : 'https://www.billplz.com/api/v3';
     const gatewayOptions = { headers: { Authorization: `Basic ${Buffer.from(`${gateway?.apiKey}:`).toString('base64')}` }, timeout: 15000 };
 
@@ -53,7 +54,7 @@ export const eventHandler: EventHandler = async event => {
       if (!snapshot.exists || snapshot.data()?.userId !== userSnapshot.id) throw new Error('PAYMENT_NOT_FOUND');
       let order = snapshot.data()!;
       // Recover a delayed/missed callback using the gateway's authenticated bill status.
-      if (order.status === 'pending' && gateway?.apiKey) {
+      if (order.status === 'pending' && order.paymentMethod !== 'manual' && order.billplzId && gateway?.apiKey) {
         stage = 'verify_bill';
         const bill = (await axios.get(`${baseUrl}/bills/${encodeURIComponent(order.billplzId)}`, gatewayOptions)).data;
         if (bill.paid === true && bill.id === order.billplzId && Number(bill.amount) === order.totalCents) {
@@ -80,11 +81,13 @@ export const eventHandler: EventHandler = async event => {
         const pending = existing.data();
         if (pending?.status === 'pending') return reply(200, {
           success: true, annualFee: pending.annualFee, renewal: pending.renewalType === 'renewal',
-          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100, accountStatus: user.status, paymentAvailable,
+          pending: true, orderId: existing.id, paymentMethod: pending.paymentMethod || 'billplz',
+          reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100,
+          accountStatus: user.status, paymentAvailable: pending.paymentMethod === 'manual' || Boolean(pending.paymentUrl),
         });
         if (pending?.status === 'creating') throw new Error('PAYMENT_CREATING');
       }
-      return reply(200, { success: true, annualFee: fee, renewal, accountStatus: user.status, paymentAvailable });
+      return reply(200, { success: true, annualFee: fee, renewal, accountStatus: user.status, paymentAvailable, paymentMethod });
     }
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { throw new Error('INVALID_REQUEST'); }
@@ -93,7 +96,6 @@ export const eventHandler: EventHandler = async event => {
     stage = 'validate_store';
     if (!(await db.collection(C.STORES).doc(body.storeId.trim()).get()).exists) throw new Error('STORE_REQUIRED');
     stage = 'validate_gateway';
-    if (!paymentAvailable) throw new Error('PAYMENT_CONFIGURATION_INCOMPLETE');
     const totalCents = (renewal ? 0 : Math.round(fee * 100)) + reloadAmount * 100;
     const lockRef = db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(userSnapshot.id);
     const newOrderRef = db.collection(C.MEMBERSHIP_PAYMENTS).doc();
@@ -113,20 +115,40 @@ export const eventHandler: EventHandler = async event => {
       if (renewal ? ![100, 200, 500].includes(reloadAmount) : reloadAmount !== 100) {
         throw new Error('INVALID_RELOAD_AMOUNT');
       }
+      if (!paymentAvailable) { stage = 'validate_gateway'; throw new Error('PAYMENT_CONFIGURATION_INCOMPLETE'); }
+      const pendingReloads = await tx.get(db.collection(C.RELOAD_RECORDS)
+        .where('userId', '==', userSnapshot.id).where('status', '==', 'pending').limit(1));
+      if (!pendingReloads.empty) throw new Error('RELOAD_PENDING');
+      const history = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
+        .where('userId', '==', userSnapshot.id).where('status', '==', 'paid'));
+      if (history.docs.some(doc => Number(doc.data().amount) > 0) !== renewal) throw new Error('MEMBERSHIP_CHANGED');
       const now = Timestamp.now();
+      tx.update(userSnapshot.ref, { updatedAt: now });
       tx.set(newOrderRef, {
         userId: userSnapshot.id, annualFee: fee, reloadAmount, totalCents,
         renewalType: renewal ? 'renewal' : 'initial', storeId: body.storeId.trim(),
         paymentMode: renewal ? 'renewal_reload' : 'initial_package',
-        status: 'creating', callbackProof, createdAt: now, updatedAt: now,
+        paymentMethod, status: paymentMethod === 'manual' ? 'pending' : 'creating',
+        callbackProof, createdAt: now, updatedAt: now,
+      });
+      if (paymentMethod === 'manual') tx.set(db.collection(C.RELOAD_RECORDS).doc(`membership_${newOrderRef.id}`), {
+        userId: userSnapshot.id, userName: user.displayName || '', requestedAmount: totalCents / 100,
+        pointsEquivalent: totalCents / 100, walletAmount: reloadAmount,
+        annualFeeAmount: renewal ? 0 : fee, membershipOrderId: newOrderRef.id,
+        paymentPurpose: renewal ? 'renewal_reload' : 'initial_package', paymentMethod: 'manual',
+        storeId: body.storeId.trim(), status: 'pending', createdAt: now, updatedAt: now,
       });
       tx.set(lockRef, { orderId: newOrderRef.id, createdAt: now });
       return { id: newOrderRef.id, existing: null };
     });
     if (reservation.existing) {
+      if (reservation.existing.paymentMethod === 'manual') return reply(200, {
+        success: true, orderId: reservation.id, paymentMethod: 'manual', resumed: true,
+      });
       if (!reservation.existing.paymentUrl) throw new Error('PAYMENT_CREATING');
       return reply(200, { success: true, orderId: reservation.id, paymentUrl: reservation.existing.paymentUrl, resumed: true });
     }
+    if (paymentMethod === 'manual') return reply(200, { success: true, orderId: reservation.id, paymentMethod });
     const requestOrigin = new URL(event.rawUrl).origin;
     const origin = process.env.URL || (process.env.NODE_ENV !== 'production' && /^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(requestOrigin) ? requestOrigin : 'https://macanudosocials.com');
     // Keep ambiguous creation failures locked: retrying could otherwise create a second payable bill.
@@ -152,7 +174,7 @@ export const eventHandler: EventHandler = async event => {
     return reply(200, { success: true, orderId: newOrderRef.id, paymentUrl: bill.url });
   } catch (error: any) {
     const code = error?.message || 'PAYMENT_UNAVAILABLE';
-    const known = ['USER_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'INVALID_REQUEST', 'INVALID_RELOAD_AMOUNT', 'STORE_REQUIRED', 'ALREADY_ACTIVE', 'ACCOUNT_SUSPENDED', 'PAYMENT_CREATING', 'MEMBERSHIP_STATUS_UNVERIFIED'];
+    const known = ['USER_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'INVALID_REQUEST', 'INVALID_RELOAD_AMOUNT', 'STORE_REQUIRED', 'ALREADY_ACTIVE', 'ACCOUNT_SUSPENDED', 'PAYMENT_CREATING', 'MEMBERSHIP_STATUS_UNVERIFIED', 'RELOAD_PENDING', 'MEMBERSHIP_CHANGED'];
     if (!known.includes(code)) {
       // Never log raw gateway errors: they can contain credentials and customer data.
       const safeCode = typeof error?.code === 'number' ? error.code

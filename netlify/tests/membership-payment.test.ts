@@ -14,6 +14,7 @@ vi.mock('../functions/_shared/firestoreMonitoring', () => ({
   withFirestoreMonitoring: (_: string, work: () => unknown) => work(),
 }));
 import handler from '../functions/membership-payment';
+import reviewHandler from '../functions/reload-review';
 import { fulfillMembershipPayment, handleMembershipBill } from '../functions/_shared/membershipPayment';
 import { verifyXSignature } from '../functions/billplz-callback';
 
@@ -67,6 +68,16 @@ const seedOrder = (renewal = false, reload = 200) => {
   });
   m.docs.set(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`, { orderId: 'payment' });
 };
+const review = (body: any, token = 'valid') => reviewHandler(new Request('http://localhost:3000/.netlify/functions/reload-review', {
+  method: 'POST', headers: token ? { Authorization: `Bearer ${token}` } : {}, body: JSON.stringify(body),
+}));
+const manualPackage = async () => {
+  m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+  const payment = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+  m.docs.set(`${C.USERS}/operator`, { role: 'storeAdmin', storeId: 'store', displayName: 'Staff' });
+  m.auth.mockResolvedValue({ uid: 'operator' });
+  return { recordId: `membership_${payment.orderId}`, orderId: payment.orderId, action: 'approve', actualAmount: 250, proof: 'https://receipt.example/image.png' };
+};
 
 describe('Annual Pass payment', () => {
   beforeEach(() => {
@@ -82,6 +93,132 @@ describe('Annual Pass payment', () => {
     expect((await request(undefined, '', '')).status).toBe(401);
     m.auth.mockRejectedValue(new Error('expired'));
     expect((await request()).status).toBe(401);
+  });
+  it('uses manual requests when Billplz is explicitly disabled without creating a bill or changing points', async () => {
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz = { enabled: false };
+    expect(await (await request()).json()).toMatchObject({ paymentMethod: 'manual', paymentAvailable: true });
+    const first = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    const second = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    expect(first.paymentMethod).toBe('manual');
+    expect(second).toMatchObject({ orderId: first.orderId, resumed: true });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${first.orderId}`)).toMatchObject({ status: 'pending', requestedAmount: 250, walletAmount: 100 });
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    expect(m.post).not.toHaveBeenCalled();
+    expect(await (await request(undefined, `?order=${first.orderId}`)).json()).toMatchObject({ status: 'pending' });
+    expect(m.get).not.toHaveBeenCalled();
+  });
+  it('does not convert an existing online bill to manual after disabling the gateway', async () => {
+    const initial = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+    expect(await (await request()).json()).toMatchObject({ paymentMethod: 'billplz', pending: true, paymentAvailable: true });
+    expect(await (await request({ reloadAmount: 100, storeId: 'store' })).json()).toMatchObject({ orderId: initial.orderId, paymentUrl: initial.paymentUrl });
+    expect(m.post).toHaveBeenCalledTimes(1);
+  });
+  it('settles the manual package once with an annual fee debit and net RM100 credit', async () => {
+    const body = await manualPackage();
+    const responses = await Promise.all([review(body), review(body)]);
+    expect(responses.map(response => response.status)).toEqual([200, 200]);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ role: 'vip', status: 'active', membership: { points: 180, nextFirstVisitWaiverExpiresAt: null } });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'completed', verifiedBy: 'operator', actualAmount: 250 });
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('fulfilled');
+    expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
+    expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(1);
+  });
+  it.each(['missingProof', 'amountMismatch', 'wrongStore', 'memberRole', 'active', 'suspended'])('blocks invalid manual approval: %s', async failure => {
+    const body = await manualPackage();
+    if (failure === 'missingProof') body.proof = '';
+    if (failure === 'amountMismatch') body.actualAmount = 100;
+    if (failure === 'wrongStore') m.docs.get(`${C.USERS}/operator`).storeId = 'other';
+    if (failure === 'memberRole') m.docs.get(`${C.USERS}/operator`).role = 'member';
+    if (['active', 'suspended'].includes(failure)) m.docs.get(`${C.USERS}/user`).status = failure;
+    expect((await review(body)).status).toBe(['wrongStore', 'memberRole'].includes(failure) ? 403 : 409);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`).status).toBe('pending');
+  });
+  it('keeps the requested annual fee snapshot even when configuration changes before review', async () => {
+    const body = await manualPackage();
+    m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
+    expect((await review(body)).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(180);
+  });
+  it.each(['active', 'suspended'])('requires explicit credit-only reconciliation for a now %s account', async status => {
+    const body = await manualPackage();
+    m.docs.get(`${C.USERS}/user`).status = status;
+    expect((await review({ ...body, creditOnly: true })).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status, membership: { points: 330 } });
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('credited');
+    expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(0);
+  });
+  it('rejects fake gateway fulfillment for a manual package', async () => {
+    const body = await manualPackage();
+    await expect(fulfillMembershipPayment(m.db, body.orderId, 'fake', 25000)).rejects.toThrow('INVALID_PAYMENT_METHOD');
+  });
+  it('cancels a pending package atomically and prevents subsequent approval', async () => {
+    const body = await manualPackage();
+    m.auth.mockResolvedValue({ uid: 'user' });
+    expect((await review({ ...body, action: 'cancel' })).status).toBe(200);
+    m.auth.mockResolvedValue({ uid: 'operator' });
+    expect((await review(body)).status).toBe(409);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('cancelled');
+    expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
+  });
+  it('serializes rejection versus approval without a partial wallet update', async () => {
+    const body = await manualPackage();
+    const responses = await Promise.all([review({ ...body, action: 'reject' }), review(body)]);
+    expect(responses.map(response => response.status).sort()).toEqual([200, 409]);
+    const record = m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(record.status === 'completed' ? 180 : 80);
+  });
+  it('serializes owner cancellation versus staff approval', async () => {
+    const body = await manualPackage();
+    m.auth.mockImplementation(async token => ({ uid: token === 'owner-token' ? 'user' : 'operator' }));
+    const results = await Promise.all([review({ ...body, action: 'cancel' }, 'owner-token'), review(body, 'staff-token')]);
+    expect(results.map(result => result.status).sort()).toEqual([200, 409]);
+    const completed = m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`).status === 'completed';
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(completed ? 180 : 80);
+    expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
+  });
+  it('does not allow a suspended operator to approve a package', async () => {
+    const body = await manualPackage();
+    m.docs.get(`${C.USERS}/operator`).status = 'suspended';
+    expect((await review(body)).status).toBe(403);
+  });
+  it.each([20, 80])('renews after a reload only when the final balance covers the annual fee (old points %s)', async points => {
+    m.docs.get(`${C.USERS}/user`).membership.points = points;
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/paid`, { userId: 'user', status: 'paid', amount: 150 });
+    m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: 100, pointsEquivalent: 100, status: 'pending' });
+    m.docs.set(`${C.USERS}/operator`, { role: 'admin', displayName: 'Staff' });
+    m.auth.mockResolvedValue({ uid: 'operator' });
+    expect((await review({ action: 'approve', recordId: 'ordinary', actualAmount: 100 })).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: points === 80 ? 'active' : 'inactive', membership: { points: points === 80 ? 30 : 120 } });
+  });
+  it('never activates a first pass from an ordinary RM299 reload', async () => {
+    m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: 299, pointsEquivalent: 299, status: 'pending' });
+    m.docs.set(`${C.USERS}/operator`, { role: 'admin' }); m.auth.mockResolvedValue({ uid: 'operator' });
+    expect((await review({ action: 'approve', recordId: 'ordinary' })).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ role: 'member', status: 'inactive', membership: { points: 379 } });
+  });
+  it('awards configured first reload referral bonuses once alongside package settlement', async () => {
+    m.docs.get(`${C.USERS}/user`).referral = { referredByUserId: 'referrer' };
+    m.docs.set(`${C.USERS}/referrer`, { membership: { points: 10 }, referral: { referrals: [] } });
+    m.docs.set(`${C.CONFIG}/points`, { reload: { referrerFirstReload: 20, referredFirstReload: 5 } });
+    const body = await manualPackage();
+    await review(body); await review(body);
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(185);
+    expect(m.docs.get(`${C.USERS}/referrer`).membership.points).toBe(30);
+  });
+  it('rejects manual approval of an online reload and requires auth', async () => {
+    m.docs.set(`${C.RELOAD_RECORDS}/online`, { userId: 'user', storeId: 'store', billplzId: 'bill', status: 'pending' });
+    m.docs.set(`${C.USERS}/operator`, { role: 'admin' }); m.auth.mockResolvedValue({ uid: 'operator' });
+    expect((await review({ action: 'approve', recordId: 'online' })).status).toBe(409);
+    expect((await review({ action: 'approve', recordId: 'online' }, '')).status).toBe(401);
+  });
+  it('validates self reload options and refuses a duplicate pending request', async () => {
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+    expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 300 })).status).toBe(403);
+    expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 100 })).status).toBe(200);
+    expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200 })).status).toBe(409);
   });
   it.each(['enabled', 'apiKey', 'collectionId', 'xSignatureKey'])('reports missing %s without creating an order or leaking configuration values', async field => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
