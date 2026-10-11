@@ -1177,14 +1177,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               <div style={{ color: selectedAccess === 'membership' ? '#FDE08D' : '#fff', fontWeight: 800, fontSize: 16, marginBottom: 8 }}>
                 {t('visitTimer.annualMembership')}
               </div>
-              {membershipQuote && !membershipQuote.renewal && (
-                <Text style={{ color: '#FDE08D' }}>{t('annualPassPayment.firstPackage', {
-                  reload: membershipQuote.pending ? membershipReload : 100,
-                  fee: membershipQuote.annualFee.toFixed(2),
-                })}</Text>
-              )}
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, lineHeight: 1.4, whiteSpace: 'pre-line' }} className="benefit-list">
                 {t('visitTimer.benefits.membership')}
+                {'\n'}{t('annualPassPayment.annualFeeBenefit', { fee: membershipQuote.annualFee.toFixed(2) })}
+                {'\n'}{t('annualPassPayment.creditBenefit', { amount: membershipQuote.pending ? membershipReload : 100 })}
               </div>
             </div>
             <div style={{ textAlign: 'right', marginTop: 16 }} className="price-text-container">
@@ -1199,7 +1195,6 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   ? `RM ${(membershipQuote.annualFee + membershipReload).toFixed(2)}`
                   : <>{annualFeeAmount} {t('visitTimer.points')}</>}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, letterSpacing: 1 }}>{t('visitTimer.yearly')}</div>
             </div>
           </div>
           )}
@@ -1272,11 +1267,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       ...[100, 200, 500].map(value => ({ value, label: t('annualPassPayment.reloadOnly', { amount: value }) })),
                     ]}
                   />}
-                  {membershipQuote && <Text>{membershipQuote.pending
+                  {membershipQuote && (membershipQuote.pending || membershipQuote.renewal) && <Text>{membershipQuote.pending
                     ? t('annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
-                    : membershipQuote.renewal
-                    ? t('annualPassPayment.renewalReload', { amount: membershipReload.toFixed(2), fee: membershipQuote.annualFee.toFixed(2) })
-                    : t('annualPassPayment.breakdown', { fee: membershipQuote.annualFee.toFixed(2), reload: membershipReload.toFixed(2), total: (membershipQuote.annualFee + membershipReload).toFixed(2) })}</Text>}
+                    : t('annualPassPayment.renewalReload', { amount: membershipReload.toFixed(2), fee: membershipQuote.annualFee.toFixed(2) })}</Text>}
                 </Space>
               )}
               <button
