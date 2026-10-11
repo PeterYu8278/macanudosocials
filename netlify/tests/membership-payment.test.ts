@@ -100,6 +100,8 @@ describe('Annual Pass payment', () => {
     const first = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
     const second = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
     expect(first.paymentMethod).toBe('manual');
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${first.orderId}`)).toMatchObject({ userId: 'user', status: 'pending', paymentMethod: 'manual', totalCents: 25000 });
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${first.orderId}`)).not.toHaveProperty('callbackProof');
     expect(second).toMatchObject({ orderId: first.orderId, resumed: true });
     expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${first.orderId}`)).toMatchObject({ status: 'pending', requestedAmount: 250, walletAmount: 100 });
     expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
@@ -114,6 +116,15 @@ describe('Annual Pass payment', () => {
     expect(await (await request({ reloadAmount: 100, storeId: 'store' })).json()).toMatchObject({ orderId: initial.orderId, paymentUrl: initial.paymentUrl });
     expect(m.post).toHaveBeenCalledTimes(1);
   });
+  it('resumes an existing online invoice through an owner-verified GET without creating another bill', async () => {
+    const created = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    m.get.mockResolvedValue({ data: { id: 'bill', paid: false } });
+    expect(await (await request(undefined, `?order=${created.orderId}`)).json()).toMatchObject({
+      status: 'pending', paymentUrl: created.paymentUrl,
+    });
+    expect(m.post).toHaveBeenCalledTimes(1);
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${created.orderId}`).status).toBe('pending');
+  });
   it('settles the manual package once with an annual fee debit and net RM100 credit', async () => {
     const body = await manualPackage();
     const responses = await Promise.all([review(body), review(body)]);
@@ -121,6 +132,7 @@ describe('Annual Pass payment', () => {
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ role: 'vip', status: 'active', membership: { points: 180, nextFirstVisitWaiverExpiresAt: null } });
     expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'completed', verifiedBy: 'operator', actualAmount: 250 });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('fulfilled');
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('fulfilled');
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
     expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(1);
   });
@@ -147,6 +159,7 @@ describe('Annual Pass payment', () => {
     expect((await review({ ...body, creditOnly: true })).status).toBe(200);
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status, membership: { points: 330 } });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('credited');
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('credited');
     expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(0);
   });
   it('rejects fake gateway fulfillment for a manual package', async () => {
@@ -161,6 +174,7 @@ describe('Annual Pass payment', () => {
     expect((await review(body)).status).toBe(409);
     expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('cancelled');
+    expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('cancelled');
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
   });
   it('serializes rejection versus approval without a partial wallet update', async () => {

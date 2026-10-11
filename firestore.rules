@@ -64,6 +64,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function isPaymentOwner(userId) {
+      return isOwner(userId) || (isSignedIn()
+        && get(/databases/$(database)/documents/users/$(userId)).data.get('authUid', '') == request.auth.uid);
+    }
+
     // Redemption document IDs are visit session IDs. Older redemption
     // documents may not contain a top-level userId, so ownership can be
     // recovered from the corresponding visit session without widening access.
@@ -341,7 +346,7 @@ service cloud.firestore {
     // ================================
     match /reloadRecords/{recordId} {
       // 读取：用户可以查看自己的充值记录，任意管理员可以查看所有
-      allow read: if isOwner(resource.data.userId) || isPointsOperator();
+      allow read: if isPaymentOwner(resource.data.userId) || isPointsOperator();
 
       // Only legacy online pending records may be created by the client. Manual requests use Admin transactions.
       allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid
@@ -356,6 +361,12 @@ service cloud.firestore {
 
       // Preserve the review audit trail, including cancellations.
       allow delete: if false;
+    }
+
+    // Member-visible projection; private payment orders and callback proofs remain server-only.
+    match /_membershipPaymentStatuses/{orderId} {
+      allow read: if isPaymentOwner(resource.data.userId);
+      allow write: if false;
     }
     
     // ================================

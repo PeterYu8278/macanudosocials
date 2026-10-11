@@ -24,6 +24,12 @@ describe('membership entry button', () => {
   it('preserves existing payment continuation', () => {
     expect(getMembershipEntryAction({ ...account, quote: { renewal: true, pending: true, annualFee: 199 } }, now)).toBe('resume');
   });
+  it('uses directly monitored pending requests instead of a stale quote', () => {
+    expect(getMembershipEntryAction({ ...account, pendingPayment: true }, now)).toBe('resume');
+    expect(getMembershipEntryAction({ ...account, pendingPayment: false, quote: { renewal: true, pending: true, annualFee: 199 } }, now)).toBe('reload');
+    expect(getMembershipEntryAction({ ...account, pendingPayment: true, status: 'suspended' }, now)).toBe('blocked');
+    expect(getMembershipEntryAction({ ...account, pendingPayment: true, status: 'active', activeUntil: new Date('2027-01-01') }, now)).toBe('active');
+  });
   it('blocks suspended accounts', () => {
     expect(getMembershipEntryAction({ ...account, status: 'suspended' }, now)).toBe('blocked');
   });

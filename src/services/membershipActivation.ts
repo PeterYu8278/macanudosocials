@@ -50,7 +50,7 @@ async function membershipPaymentRequest(query: string, body?: { reloadAmount: nu
 export const getMembershipPaymentQuote = async (): Promise<MembershipPaymentQuote> => membershipPaymentRequest('');
 export const createMembershipPayment = async (reloadAmount: number, storeId: string): Promise<{ paymentUrl?: string; paymentMethod?: 'manual' | 'billplz'; orderId: string; resumed?: boolean }> =>
   membershipPaymentRequest('', { reloadAmount, storeId });
-export const getMembershipPaymentStatus = async (orderId: string): Promise<{ status: string }> =>
+export const getMembershipPaymentStatus = async (orderId: string): Promise<{ status: string; paymentUrl?: string | null }> =>
   membershipPaymentRequest(`?order=${encodeURIComponent(orderId)}`);
 
 interface ActivationResponse {

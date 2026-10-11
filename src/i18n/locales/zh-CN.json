@@ -1,5 +1,9 @@
 {
   "annualPassPayment": {
+    "checkingRequests": "查询申请中",
+    "retryRequests": "重试查询申请",
+    "viewReloadRequest": "查看充值申请",
+    "requestCheckFailed": "无法查询待处理申请，请重试后再提交付款。",
     "manualAvailable": "在线付款已关闭。提交申请后向工作人员付款，确认收款后才会开通。",
     "manualPending": "等待工作人员确认收款，尚未充值或扣除年费。请勿重复申请或付款。",
     "manualSubmitted": "申请已提交，等待工作人员确认收款。",

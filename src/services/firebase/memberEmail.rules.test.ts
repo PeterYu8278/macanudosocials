@@ -99,4 +99,18 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
       .rejects.toMatchObject({ code: 'permission-denied' })
     await expect(deleteDoc(doc(db, 'reloadRecords/pending'))).rejects.toMatchObject({ code: 'permission-denied' })
   })
+  it('allows only the owner to query safe payment statuses and never exposes private orders', async () => {
+    for (const name of ['_membershipPaymentStatuses', '_membershipPayments']) {
+      const response = await fetch(`${base}/${name}/payment`, { method: 'PATCH',
+        headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { userId: text('member'), status: text('pending') } }) })
+      if (!response.ok) throw new Error('Payment seed failed')
+    }
+    const db = client('member')
+    const rows = await getDocs(query(collection(db, '_membershipPaymentStatuses'), where('userId', '==', 'member'), where('status', 'in', ['creating', 'pending'])))
+    expect(rows.size).toBe(1)
+    await expect(getDoc(doc(client('operator'), '_membershipPaymentStatuses/payment'))).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(getDoc(doc(db, '_membershipPayments/payment'))).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(updateDoc(doc(db, '_membershipPaymentStatuses/payment'), { status: 'fulfilled' })).rejects.toMatchObject({ code: 'permission-denied' })
+  })
 })

@@ -6,6 +6,7 @@ import { getFirestore, Timestamp } from './_shared/firestoreMonitoring';
 import { toWebFunction, type EventHandler } from './_shared/webFunction';
 import { annualFee, fulfillMembershipPayment, hasAnnualHistory, reconcileMembershipStatus } from './_shared/membershipPayment';
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
+import { writeMembershipPaymentStatus } from './_shared/membershipPaymentStatus';
 
 const reply = (statusCode: number, data: Record<string, unknown>) => ({
   statusCode, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(data),
@@ -62,7 +63,8 @@ export const eventHandler: EventHandler = async event => {
           order = (await orderRef.get()).data()!;
         }
       }
-      return reply(200, { success: true, status: order.status, balance: order.balance ?? null });
+      return reply(200, { success: true, status: order.status, balance: order.balance ?? null,
+        ...(order.status === 'pending' && order.paymentMethod !== 'manual' && { paymentUrl: order.paymentUrl || null }) });
     }
 
     stage = 'reconcile_membership';
@@ -124,13 +126,15 @@ export const eventHandler: EventHandler = async event => {
       if (history.docs.some(doc => Number(doc.data().amount) > 0) !== renewal) throw new Error('MEMBERSHIP_CHANGED');
       const now = Timestamp.now();
       tx.update(userSnapshot.ref, { updatedAt: now });
-      tx.set(newOrderRef, {
+      const order = {
         userId: userSnapshot.id, annualFee: fee, reloadAmount, totalCents,
         renewalType: renewal ? 'renewal' : 'initial', storeId: body.storeId.trim(),
         paymentMode: renewal ? 'renewal_reload' : 'initial_package',
         paymentMethod, status: paymentMethod === 'manual' ? 'pending' : 'creating',
         callbackProof, createdAt: now, updatedAt: now,
-      });
+      };
+      tx.set(newOrderRef, order);
+      writeMembershipPaymentStatus(db, tx, newOrderRef.id, order);
       if (paymentMethod === 'manual') tx.set(db.collection(C.RELOAD_RECORDS).doc(`membership_${newOrderRef.id}`), {
         userId: userSnapshot.id, userName: user.displayName || '', requestedAmount: totalCents / 100,
         pointsEquivalent: totalCents / 100, walletAmount: reloadAmount,
@@ -169,6 +173,10 @@ export const eventHandler: EventHandler = async event => {
       tx.update(newOrderRef, {
         billplzId: bill.id, paymentUrl: bill.url,
         ...(current.data()?.status === 'creating' && { status: 'pending' }), updatedAt: Timestamp.now(),
+      });
+      writeMembershipPaymentStatus(db, tx, newOrderRef.id, {
+        ...current.data(), status: current.data()?.status === 'creating' ? 'pending' : current.data()?.status,
+        updatedAt: Timestamp.now(),
       });
     });
     return reply(200, { success: true, orderId: newOrderRef.id, paymentUrl: bill.url });

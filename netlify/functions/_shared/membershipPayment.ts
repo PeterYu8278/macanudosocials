@@ -1,6 +1,7 @@
 import type { Firestore } from 'firebase-admin/firestore';
 import { Timestamp } from './firestoreMonitoring';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
+import { writeMembershipPaymentStatus } from './membershipPaymentStatus';
 
 export const dateOf = (value: any): Date | null => {
   const date = value?.toDate?.() || (value ? new Date(value) : null);
@@ -142,6 +143,7 @@ export async function fulfillMembershipPayment(db: Firestore, orderId: string, b
     }
     const status = creditOnly ? 'credited' : 'fulfilled';
     tx.update(orderRef, { status, billplzId: billId, balance, fulfilledAt: timestamp, updatedAt: timestamp });
+    writeMembershipPaymentStatus(db, tx, orderId, { ...order, status, updatedAt: timestamp });
     tx.delete(db.collection(C.MEMBERSHIP_PAYMENT_LOCKS).doc(order.userId));
     return status;
   });

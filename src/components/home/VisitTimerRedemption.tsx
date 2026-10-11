@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
 import { getMembershipEntryAction } from '../../utils/membershipEntry';
+import { usePendingPayments } from '../../hooks/usePendingPayments';
 import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -29,6 +30,7 @@ interface VisitTimerRedemptionProps {
 
 export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ style }) => {
   const { user, setUser } = useAuthStore();
+  const pendingPayments = usePendingPayments(user?.id);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
@@ -63,9 +65,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     }
   }, [user?.status]);
   useEffect(() => {
-    const expiredActive = user?.status === 'active' && user.membership?.activeUntil
-      && dayjs(user.membership.activeUntil).valueOf() <= Date.now();
-    if (!user?.id || (!membershipModalVisible && user.status !== 'inactive' && !expiredActive)) return;
+    if (!user?.id || !membershipModalVisible) return;
     let cancelled = false;
     setMembershipQuote(null);
     setMembershipQuoteError(false);
@@ -643,6 +643,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 firstActivatedAt: user?.membership?.firstActivatedAt,
                 annualFee: annualFeeAmount,
                 quote: membershipQuote,
+                pendingPayment: Boolean(pendingPayments.request),
               });
               const isActiveMember = membershipAction === 'active';
               const hasDayPass = currentSession?.dayPass?.isPurchased;
@@ -657,7 +658,13 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               if (!isActiveMember && !hasDayPass) {
                 const needsRenewalReload = membershipAction === 'reload';
                 const blocked = membershipAction === 'blocked';
+                const checking = !blocked && pendingPayments.loading;
+                const checkFailed = !blocked && pendingPayments.error;
                 const label = blocked ? 'annualPassPayment.suspended'
+                  : checking ? 'annualPassPayment.checkingRequests'
+                  : checkFailed ? 'annualPassPayment.retryRequests'
+                  : membershipAction === 'resume' && pendingPayments.request?.kind === 'manual_membership' ? 'annualPassPayment.viewManualRequest'
+                  : membershipAction === 'resume' && pendingPayments.request?.kind === 'manual_reload' ? 'annualPassPayment.viewReloadRequest'
                   : needsRenewalReload ? 'annualPassPayment.reload'
                   : membershipAction === 'renew' ? 'annualPassPayment.renew'
                   : membershipAction === 'resume' ? 'annualPassPayment.continuePayment' : 'visitTimer.joinNow';
@@ -665,9 +672,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   <>
                     <button
                       type="button"
-                      onClick={() => needsRenewalReload || membershipAction === 'resume'
-                        ? navigate('/reload') : setMembershipModalVisible(true)}
-                      disabled={loading || blocked}
+                      onClick={() => checkFailed ? pendingPayments.retry()
+                        : needsRenewalReload || membershipAction === 'resume' ? navigate('/reload') : setMembershipModalVisible(true)}
+                      disabled={loading || blocked || checking}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
                           ? `linear-gradient(135deg, ${appConfig.colorTheme.primaryButton.startColor} 0%, ${appConfig.colorTheme.primaryButton.endColor} 100%)`
@@ -688,7 +695,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                         boxShadow: '0 4px 12px rgba(196, 141, 58, 0.3)'
                       }}
                     >
-                      {loading && <LoadingOutlined spin />}
+                      {(loading || checking) && <LoadingOutlined spin />}
                       {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
                       {t(label)}
                     </button>

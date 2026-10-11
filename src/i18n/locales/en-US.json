@@ -1,5 +1,9 @@
 {
   "annualPassPayment": {
+    "checkingRequests": "Checking Requests",
+    "retryRequests": "Retry Request Check",
+    "viewReloadRequest": "View Reload Request",
+    "requestCheckFailed": "Unable to check pending requests. Retry before submitting another payment.",
     "manualAvailable": "Online payment is disabled. Submit a request and pay staff; activation follows verified receipt.",
     "manualPending": "Awaiting staff payment verification. No points or annual fee have been processed. Do not submit or pay again.",
     "manualSubmitted": "Request submitted for staff payment verification.",

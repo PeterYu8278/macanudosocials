@@ -3,6 +3,7 @@ import { Timestamp } from './firestoreMonitoring';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { annualFee, dateOf } from './membershipPayment';
 import { calculateReferralPointsFromArray } from '../../../src/utils/referral';
+import { writeMembershipPaymentStatus } from './membershipPaymentStatus';
 
 export interface ReloadReview {
   action: 'approve' | 'reject' | 'cancel';
@@ -53,6 +54,9 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
       tx.update(recordRef, { ...audit, status: 'rejected', reviewAction: input.action });
       if (orderRef) {
         tx.update(orderRef, { ...audit, status: input.action === 'cancel' ? 'cancelled' : 'rejected' });
+        writeMembershipPaymentStatus(db, tx, orderRef.id, {
+          ...order, status: input.action === 'cancel' ? 'cancelled' : 'rejected', updatedAt: timestamp,
+        });
         tx.delete(lockRef);
       }
       return { status: 'rejected' };
@@ -171,6 +175,7 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
       annualFeeAmount: activate ? fee : 0, balance, membershipActivated: activate });
     if (orderRef) {
       tx.update(orderRef, { ...audit, status: activate ? 'fulfilled' : 'credited', balance, fulfilledAt: timestamp });
+      writeMembershipPaymentStatus(db, tx, orderRef.id, { ...order, status: activate ? 'fulfilled' : 'credited', updatedAt: timestamp });
       tx.delete(lockRef);
     }
     return { status: 'completed', balance };

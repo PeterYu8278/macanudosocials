@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "_membershipPaymentStatuses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reloadRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "membershipFeeRecords",
       "queryScope": "COLLECTION",
       "fields": [

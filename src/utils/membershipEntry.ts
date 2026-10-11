@@ -9,6 +9,7 @@ interface EntryInput {
   activeUntil?: unknown;
   firstActivatedAt?: unknown;
   annualFee: number | null;
+  pendingPayment?: boolean;
   quote?: { renewal: boolean; pending?: boolean; annualFee: number } | null;
 }
 
@@ -17,7 +18,7 @@ export function getMembershipEntryAction(input: EntryInput, now = new Date()): E
   const start = toDateOrNull(input.activeFrom);
   const end = toDateOrNull(input.activeUntil);
   if (input.status === 'active' && (!end || end > now)) return 'active';
-  if (input.quote?.pending) return 'resume';
+  if (input.pendingPayment ?? input.quote?.pending) return 'resume';
   const first = toDateOrNull(input.firstActivatedAt);
   // Local dates are display hints only. A successful server quote overrides them;
   // neither this decision nor a cached first-activation date authorizes a debit.
