@@ -220,7 +220,7 @@ describe('Annual Pass payment', () => {
     expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 100 })).status).toBe(200);
     expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200 })).status).toBe(409);
   });
-  it.each(['enabled', 'apiKey', 'collectionId', 'xSignatureKey'])('reports missing %s without creating an order or leaking configuration values', async field => {
+  it.each(['apiKey', 'collectionId', 'xSignatureKey'])('reports missing %s without creating an order or leaking configuration values', async field => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     delete m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz[field];
     try {
@@ -242,10 +242,37 @@ describe('Annual Pass payment', () => {
     delete config.payment;
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
-      expect(await (await request()).json()).toMatchObject({ paymentAvailable: false });
-      expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(503);
+      expect(await (await request()).json()).toMatchObject({ paymentAvailable: true, paymentMethod: 'manual' });
+      expect(await (await request({ reloadAmount: 100, storeId: 'store' })).json()).toMatchObject({ success: true, paymentMethod: 'manual' });
       expect(m.post).not.toHaveBeenCalled();
     } finally { log.mockRestore(); }
+  });
+  it.each(['enabled', 'billplz', 'payment', 'appConfig'])('defaults to manual Annual Pass handling when %s is missing', async missing => {
+    const config = m.docs.get(`${C.APP_CONFIG}/default`);
+    if (missing === 'enabled') delete config.payment.billplz.enabled;
+    if (missing === 'billplz') delete config.payment.billplz;
+    if (missing === 'payment') delete config.payment;
+    if (missing === 'appConfig') m.docs.delete(`${C.APP_CONFIG}/default`);
+    expect(await (await request()).json()).toMatchObject({ paymentAvailable: true, paymentMethod: 'manual' });
+    const payment = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    expect(payment).toMatchObject({ success: true, paymentMethod: 'manual' });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${payment.orderId}`)).toMatchObject({ status: 'pending', requestedAmount: 250, walletAmount: 100 });
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    expect(m.post).not.toHaveBeenCalled();
+  });
+  it('allows manual renewal reload requests when payment configuration is missing', async () => {
+    delete m.docs.get(`${C.APP_CONFIG}/default`).payment;
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/paid`, { userId: 'user', status: 'paid', amount: 150 });
+    const payment = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
+    expect(payment.paymentMethod).toBe('manual');
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${payment.orderId}`)).toMatchObject({ requestedAmount: 100, annualFeeAmount: 0, paymentPurpose: 'renewal_reload' });
+    expect(m.post).not.toHaveBeenCalled();
+  });
+  it('allows ordinary manual reloads with an unset Billplz toggle but blocks them when explicitly enabled', async () => {
+    delete m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled;
+    expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 100 })).status).toBe(200);
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = true;
+    expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200 })).status).toBe(403);
   });
   it('reports a ready gateway without exposing keys in the quote', async () => {
     const quote = await (await request()).json();

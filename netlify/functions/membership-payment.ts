@@ -42,7 +42,7 @@ export const eventHandler: EventHandler = async event => {
       ...['apiKey', 'collectionId', 'xSignatureKey'].filter(key =>
         typeof gateway?.[key] !== 'string' || !gateway[key].trim()),
     ];
-    const paymentMethod = gateway?.enabled === false ? 'manual' : 'billplz';
+    const paymentMethod = gateway?.enabled === true ? 'billplz' : 'manual';
     const paymentAvailable = paymentMethod === 'manual' || configurationIssues.length === 0;
     const baseUrl = gateway?.isSandbox !== false ? 'https://www.billplz-sandbox.com/api/v3' : 'https://www.billplz.com/api/v3';
     const gatewayOptions = { headers: { Authorization: `Basic ${Buffer.from(`${gateway?.apiKey}:`).toString('base64')}` }, timeout: 15000 };

@@ -44,7 +44,7 @@ export const eventHandler: EventHandler = async event => {
         if (!target.exists || !store.exists || !freshActor.exists) throw new Error('INVALID_REQUEST');
         if (body.operatorManual === true) requireReloadOperator(freshActor.data(), body.storeId);
         else if (body.userId !== actor.id || ![100, 200, 500].includes(body.amount)
-          || config.data()?.payment?.billplz?.enabled !== false) throw new Error('FORBIDDEN');
+          || config.data()?.payment?.billplz?.enabled === true) throw new Error('FORBIDDEN');
         if (!pending.empty) throw new Error('MEMBERSHIP_PAYMENT_PENDING');
         if (lock.exists) {
           const order = await tx.get(db.collection(C.MEMBERSHIP_PAYMENTS).doc(lock.data()!.orderId));
