@@ -152,6 +152,8 @@
     "saveAi": "保存 AI 设置"
   },
   "systemMonitoring": {
+    "trend": "应用监控操作趋势",
+    "dailyOperations": "每日操作次数（UTC）",
     "observed": "应用观测的 Firestore 操作量（UTC）",
     "observedNote": "部署后开始尽力采集，并非账单用量。已接入前端 Firebase 服务及所有使用 Firestore 的 Netlify 业务函数，涵盖支付、认证、通知、WhatsApp 和定时任务。视图/状态层直接 SDK 调用及手机应用暂未覆盖。缓存读取单列，监听统计变更文档。浏览器数据为已登录用户自报，每60秒批量上报，失败可能丢失。监控集合不计入统计；监控本身仍产生写入及看板读取，无历史补录或自动告警。",
     "range": "时间范围",

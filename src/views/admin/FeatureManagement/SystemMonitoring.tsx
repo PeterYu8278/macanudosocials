@@ -4,6 +4,7 @@ import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getAuth } from 'firebase/auth';
 import type { MetricRow } from '@/services/firebase/monitoringQueue';
+import MonitoringChart from './MonitoringChart';
 
 type Row = MetricRow & { id: string; date: string; source: 'frontend' | 'backend' };
 export default function SystemMonitoring() {
@@ -40,7 +41,6 @@ export default function SystemMonitoring() {
     deletes: sum.deletes + row.deletes, failures: sum.failures + row.failures }), { reads: 0, writes: 0, deletes: 0, failures: 0 });
   return <div className="system-monitoring-page">
     <Typography.Title level={4}>{t('systemMonitoring.title')}</Typography.Title>
-    <Alert type="info" showIcon message={t('systemMonitoring.observed')} description={t('systemMonitoring.observedNote')} style={{ marginBottom: 20 }} />
     <Space wrap style={{ marginBottom: 20 }}>
       <Select value={days} onChange={setDays} style={{ width: 150 }} aria-label={t('systemMonitoring.range')}
         options={[1, 7, 30].map(value => ({ value, label: t('systemMonitoring.days', { count: value }) }))} />
@@ -54,6 +54,7 @@ export default function SystemMonitoring() {
     <Space wrap size={40} style={{ marginBottom: 20 }}>
       {Object.entries(totals).map(([key, value]) => <Statistic key={key} title={t(`systemMonitoring.${key}`)} value={value} />)}
     </Space>
+    <MonitoringChart rows={filtered} days={days} loading={loading} />
     <Table<Row> rowKey="id" size="small" loading={loading} dataSource={filtered} scroll={{ x: 980 }}
       locale={{ emptyText: t('systemMonitoring.empty') }} pagination={{ pageSize: 20, showSizeChanger: true }}
       columns={[

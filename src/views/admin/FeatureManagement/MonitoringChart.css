@@ -1,0 +1,14 @@
+.monitoring-trend { border-top: 1px solid rgba(255, 255, 255, 0.15); border-bottom: 1px solid rgba(255, 255, 255, 0.15); padding: 16px 0; margin-bottom: 20px; }
+.monitoring-trend-layout { display: grid; grid-template-columns: 170px minmax(0, 1fr); gap: 16px; align-items: center; }
+.monitoring-trend-legend { display: grid; gap: 20px; }
+.monitoring-trend-legend strong { display: block; font-size: 24px; font-weight: 500; margin: 4px 0 0 24px; }
+.monitoring-trend-plot { min-width: 0; min-height: 240px; display: flex; align-items: center; justify-content: center; }
+.monitoring-trend-plot svg { width: 100%; display: block; color: #aab3bf; }
+.monitoring-trend-plot text { fill: currentColor; font-size: 12px; }
+@media (max-width: 700px) {
+  .monitoring-trend-layout { grid-template-columns: minmax(0, 1fr); }
+  .monitoring-trend-legend { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .monitoring-trend-legend strong { margin-left: 0; font-size: 20px; }
+  .monitoring-trend-legend .ant-checkbox-wrapper { align-items: flex-start; font-size: 12px; }
+  .monitoring-trend-plot { min-height: 160px; }
+}
