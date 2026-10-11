@@ -8,6 +8,7 @@ export interface MembershipPaymentQuote {
   reloadAmount?: number;
   storeId?: string;
   total?: number;
+  accountStatus?: string;
 }
 
 async function membershipPaymentRequest(query: string, body?: { reloadAmount: number; storeId: string }) {
@@ -45,6 +46,8 @@ const getActivationError = (result: ActivationResponse) => {
       return 'Annual Pass is already active';
     case 'FIRST_PAYMENT_REQUIRED':
       return i18n.t('annualPassPayment.firstPaymentRequired');
+    case 'MEMBERSHIP_STATUS_UNVERIFIED':
+      return i18n.t('annualPassPayment.statusError');
     case 'ACCOUNT_SUSPENDED':
       return 'This account is suspended';
     case 'INSUFFICIENT_POINTS':

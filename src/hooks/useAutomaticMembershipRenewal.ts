@@ -18,6 +18,12 @@ export function useAutomaticMembershipRenewal() {
     const renew = async () => {
       try {
         const quote = await getMembershipPaymentQuote();
+        if (cancelled) return;
+        if (quote.accountStatus && quote.accountStatus !== 'inactive') {
+          const freshUser = await getUserData(userId);
+          if (!cancelled && freshUser) setUser(freshUser);
+          return;
+        }
         if (cancelled || !quote.renewal || quote.pending || !Number.isFinite(quote.annualFee)
           || quote.annualFee <= 0 || points < quote.annualFee) return;
         // Do not repeatedly submit a failed debit for an unchanged account balance.

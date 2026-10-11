@@ -55,6 +55,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [membershipQuote, setMembershipQuote] = useState<MembershipPaymentQuote | null>(null);
   const [membershipQuoteError, setMembershipQuoteError] = useState(false);
   const [membershipReload, setMembershipReload] = useState(100);
+  const [membershipRetry, setMembershipRetry] = useState(0);
   useEffect(() => {
     if (user?.status === 'active') {
       setMembershipModalVisible(false);
@@ -62,21 +63,27 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     }
   }, [user?.status]);
   useEffect(() => {
-    if (!user?.id || (!membershipModalVisible && user.status !== 'inactive')) return;
+    const expiredActive = user?.status === 'active' && user.membership?.activeUntil
+      && dayjs(user.membership.activeUntil).valueOf() <= Date.now();
+    if (!user?.id || (!membershipModalVisible && user.status !== 'inactive' && !expiredActive)) return;
     let cancelled = false;
     setMembershipQuote(null);
     setMembershipQuoteError(false);
-    getMembershipPaymentQuote().then(quote => {
+    getMembershipPaymentQuote().then(async quote => {
       if (!cancelled) {
         setMembershipQuote(quote);
         setAnnualFeeAmount(quote.annualFee);
         setMembershipReload(quote.reloadAmount ?? 100);
         if (quote.renewal) setSelectedAccess(current => current ?? 'membership');
         if (quote.pending && quote.storeId) setSelectedStoreId(quote.storeId);
+        if (quote.accountStatus && quote.accountStatus !== user.status) {
+          const freshUser = await getUserData(user.id);
+          if (!cancelled && freshUser) setUser(freshUser);
+        }
       }
     }).catch(() => { if (!cancelled) setMembershipQuoteError(true); });
     return () => { cancelled = true; };
-  }, [membershipModalVisible, user?.id, user?.status]);
+  }, [membershipModalVisible, user?.id, user?.status, user?.membership?.activeUntil, membershipRetry, setUser]);
   const handleMembershipPayment = async () => {
     if (loading || !membershipQuote) return;
     if (!selectedStoreId) { message.warning(t('reload.pleaseSelectStore')); return; }
@@ -644,13 +651,14 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 const label = checkingMembership ? 'common.loading' : blocked ? 'annualPassPayment.suspended'
                   : needsRenewalReload ? 'annualPassPayment.reload'
                   : membershipAction === 'renew' ? 'annualPassPayment.renew'
-                  : membershipAction === 'verify' ? 'annualPassPayment.checkMembership'
+                  : membershipAction === 'error' ? 'annualPassPayment.retryStatus'
                   : membershipAction === 'resume' ? 'annualPassPayment.continuePayment' : 'visitTimer.joinNow';
                 return (
                   <>
                     <button
                       type="button"
-                      onClick={() => needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
+                      onClick={() => membershipAction === 'error' ? setMembershipRetry(value => value + 1)
+                        : needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
                       disabled={loading || checkingMembership || blocked}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
@@ -676,6 +684,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       {checkingMembership ? <Spin size="small" /> : needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
                       {t(label)}
                     </button>
+                    {membershipAction === 'error' && <Text type="danger" style={{ display: 'block', maxWidth: 240, marginTop: 8 }}>
+                      {t('annualPassPayment.statusError')}
+                    </Text>}
                     <Text style={{ fontSize: 13, display: 'block', marginTop: 8, color: '#FFFFFF', textAlign: 'center' }}>
                       {t('visitTimer.dailyLimit')}: 0/0
                     </Text>

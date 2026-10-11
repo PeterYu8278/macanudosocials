@@ -134,6 +134,8 @@ export const eventHandler: Handler = async event => {
       const user = freshUserSnapshot.data()!;
       if (user.status === 'active') throw new Error('ALREADY_ACTIVE');
       if (user.status === 'suspended') throw new Error('ACCOUNT_SUSPENDED');
+      const existingUntil = toDate(user.membership?.activeUntil);
+      if (existingUntil && existingUntil > new Date()) throw new Error('MEMBERSHIP_STATUS_UNVERIFIED');
       if (!annualHistory && !user.membership?.activeFrom && !user.membership?.activeUntil && !user.membership?.firstActivatedAt) {
         throw new Error('FIRST_PAYMENT_REQUIRED');
       }
@@ -227,7 +229,7 @@ export const eventHandler: Handler = async event => {
     }
     if (code === 'UNAUTHENTICATED') return reply(401, { success: false, code });
     if (code === 'USER_NOT_FOUND') return reply(404, { success: false, code });
-    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED' || code === 'FIRST_PAYMENT_REQUIRED') {
+    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED' || code === 'FIRST_PAYMENT_REQUIRED' || code === 'MEMBERSHIP_STATUS_UNVERIFIED') {
       return reply(409, { success: false, code });
     }
     if (code === 'INSUFFICIENT_POINTS') {

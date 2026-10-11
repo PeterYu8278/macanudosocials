@@ -35,6 +35,13 @@ describe('Annual Pass role progression', () => {
     expect(m.update).not.toHaveBeenCalled()
     expect(m.set).not.toHaveBeenCalled()
   })
+  it('refuses to charge an inactive account with an unexpired membership', async () => {
+    m.user.membership.activeUntil = new Date(Date.now() + 86400000)
+    const response = await activate()
+    expect(response.status).toBe(409)
+    expect(await response.json()).toMatchObject({ code: 'MEMBERSHIP_STATUS_UNVERIFIED' })
+    expect(m.update).not.toHaveBeenCalled()
+  })
   it('keeps the renewal classification for a member with prior Annual Pass dates', async () => {
     m.user.membership.activeFrom = new Date('2025-01-01')
     expect((await activate()).status).toBe(200)

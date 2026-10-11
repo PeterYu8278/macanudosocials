@@ -83,6 +83,37 @@ describe('Annual Pass payment', () => {
     m.auth.mockRejectedValue(new Error('expired'));
     expect((await request()).status).toBe(401);
   });
+  it('marks an expired active membership inactive without debiting the wallet', async () => {
+    m.docs.get(`${C.USERS}/user`).status = 'active';
+    m.docs.get(`${C.USERS}/user`).membership.activeUntil = new Date(Date.now() - 86400000);
+    expect(await (await request()).json()).toMatchObject({ accountStatus: 'inactive', renewal: true });
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    expect(m.post).not.toHaveBeenCalled();
+  });
+  it('restores a paid unexpired membership without another annual charge', async () => {
+    const from = new Date(Date.now() - 86400000);
+    const until = new Date(from); until.setFullYear(until.getFullYear() + 1);
+    m.docs.get(`${C.USERS}/user`).membership = { points: 80, activeFrom: from, activeUntil: until };
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/paid`, { userId: 'user', status: 'paid', amount: 199, deductedAt: from });
+    expect(await (await request()).json()).toMatchObject({ accountStatus: 'active' });
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'active', role: 'vip', membership: { points: 80 } });
+    expect([...m.docs.keys()].filter(path => path.startsWith(`${C.POINTS_RECORDS}/`))).toHaveLength(0);
+  });
+  it('does not grant access based on future dates without matching paid evidence', async () => {
+    m.docs.get(`${C.USERS}/user`).membership.activeFrom = new Date(Date.now() - 86400000);
+    m.docs.get(`${C.USERS}/user`).membership.activeUntil = new Date(Date.now() + 86400000);
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 199, deductedAt: new Date('2020-01-01') });
+    const response = await request();
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'MEMBERSHIP_STATUS_UNVERIFIED' });
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'inactive', membership: { points: 80 } });
+  });
+  it('never restores a suspended account during a quote check', async () => {
+    m.docs.get(`${C.USERS}/user`).status = 'suspended';
+    m.docs.get(`${C.USERS}/user`).membership.activeUntil = new Date(Date.now() + 86400000);
+    expect(await (await request()).json()).toMatchObject({ accountStatus: 'suspended' });
+    expect(m.docs.get(`${C.USERS}/user`).status).toBe('suspended');
+  });
   it('quotes first-time status using historical paid records, not role alone', async () => {
     expect(await (await request()).json()).toMatchObject({ annualFee: 150, renewal: false });
     m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid' });

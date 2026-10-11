@@ -35,6 +35,13 @@ describe('automatic Annual Pass renewal', () => {
     renderHook(() => useAutomaticMembershipRenewal());
     await waitFor(() => expect(m.activate).toHaveBeenCalledTimes(1));
   });
+  it('refreshes a restored membership without submitting another debit', async () => {
+    m.state.user.membership.points = 500;
+    m.quote.mockResolvedValue({ renewal: true, annualFee: 199, accountStatus: 'active' });
+    renderHook(() => useAutomaticMembershipRenewal());
+    await waitFor(() => expect(m.setUser).toHaveBeenCalledTimes(1));
+    expect(m.activate).not.toHaveBeenCalled();
+  });
 
   it('submits once when React Strict Mode repeats effect initialization', async () => {
     m.state.user.membership.points = 202;

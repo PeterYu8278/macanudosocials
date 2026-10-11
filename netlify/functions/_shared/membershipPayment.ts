@@ -24,6 +24,40 @@ export async function hasAnnualHistory(db: Firestore, userId: string, user: any)
   return !records.empty;
 }
 
+export async function reconcileMembershipStatus(db: Firestore, userId: string, current: any): Promise<void> {
+  const end = dateOf(current.membership?.activeUntil);
+  if (!end || current.status === 'suspended') return;
+  const now = new Date();
+  if (!(current.status === 'active' && end <= now) && !(current.status === 'inactive' && end > now)) return;
+  const userRef = db.collection(C.USERS).doc(userId);
+  await db.runTransaction(async tx => {
+    const snapshot = await tx.get(userRef);
+    if (!snapshot.exists) throw new Error('USER_NOT_FOUND');
+    const user = snapshot.data()!;
+    const until = dateOf(user.membership?.activeUntil);
+    if (!until || user.status === 'suspended') return;
+    if (user.status === 'active' && until <= now) {
+      tx.update(userRef, { status: 'inactive', updatedAt: Timestamp.fromDate(now) });
+    } else if (user.status === 'inactive' && until > now) {
+      const from = dateOf(user.membership?.activeFrom);
+      const records = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
+        .where('userId', '==', userId).where('status', '==', 'paid').limit(100));
+      // A paid fee must match this activation period, not merely exist in older history.
+      const verified = from && from <= now && until > from && until.getTime() - from.getTime() <= 367 * 86400000
+        && records.docs.some(record => {
+          const fee = record.data();
+          const paidAt = dateOf(fee.deductedAt);
+          return Number(fee.amount) > 0 && paidAt && Math.abs(paidAt.getTime() - from.getTime()) <= 60000;
+        });
+      if (!verified) throw new Error('MEMBERSHIP_STATUS_UNVERIFIED');
+      tx.update(userRef, {
+        status: 'active', role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,
+        updatedAt: Timestamp.fromDate(now),
+      });
+    }
+  });
+}
+
 // The order and wallet are read in the same transaction so parallel callbacks cannot credit twice.
 export async function fulfillMembershipPayment(db: Firestore, orderId: string, billId: string, paidCents: number) {
   const orderRef = db.collection(C.MEMBERSHIP_PAYMENTS).doc(orderId);

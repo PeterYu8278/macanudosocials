@@ -1,7 +1,8 @@
 {
   "annualPassPayment": {
     "suspended": "Account suspended",
-    "checkMembership": "Check Membership",
+    "retryStatus": "Retry",
+    "statusError": "Unable to verify membership. Retry or contact staff. No annual fee was charged by this check.",
     "continuePayment": "Continue Payment",
     "reload": "Reload",
     "renew": "Renew Annual Pass",

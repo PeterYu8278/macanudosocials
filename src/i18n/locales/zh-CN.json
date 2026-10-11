@@ -1,7 +1,8 @@
 {
   "annualPassPayment": {
     "suspended": "账户已停用",
-    "checkMembership": "核实会员状态",
+    "retryStatus": "重试",
+    "statusError": "暂时无法核实会员状态，请重试或联系工作人员。本次核实未扣除年费。",
     "continuePayment": "继续付款",
     "reload": "充值",
     "renew": "续费 Annual Pass",

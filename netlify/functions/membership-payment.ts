@@ -4,7 +4,7 @@ import axios from 'axios';
 import { randomBytes } from 'node:crypto';
 import { getFirestore, Timestamp } from './_shared/firestoreMonitoring';
 import { toWebFunction, type EventHandler } from './_shared/webFunction';
-import { annualFee, fulfillMembershipPayment, hasAnnualHistory } from './_shared/membershipPayment';
+import { annualFee, fulfillMembershipPayment, hasAnnualHistory, reconcileMembershipStatus } from './_shared/membershipPayment';
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
 
 const reply = (statusCode: number, data: Record<string, unknown>) => ({
@@ -30,7 +30,7 @@ export const eventHandler: EventHandler = async event => {
       userSnapshot = matches.docs[0] || userSnapshot;
     }
     if (!userSnapshot.exists) throw new Error('USER_NOT_FOUND');
-    const user = userSnapshot.data()!;
+    let user = userSnapshot.data()!;
     const appConfig = (await db.collection(C.APP_CONFIG).doc('default').get()).data();
     const gateway = appConfig?.payment?.billplz;
     const baseUrl = gateway?.isSandbox !== false ? 'https://www.billplz-sandbox.com/api/v3' : 'https://www.billplz.com/api/v3';
@@ -53,6 +53,9 @@ export const eventHandler: EventHandler = async event => {
       return reply(200, { success: true, status: order.status, balance: order.balance ?? null });
     }
 
+    await reconcileMembershipStatus(db, userSnapshot.id, user);
+    userSnapshot = await userSnapshot.ref.get();
+    user = userSnapshot.data()!;
     const renewal = await hasAnnualHistory(db, userSnapshot.id, user);
     const fee = annualFee((await db.collection(C.CONFIG).doc('membershipFee').get()).data());
     if (event.httpMethod === 'GET') {
@@ -62,11 +65,11 @@ export const eventHandler: EventHandler = async event => {
         const pending = existing.data();
         if (pending?.status === 'pending') return reply(200, {
           success: true, annualFee: pending.annualFee, renewal: pending.renewalType === 'renewal',
-          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100,
+          pending: true, reloadAmount: pending.reloadAmount, storeId: pending.storeId, total: pending.totalCents / 100, accountStatus: user.status,
         });
         if (pending?.status === 'creating') throw new Error('PAYMENT_CREATING');
       }
-      return reply(200, { success: true, annualFee: fee, renewal });
+      return reply(200, { success: true, annualFee: fee, renewal, accountStatus: user.status });
     }
     let body;
     try { body = JSON.parse(event.body || '{}'); } catch { throw new Error('INVALID_REQUEST'); }
@@ -129,7 +132,7 @@ export const eventHandler: EventHandler = async event => {
     return reply(200, { success: true, orderId: newOrderRef.id, paymentUrl: bill.url });
   } catch (error: any) {
     const code = error?.message || 'PAYMENT_UNAVAILABLE';
-    const known = ['USER_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'INVALID_REQUEST', 'INVALID_RELOAD_AMOUNT', 'STORE_REQUIRED', 'ALREADY_ACTIVE', 'ACCOUNT_SUSPENDED', 'PAYMENT_CREATING'];
+    const known = ['USER_NOT_FOUND', 'PAYMENT_NOT_FOUND', 'INVALID_REQUEST', 'INVALID_RELOAD_AMOUNT', 'STORE_REQUIRED', 'ALREADY_ACTIVE', 'ACCOUNT_SUSPENDED', 'PAYMENT_CREATING', 'MEMBERSHIP_STATUS_UNVERIFIED'];
     if (!known.includes(code)) console.error('[membership-payment] Failed', { code: error?.code || 'dependency_error' });
     return reply(known.includes(code) ? 409 : 503, { success: false, code: known.includes(code) ? code : 'PAYMENT_UNAVAILABLE' });
   }

@@ -28,8 +28,9 @@ describe('membership entry button', () => {
     expect(getMembershipEntryAction({ ...account, status: 'suspended' }, now)).toBe('blocked');
   });
   it('checks conflicting status and dates rather than treating an expired pass as active', () => {
-    expect(getMembershipEntryAction({ ...account, status: 'active' }, now)).toBe('verify');
-    expect(getMembershipEntryAction({ ...account, activeUntil: new Date('2027-01-01') }, now)).toBe('verify');
+    expect(getMembershipEntryAction({ ...account, status: 'active' }, now)).toBe('checking');
+    expect(getMembershipEntryAction({ ...account, activeUntil: new Date('2027-01-01') }, now)).toBe('checking');
+    expect(getMembershipEntryAction({ ...account, activeUntil: new Date('2027-01-01'), queryFailed: true }, now)).toBe('error');
   });
   it('recognizes an active unexpired pass', () => {
     expect(getMembershipEntryAction({ ...account, status: 'active', activeUntil: new Date('2027-01-01') }, now)).toBe('active');
@@ -39,6 +40,6 @@ describe('membership entry button', () => {
     expect(getMembershipEntryAction({ ...account, annualFee: NaN }, now)).toBe('checking');
   });
   it('requires verification for missing history when the lookup fails', () => {
-    expect(getMembershipEntryAction({ status: 'inactive', points: 102, annualFee: 199, queryFailed: true }, now)).toBe('verify');
+    expect(getMembershipEntryAction({ status: 'inactive', points: 102, annualFee: 199, queryFailed: true }, now)).toBe('error');
   });
 });
