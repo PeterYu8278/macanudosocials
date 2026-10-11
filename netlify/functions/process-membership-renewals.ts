@@ -1,6 +1,7 @@
 import { toWebFunction } from './_shared/webFunction';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { Timestamp, getFirestore } from './_shared/firestoreMonitoring';
+import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
 
 const getAdminDb = () => {
   if (!getApps().length) {
@@ -61,11 +62,20 @@ const processRenewals = async () => {
         if (!recordSnapshot.exists || recordSnapshot.data()?.status !== 'pending') return 'skipped';
 
         const record = recordSnapshot.data()!;
+        if (record.renewalType !== 'renewal') return 'skipped';
         const userRef = db.doc(`users/${record.userId}`);
         const userSnapshot = await transaction.get(userRef);
         if (!userSnapshot.exists) throw new Error(`User ${record.userId} not found`);
 
         const user = userSnapshot.data()!;
+        const until = toDate(user.membership?.activeUntil);
+        if (user.status === 'suspended' || (user.status === 'active' && !until) || (until && until > now)) return 'skipped';
+        const history = await transaction.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
+          .where('userId', '==', record.userId).where('status', '==', 'paid').limit(100));
+        if (!history.docs.some(doc => {
+          const amount = Number(doc.data().amount);
+          return Number.isFinite(amount) && amount > 0;
+        })) return 'skipped';
         // Never trust the amount stored in an old client-created pending record.
         const feeDate = toDate(record.dueDate) || now;
         const amount = getAnnualFeeAmount(annualFees, feeDate);

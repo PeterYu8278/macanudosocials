@@ -90,7 +90,7 @@ export const eventHandler: Handler = async event => {
   try {
     const userSnapshot = await getAuthenticatedUser(event.headers.authorization);
     const db = getFirestore();
-    const annualHistory = await hasAnnualHistory(db, userSnapshot.id, userSnapshot.data());
+    const annualHistory = await hasAnnualHistory(db, userSnapshot.id);
     let body: Record<string, unknown> = {};
     if (event.body) {
       try {
@@ -136,7 +136,7 @@ export const eventHandler: Handler = async event => {
       if (user.status === 'suspended') throw new Error('ACCOUNT_SUSPENDED');
       const existingUntil = toDate(user.membership?.activeUntil);
       if (existingUntil && existingUntil > new Date()) throw new Error('MEMBERSHIP_STATUS_UNVERIFIED');
-      if (!annualHistory && !user.membership?.activeFrom && !user.membership?.activeUntil && !user.membership?.firstActivatedAt) {
+      if (!annualHistory) {
         throw new Error('FIRST_PAYMENT_REQUIRED');
       }
 

@@ -62,7 +62,7 @@ export const eventHandler: EventHandler = async event => {
     userSnapshot = await userSnapshot.ref.get();
     user = userSnapshot.data()!;
     stage = 'read_annual_history';
-    const renewal = await hasAnnualHistory(db, userSnapshot.id, user);
+    const renewal = await hasAnnualHistory(db, userSnapshot.id);
     stage = 'read_annual_fee';
     const fee = annualFee((await db.collection(C.CONFIG).doc('membershipFee').get()).data());
     if (event.httpMethod === 'GET') {

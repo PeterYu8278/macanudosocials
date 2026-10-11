@@ -102,6 +102,7 @@ describe('Annual Pass payment', () => {
   it('marks an expired active membership inactive without debiting the wallet', async () => {
     m.docs.get(`${C.USERS}/user`).status = 'active';
     m.docs.get(`${C.USERS}/user`).membership.activeUntil = new Date(Date.now() - 86400000);
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 150 });
     expect(await (await request()).json()).toMatchObject({ accountStatus: 'inactive', renewal: true });
     expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
     expect(m.post).not.toHaveBeenCalled();
@@ -132,8 +133,17 @@ describe('Annual Pass payment', () => {
   });
   it('quotes first-time status using historical paid records, not role alone', async () => {
     expect(await (await request()).json()).toMatchObject({ annualFee: 150, renewal: false });
-    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid' });
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 150 });
     expect(await (await request()).json()).toMatchObject({ renewal: true });
+  });
+  it('does not treat placeholder dates or an unpaid record as successful activation', async () => {
+    m.docs.get(`${C.USERS}/user`).membership = {
+      points: 500, activeFrom: '2025-01-01', activeUntil: '2026-01-01', firstActivatedAt: '2025-01-01',
+    };
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/pending`, { userId: 'user', status: 'pending', amount: 150 });
+    expect(await (await request()).json()).toMatchObject({ renewal: false });
+    expect((await request({ reloadAmount: 100, storeId: 'store' })).status).toBe(200);
+    expect(m.post.mock.calls[0][1].amount).toBe(25000);
   });
   it('rejects fee-only first activation and arbitrary recharge amounts', async () => {
     for (const reloadAmount of [0, 200, 300, 500, -1, '100']) {
@@ -143,6 +153,7 @@ describe('Annual Pass payment', () => {
   });
   it.each([100, 200, 500])('charges only RM%s recharge for renewal', async reloadAmount => {
     m.docs.get(`${C.USERS}/user`).membership.activeFrom = '2025-01-01';
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 150 });
     expect((await request({ reloadAmount, storeId: 'store' })).status).toBe(200);
     expect(m.post.mock.calls[0][1]).toMatchObject({ amount: reloadAmount * 100 });
   });
@@ -195,6 +206,7 @@ describe('Annual Pass payment', () => {
   });
   it('renews from existing balance plus RM100 reload without charging the fee externally', async () => {
     m.docs.get(`${C.USERS}/user`).membership = { points: 101, activeUntil: '2025-01-01', nextFirstVisitWaiverExpiresAt: new Date() };
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 199 });
     m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
     const result = await (await request({ reloadAmount: 100, storeId: 'store' })).json();
     expect(m.post.mock.calls[0][1].amount).toBe(10000);
@@ -204,6 +216,7 @@ describe('Annual Pass payment', () => {
     expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${result.orderId}`).requestedAmount).toBe(100);
   });
   it('credits an insufficient reload once without renewing, then permits a second reload', async () => {
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 199 });
     m.docs.get(`${C.USERS}/user`).membership.activeUntil = '2025-01-01';
     m.docs.get(`${C.CONFIG}/membershipFee`).annualFees[0].amount = 199;
     const first = await (await request({ reloadAmount: 100, storeId: 'store' })).json();

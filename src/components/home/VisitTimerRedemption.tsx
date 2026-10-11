@@ -630,9 +630,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 points: user?.membership?.points || 0,
                 activeFrom: user?.membership?.activeFrom,
                 activeUntil: user?.membership?.activeUntil,
+                firstActivatedAt: user?.membership?.firstActivatedAt,
                 annualFee: annualFeeAmount,
                 quote: membershipQuote,
-                queryFailed: membershipQuoteError,
               });
               const isActiveMember = membershipAction === 'active';
               const hasDayPass = currentSession?.dayPass?.isPurchased;
@@ -646,20 +646,17 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
               if (!isActiveMember && !hasDayPass) {
                 const needsRenewalReload = membershipAction === 'reload';
-                const checkingMembership = membershipAction === 'checking';
                 const blocked = membershipAction === 'blocked';
-                const label = checkingMembership ? 'common.loading' : blocked ? 'annualPassPayment.suspended'
+                const label = blocked ? 'annualPassPayment.suspended'
                   : needsRenewalReload ? 'annualPassPayment.reload'
                   : membershipAction === 'renew' ? 'annualPassPayment.renew'
-                  : membershipAction === 'error' ? 'annualPassPayment.retryStatus'
                   : membershipAction === 'resume' ? 'annualPassPayment.continuePayment' : 'visitTimer.joinNow';
                 return (
                   <>
                     <button
                       type="button"
-                      onClick={() => membershipAction === 'error' ? setMembershipRetry(value => value + 1)
-                        : needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
-                      disabled={loading || checkingMembership || blocked}
+                      onClick={() => needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
+                      disabled={loading || blocked}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
                           ? `linear-gradient(135deg, ${appConfig.colorTheme.primaryButton.startColor} 0%, ${appConfig.colorTheme.primaryButton.endColor} 100%)`
@@ -681,12 +678,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       }}
                     >
                       {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                      {checkingMembership ? <Spin size="small" /> : needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
+                      {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
                       {t(label)}
                     </button>
-                    {membershipAction === 'error' && <Text type="danger" style={{ display: 'block', maxWidth: 240, marginTop: 8 }}>
-                      {t('annualPassPayment.statusError')}
-                    </Text>}
                     <Text style={{ fontSize: 13, display: 'block', marginTop: 8, color: '#FFFFFF', textAlign: 'center' }}>
                       {t('visitTimer.dailyLimit')}: 0/0
                     </Text>
@@ -1142,7 +1136,11 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         </div>
 
         {!membershipQuote && !membershipQuoteError && <Spin />}
-        {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')} />}
+        {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')}
+          action={<Button size="small" icon={<ReloadOutlined />} onClick={() => setMembershipRetry(value => value + 1)}>
+            {t('annualPassPayment.retryStatus')}
+          </Button>}
+        />}
         {membershipQuote?.renewal && (
           <Button block type={selectedAccess === 'membership' ? 'primary' : 'default'} onClick={() => setSelectedAccess('membership')}>
             {t('annualPassPayment.renew')}
@@ -1253,7 +1251,6 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
             <div style={{ marginTop: 24 }}>
               {needsMembershipPayment && (
                 <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
-                  {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')} />}
                   {membershipQuote?.pending && <Alert type="info" message={t('annualPassPayment.resuming')} />}
                   {membershipQuote?.renewal && <Select
                     aria-label={t('annualPassPayment.reloadAmount')}

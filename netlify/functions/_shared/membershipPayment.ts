@@ -17,11 +17,15 @@ export function annualFee(config: any, now = new Date()): number {
   return amount;
 }
 
-export async function hasAnnualHistory(db: Firestore, userId: string, user: any): Promise<boolean> {
-  if (user.membership?.activeFrom || user.membership?.activeUntil || user.membership?.firstActivatedAt) return true;
+export async function hasAnnualHistory(db: Firestore, userId: string): Promise<boolean> {
+  // Membership dates can be legacy placeholders or client-editable metadata.
+  // Only trusted paid fee records authorize the wallet renewal path.
   const records = await db.collection(C.MEMBERSHIP_FEE_RECORDS)
-    .where('userId', '==', userId).where('status', '==', 'paid').limit(1).get();
-  return !records.empty;
+    .where('userId', '==', userId).where('status', '==', 'paid').limit(100).get();
+  return records.docs.some(record => {
+    const amount = Number(record.data().amount);
+    return Number.isFinite(amount) && amount > 0;
+  });
 }
 
 export async function reconcileMembershipStatus(db: Firestore, userId: string, current: any): Promise<void> {
