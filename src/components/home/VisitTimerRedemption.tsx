@@ -55,7 +55,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [membershipQuoteError, setMembershipQuoteError] = useState(false);
   const [membershipReload, setMembershipReload] = useState(100);
   useEffect(() => {
-    if (!membershipModalVisible) return;
+    if (!user?.id || (!membershipModalVisible && user.status !== 'inactive')) return;
     let cancelled = false;
     setMembershipQuote(null);
     setMembershipQuoteError(false);
@@ -69,7 +69,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       }
     }).catch(() => { if (!cancelled) setMembershipQuoteError(true); });
     return () => { cancelled = true; };
-  }, [membershipModalVisible, user?.id]);
+  }, [membershipModalVisible, user?.id, user?.status]);
   const handleMembershipPayment = async () => {
     if (loading || !membershipQuote) return;
     if (!selectedStoreId) { message.warning(t('reload.pleaseSelectStore')); return; }
@@ -622,12 +622,16 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
               if (!isActiveMember && !hasDayPass) {
+                const needsRenewalReload = membershipQuote?.renewal === true
+                  && !membershipQuote.pending
+                  && (user?.membership?.points || 0) < membershipQuote.annualFee;
+                const checkingMembership = user?.status === 'inactive' && !membershipQuote && !membershipQuoteError;
                 return (
                   <>
                     <button
                       type="button"
-                      onClick={() => setMembershipModalVisible(true)}
-                      disabled={loading}
+                      onClick={() => needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
+                      disabled={loading || checkingMembership}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
                           ? `linear-gradient(135deg, ${appConfig.colorTheme.primaryButton.startColor} 0%, ${appConfig.colorTheme.primaryButton.endColor} 100%)`
@@ -649,8 +653,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       }}
                     >
                       {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                      <GiftOutlined />
-                      {t('visitTimer.joinNow')}
+                      {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
+                      {t(needsRenewalReload ? 'annualPassPayment.reload' : 'visitTimer.joinNow')}
                     </button>
                     <Text style={{ fontSize: 13, display: 'block', marginTop: 8, color: '#FFFFFF', textAlign: 'center' }}>
                       {t('visitTimer.dailyLimit')}: 0/0

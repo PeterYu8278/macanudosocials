@@ -1,5 +1,6 @@
 {
   "annualPassPayment": {
+    "reload": "充值",
     "renew": "续费 Annual Pass",
     "pendingAmount": "继续已有付款：RM {{amount}}",
     "reloadOnly": "充值 RM {{amount}}",

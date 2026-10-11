@@ -1,5 +1,6 @@
 {
   "annualPassPayment": {
+    "reload": "Reload",
     "renew": "Renew Annual Pass",
     "pendingAmount": "Continue existing payment: RM {{amount}}",
     "reloadOnly": "Reload RM {{amount}}",
