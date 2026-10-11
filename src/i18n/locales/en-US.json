@@ -1,5 +1,8 @@
 {
   "annualPassPayment": {
+    "suspended": "Account suspended",
+    "checkMembership": "Check Membership",
+    "continuePayment": "Continue Payment",
     "reload": "Reload",
     "renew": "Renew Annual Pass",
     "pendingAmount": "Continue existing payment: RM {{amount}}",

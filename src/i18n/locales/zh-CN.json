@@ -1,5 +1,8 @@
 {
   "annualPassPayment": {
+    "suspended": "账户已停用",
+    "checkMembership": "核实会员状态",
+    "continuePayment": "继续付款",
     "reload": "充值",
     "renew": "续费 Annual Pass",
     "pendingAmount": "继续已有付款：RM {{amount}}",

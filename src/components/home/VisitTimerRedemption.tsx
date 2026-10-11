@@ -15,6 +15,7 @@ import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
+import { getMembershipEntryAction } from '../../utils/membershipEntry';
 import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
@@ -617,7 +618,16 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               };
 
               // 检查用户会员状态
-              const isActiveMember = user?.status === 'active';
+              const membershipAction = getMembershipEntryAction({
+                status: user?.status,
+                points: user?.membership?.points || 0,
+                activeFrom: user?.membership?.activeFrom,
+                activeUntil: user?.membership?.activeUntil,
+                annualFee: annualFeeAmount,
+                quote: membershipQuote,
+                queryFailed: membershipQuoteError,
+              });
+              const isActiveMember = membershipAction === 'active';
               const hasDayPass = currentSession?.dayPass?.isPurchased;
 
               // 计算显示用的限额
@@ -628,16 +638,20 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
               if (!isActiveMember && !hasDayPass) {
-                const needsRenewalReload = membershipQuote?.renewal === true
-                  && !membershipQuote.pending
-                  && (user?.membership?.points || 0) < membershipQuote.annualFee;
-                const checkingMembership = user?.status === 'inactive' && !membershipQuote && !membershipQuoteError;
+                const needsRenewalReload = membershipAction === 'reload';
+                const checkingMembership = membershipAction === 'checking';
+                const blocked = membershipAction === 'blocked';
+                const label = checkingMembership ? 'common.loading' : blocked ? 'annualPassPayment.suspended'
+                  : needsRenewalReload ? 'annualPassPayment.reload'
+                  : membershipAction === 'renew' ? 'annualPassPayment.renew'
+                  : membershipAction === 'verify' ? 'annualPassPayment.checkMembership'
+                  : membershipAction === 'resume' ? 'annualPassPayment.continuePayment' : 'visitTimer.joinNow';
                 return (
                   <>
                     <button
                       type="button"
                       onClick={() => needsRenewalReload ? navigate('/reload') : setMembershipModalVisible(true)}
-                      disabled={loading || checkingMembership}
+                      disabled={loading || checkingMembership || blocked}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
                           ? `linear-gradient(135deg, ${appConfig.colorTheme.primaryButton.startColor} 0%, ${appConfig.colorTheme.primaryButton.endColor} 100%)`
@@ -659,8 +673,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       }}
                     >
                       {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                      {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
-                      {t(needsRenewalReload ? 'annualPassPayment.reload' : 'visitTimer.joinNow')}
+                      {checkingMembership ? <Spin size="small" /> : needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
+                      {t(label)}
                     </button>
                     <Text style={{ fontSize: 13, display: 'block', marginTop: 8, color: '#FFFFFF', textAlign: 'center' }}>
                       {t('visitTimer.dailyLimit')}: 0/0
