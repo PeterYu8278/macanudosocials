@@ -4,6 +4,7 @@
  */
 
 export const GLOBAL_COLLECTIONS = {
+  MIGRATION_BATCHES: 'migrationBatches',
   MEMBERSHIP_PAYMENTS: '_membershipPayments',
   MEMBERSHIP_PAYMENT_STATUSES: '_membershipPaymentStatuses',
   MEMBERSHIP_PAYMENT_LOCKS: '_membershipPaymentLocks',

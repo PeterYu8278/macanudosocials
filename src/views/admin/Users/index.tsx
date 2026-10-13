@@ -5,6 +5,7 @@ import { EditOutlined, DeleteOutlined, PlusOutlined, SearchOutlined, EyeOutlined
 import { MemberProfileCard } from '../../../components/common/MemberProfileCard'
 import { ProfileView } from '../../../components/common/ProfileView'
 import { ReferralTreeView } from '../../../components/admin/ReferralTreeView'
+import { LegacyMigrationMaintenance } from '../../../components/admin/LegacyMigrationMaintenance'
 
 const { Title, Text } = Typography
 const { Search } = Input
@@ -204,6 +205,8 @@ const AdminUsers: React.FC = () => {
   const [legacyDryRunReport, setLegacyDryRunReport] = useState<LegacyMigrationWorkbookReport | null>(null)
   const [legacyMigrationPayload, setLegacyMigrationPayload] = useState<LegacyMigrationPayload | null>(null)
   const [legacyMigrationBatchId, setLegacyMigrationBatchId] = useState('')
+  const [legacyMaintenanceBusy, setLegacyMaintenanceBusy] = useState(false)
+  const [legacyBusinessUsersVerified, setLegacyBusinessUsersVerified] = useState(false)
   const [legacyMigrationStageLoading, setLegacyMigrationStageLoading] = useState<LegacyMigrationStage | null>(null)
   const [legacyMigrationResults, setLegacyMigrationResults] = useState<Partial<Record<LegacyMigrationStage, LegacyMigrationStageResult>>>({})
   const { verifyPhoneChange, verifyEmailChange, phoneVerificationModal } = usePhoneChangeVerification()
@@ -706,6 +709,7 @@ const AdminUsers: React.FC = () => {
       setLegacyDryRunReport(report)
       setLegacyMigrationPayload(prepared.payload)
       setLegacyMigrationBatchId(batchId)
+      setLegacyBusinessUsersVerified(false)
       setLegacyMigrationResults({})
       setLegacyDryRunOpen(true)
       if (report.sheets.missing.length) {
@@ -722,9 +726,10 @@ const AdminUsers: React.FC = () => {
     return false
   }
 
-  const runLegacyMigrationStage = async (stage: LegacyMigrationStage) => {
-    if (!legacyMigrationPayload || !legacyMigrationBatchId) return
+  const runLegacyMigrationStage = async (stage: LegacyMigrationStage, targetBatchId = legacyMigrationBatchId) => {
+    if (!legacyMigrationPayload || !targetBatchId) return false
     setLegacyMigrationStageLoading(stage)
+    setLegacyMigrationResults(current => { const next = { ...current }; delete next[stage]; return next })
     try {
       const token = await auth.currentUser?.getIdToken()
       if (!token) throw new Error(t('usersAdmin.migrationAuthenticationRequired'))
@@ -767,7 +772,7 @@ const AdminUsers: React.FC = () => {
         const response = await fetch('/.netlify/functions/legacy-migration', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-          body: JSON.stringify({ stage, batchId: legacyMigrationBatchId, ...job }),
+          body: JSON.stringify({ stage, batchId: targetBatchId, fileName: legacyDryRunReport?.fileName, ...job }),
         })
         const responseBody = await response.text()
         let chunkResult: Record<string, any> = {}
@@ -804,8 +809,10 @@ const AdminUsers: React.FC = () => {
       } else {
         message.success(t('usersAdmin.migrationStageComplete'))
       }
+      return result.failedCount === 0
     } catch (error: any) {
       message.error(error?.message || t('usersAdmin.migrationStageFailed'))
+      return false
     } finally {
       setLegacyMigrationStageLoading(null)
     }
@@ -1093,7 +1100,7 @@ const AdminUsers: React.FC = () => {
                       <Upload
                         accept=".xlsx,.xls"
                         showUploadList={false}
-                        disabled={legacyDryRunLoading}
+                        disabled={legacyDryRunLoading || legacyMaintenanceBusy || !!legacyMigrationStageLoading}
                         beforeUpload={handleLegacyWorkbookDryRun}
                       >
                         <Button
@@ -2130,7 +2137,9 @@ const AdminUsers: React.FC = () => {
       <Modal
         title={<span style={{ color: '#FFFFFF' }}>{t('usersAdmin.migrationDryRunTitle')}</span>}
         open={legacyDryRunOpen}
-        onCancel={() => setLegacyDryRunOpen(false)}
+        onCancel={() => { if (!legacyMaintenanceBusy && !legacyMigrationStageLoading) setLegacyDryRunOpen(false) }}
+        closable={!legacyMaintenanceBusy && !legacyMigrationStageLoading}
+        maskClosable={!legacyMaintenanceBusy && !legacyMigrationStageLoading}
         width={900}
         centered
         wrapClassName="legacy-migration-modal"
@@ -2138,7 +2147,7 @@ const AdminUsers: React.FC = () => {
         style={{ maxWidth: 'calc(100% - 32px)', paddingBottom: 0 }}
         styles={getModalThemeStyles(isMobile, true)}
         footer={[
-          <Button key="close" onClick={() => setLegacyDryRunOpen(false)}>
+          <Button key="close" disabled={legacyMaintenanceBusy || !!legacyMigrationStageLoading} onClick={() => setLegacyDryRunOpen(false)}>
             {t('common.close')}
           </Button>,
         ]}
@@ -2225,6 +2234,23 @@ const AdminUsers: React.FC = () => {
                 style={{ marginTop: 8, marginBottom: 10 }}
                 message={t('usersAdmin.migrationWriteWarning')}
               />
+              <LegacyMigrationMaintenance batchId={legacyMigrationBatchId} disabled={!!legacyMigrationStageLoading || legacyMaintenanceBusy}
+                canOverwrite={!legacyDryRunReport.sheets.missing.length && !!legacyMigrationPayload}
+                phones={[...new Set([...(legacyMigrationPayload?.reloads || []), ...(legacyMigrationPayload?.memberships || []),
+                  ...(legacyMigrationPayload?.visits || []), ...(legacyMigrationPayload?.redemptions || [])].map(row => row.phone))]}
+                onBusyChange={setLegacyMaintenanceBusy}
+                onCleaned={async (targetBatchId, overwrite) => {
+                  if (!overwrite) {
+                    if (targetBatchId === legacyMigrationBatchId) { setLegacyMigrationResults({}); setLegacyBusinessUsersVerified(false) }
+                    return
+                  }
+                  setLegacyMigrationBatchId(targetBatchId)
+                  setLegacyBusinessUsersVerified(true)
+                  setLegacyMigrationResults(current => ({ users: current.users }))
+                  for (const stage of ['reload', 'membership', 'visits'] as const) {
+                    if (!await runLegacyMigrationStage(stage, targetBatchId)) throw new Error(t('usersAdmin.migrationOverwriteStopped'))
+                  }
+                }} />
               <Space direction="vertical" size={8} style={{ width: '100%' }}>
                 {([
                   ['users', t('usersAdmin.migrationStageUsers'), legacyMigrationPayload?.users.length || 0],
@@ -2234,7 +2260,9 @@ const AdminUsers: React.FC = () => {
                 ] as Array<[LegacyMigrationStage, string, number]>).map(([stage, label, count], index) => {
                   const previousStage = (['users', 'reload', 'membership', 'visits'] as LegacyMigrationStage[])[index - 1]
                   const result = legacyMigrationResults[stage]
-                  const disabled = legacyDryRunReport.sheets.missing.length > 0 || (index > 0 && !legacyMigrationResults[previousStage])
+                  const previousReady = index === 1 && legacyBusinessUsersVerified
+                    || !!legacyMigrationResults[previousStage] && !legacyMigrationResults[previousStage]?.failedCount
+                  const disabled = legacyDryRunReport.sheets.missing.length > 0 || (index > 0 && !previousReady)
                   return (
                     <div
                       key={stage}
@@ -2260,7 +2288,7 @@ const AdminUsers: React.FC = () => {
                       </Typography.Text>
                       <Button
                         type="primary"
-                        disabled={disabled || !!legacyMigrationStageLoading}
+                        disabled={disabled || !!legacyMigrationStageLoading || legacyMaintenanceBusy}
                         loading={legacyMigrationStageLoading === stage}
                         onClick={() => modal.confirm({
                           title: t('usersAdmin.migrationConfirmTitle', { stage: label }),
