@@ -808,6 +808,7 @@
     "selectStore": "选择所属会所",
     "roomNameRequired": "请输入房间/包厢名称",
     "roomNamePlaceholder": "例如: 尊享VIP房, 大厅8号座",
+    "roomPhoto": "房间照片",
     "feeRequired": "请输入预订费用",
     "feePlaceholder": "每场次或每小时费用",
     "minBookingHours": "最低预约小时数 (Min Booking Hours)",

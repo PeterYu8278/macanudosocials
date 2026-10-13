@@ -804,6 +804,7 @@
     "selectStore": "Select lounge",
     "roomNameRequired": "Please enter room name",
     "roomNamePlaceholder": "e.g., VIP Room, Lobby Seat 8",
+    "roomPhoto": "Room Photo",
     "feeRequired": "Please enter booking fee",
     "feePlaceholder": "Fee per session or per hour",
     "minBookingHours": "Min Booking Hours",
