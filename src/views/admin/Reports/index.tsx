@@ -8,7 +8,8 @@ import {
   CalendarOutlined,
   DownloadOutlined,
   BarChartOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  WalletOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -21,7 +22,6 @@ import {
   getAllInboundOrders,
   getAllOutboundOrders
 } from '../../../services/firebase/firestore'
-import { getAllReloadRecords } from '../../../services/firebase/reload'
 import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
 import { getAllRedemptionRecords } from '../../../services/firebase/redemption'
@@ -30,6 +30,10 @@ import { aggregateMemberReportMetrics } from '../../../utils/memberReport'
 import { annualMembershipReportRows } from '../../../utils/annualMembershipReport'
 import { inventoryCustomerFields, mysteryGiftReportRows, reportOrderType } from '../../../utils/operationReports'
 import AuditLogTab from './AuditLogTab'
+import { getReportRecords } from '../../../services/firebase/reportRecords'
+import { GLOBAL_COLLECTIONS as C } from '../../../config/globalCollections'
+import type { MembershipFeeRecord, PointsRecord, ReloadRecord, User, VisitSession } from '../../../types'
+import { balanceReportRows, membershipFeeReportRows, pointsReportRows, reloadReportRows, visitReportRows, type ReportRecord } from '../../../utils/walletReports'
 
 const { Title, Text, Paragraph } = Typography
 const { RangePicker } = DatePicker
@@ -70,6 +74,12 @@ const AdminReports: React.FC = () => {
     const workbook = XLSX.utils.book_new()
     for (const sheet of sheets) {
       const worksheet = XLSX.utils.json_to_sheet(sheet.data)
+      if (sheet.data.length && worksheet['!ref']) {
+        worksheet['!autofilter'] = { ref: worksheet['!ref'] }
+        worksheet['!cols'] = Object.keys(sheet.data[0]).map(header => ({
+          wch: sheet.data.reduce((width, row) => Math.min(40, Math.max(width, String(row[header] ?? '').length + 2)), Math.min(40, header.length + 2))
+        }))
+      }
       XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name)
     }
     XLSX.writeFile(workbook, `${fileName}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`)
@@ -78,12 +88,14 @@ const AdminReports: React.FC = () => {
   const exportMembers = async () => {
     setExporting('members')
     try {
-      const [users, reloads, sessions, redemptions] = await Promise.all([
-        getUsers(),
-        getAllReloadRecords('completed'),
-        getAllVisitSessions(),
+      const [users, allReloads, sessions, redemptions, fees] = await Promise.all([
+        getReportRecords<User>(C.USERS),
+        getReportRecords<ReloadRecord>(C.RELOAD_RECORDS),
+        getReportRecords<ReportRecord<VisitSession>>(C.VISIT_SESSIONS),
         getAllRedemptionRecords(),
+        getReportRecords<ReportRecord<MembershipFeeRecord>>(C.MEMBERSHIP_FEE_RECORDS),
       ])
+      const reloads = allReloads.filter(record => record.status === 'completed')
 
       const metricsByUser = aggregateMemberReportMetrics(users, reloads, sessions, redemptions)
       const exportUsers = [...users].sort((a, b) => {
@@ -98,6 +110,7 @@ const AdminReports: React.FC = () => {
         const metrics = metricsByUser.get(u.id)
         return {
           'No.': index + 1,
+          'User ID': u.id,
           'Member ID': u.memberId || '-',
           'Name': u.displayName || '-',
           'Email': u.email || '-',
@@ -114,7 +127,11 @@ const AdminReports: React.FC = () => {
           'Created At': u.createdAt ? dayjs((u.createdAt as any)?.toDate?.() || u.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'
         }
       })
-      await downloadExcel(exportData, 'Members_Report', 'Members')
+      await downloadMultiSheetExcel([
+        { data: exportData, name: 'Members' },
+        { data: membershipFeeReportRows(fees, users), name: 'Annual Fees and Renewals' },
+        { data: visitReportRows(sessions, users), name: 'Visit Sessions' },
+      ], 'Members_Report')
       message.success(t('messages.operationSuccess'))
     } catch (error) {
       console.error('Export members error:', error)
@@ -143,6 +160,26 @@ const AdminReports: React.FC = () => {
     } finally {
       setExporting(null)
     }
+  }
+
+  const exportWallet = async () => {
+    setExporting('wallet')
+    try {
+      const [users, reloads, points] = await Promise.all([
+        getReportRecords<User>(C.USERS),
+        getReportRecords<ReportRecord<ReloadRecord>>(C.RELOAD_RECORDS),
+        getReportRecords<ReportRecord<PointsRecord>>(C.POINTS_RECORDS),
+      ])
+      await downloadMultiSheetExcel([
+        { data: reloadReportRows(reloads, users), name: 'Reload Details' },
+        { data: pointsReportRows(points, users), name: 'Points Ledger' },
+        { data: balanceReportRows(users, points), name: 'Balance Reconciliation' },
+      ], 'Reload_and_Wallet_Report')
+      message.success(t('messages.operationSuccess'))
+    } catch (error) {
+      console.error('Export wallet error:', error)
+      message.error(t('messages.operationFailed'))
+    } finally { setExporting(null) }
   }
 
   const exportInventory = async () => {
@@ -414,6 +451,11 @@ const AdminReports: React.FC = () => {
 
   const reportCards = [
     {
+      key: 'wallet', title: t('reports.walletReportTitle'),
+      icon: <WalletOutlined style={{ fontSize: 32, color: '#1890ff' }} />,
+      description: t('reports.walletReportDesc'), action: exportWallet, color: '#1890ff'
+    },
+    {
       key: 'annualMemberships',
       title: t('reports.annualMembershipTitle'),
       icon: <TeamOutlined style={{ fontSize: 32, color: '#f4af25' }} />,
@@ -479,7 +521,7 @@ const AdminReports: React.FC = () => {
       children: (
         <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
           {reportCards.map(card => (
-            <Col xs={24} sm={12} key={card.key}>
+            <Col xs={24} sm={12} lg={8} key={card.key}>
               <Card
                 hoverable
                 style={{
