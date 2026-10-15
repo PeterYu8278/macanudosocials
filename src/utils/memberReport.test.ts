@@ -13,6 +13,14 @@ const users = [
 ] as User[];
 
 describe('aggregateMemberReportMetrics', () => {
+  it('sums net reload points across gross legacy and net records without a second fee deduction', () => {
+    const reloads = [
+      { userId: 'member-1', status: 'completed', requestedAmount: 299, pointsEquivalent: 299, annualFeeAmount: 199 },
+      { userId: 'member-1', status: 'completed', requestedAmount: 299, pointsEquivalent: 100, annualFeeAmount: 199, pointsEquivalentBasis: 'net' },
+      { userId: 'member-1', status: 'completed', requestedAmount: 100, pointsEquivalent: -99, annualFeeAmount: 199, pointsEquivalentBasis: 'net' },
+    ] as ReloadRecord[];
+    expect(aggregateMemberReportMetrics(users, reloads, [], []).get('member-1')).toMatchObject({ totalReloadAmount: 698, totalReloadPoints: 101 });
+  });
   it('aggregates completed reloads, settled visits, cigars and unique referrals', () => {
     const reloads = [
       { userId: 'member-1', status: 'completed', requestedAmount: 300, pointsEquivalent: 300 },

@@ -137,7 +137,7 @@ export const eventHandler: EventHandler = async event => {
       writeMembershipPaymentStatus(db, tx, newOrderRef.id, order);
       if (paymentMethod === 'manual') tx.set(db.collection(C.RELOAD_RECORDS).doc(`membership_${newOrderRef.id}`), {
         userId: userSnapshot.id, userName: user.displayName || '', requestedAmount: totalCents / 100,
-        pointsEquivalent: totalCents / 100, walletAmount: reloadAmount,
+        pointsEquivalent: renewal ? reloadAmount : totalCents / 100 - fee, pointsEquivalentBasis: 'net', walletAmount: reloadAmount,
         annualFeeAmount: renewal ? 0 : fee, membershipOrderId: newOrderRef.id,
         paymentPurpose: renewal ? 'renewal_reload' : 'initial_package', paymentMethod: 'manual',
         storeId: body.storeId.trim(), status: 'pending', createdAt: now, updatedAt: now,

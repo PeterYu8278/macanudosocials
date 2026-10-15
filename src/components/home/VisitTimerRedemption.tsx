@@ -17,10 +17,11 @@ import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
 import { getMembershipEntryAction } from '../../utils/membershipEntry';
 import { usePendingPayments } from '../../hooks/usePendingPayments';
-import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
+import { isCurrentVisitCheckedIn, shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
+import { subscribeToRedemptionStats, type RedemptionStatsState } from '../../services/firebase/redemptionStats';
 
 const { Title, Text } = Typography;
 
@@ -40,8 +41,18 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [loading, setLoading] = useState(false);
   const [limits, setLimits] = useState({ dailyLimit: 3, totalLimit: 25, hourlyLimit: undefined as number | undefined });
   const [dailyCount, setDailyCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const [redemptionStats, setRedemptionStats] = useState<RedemptionStatsState>({
+    userId: '', status: 'loading', completedQuantity: 0, pendingQuantity: 0,
+  });
+  const totalCount = redemptionStats.userId === user?.id && redemptionStats.status === 'ready'
+    ? redemptionStats.completedQuantity + redemptionStats.pendingQuantity : null;
+  useEffect(() => {
+    if (!user?.id) return;
+    setRedemptionStats({ userId: user.id, status: 'loading', completedQuantity: 0, pendingQuantity: 0 });
+    return subscribeToRedemptionStats(user.id, setRedemptionStats);
+  }, [user?.id]);
   const [hourlyCount, setHourlyCount] = useState(0);
+  const [redemptionStatus, setRedemptionStatus] = useState({ userId: '', loading: true, error: false });
 
   const [cutoffTime, setCutoffTime] = useState('23:00');
   const [totalHours, setTotalHours] = useState(0);
@@ -319,6 +330,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       return;
     }
     const userId = user.id;
+    setRedemptionStatus({ userId, loading: true, error: false });
+    let failed = false;
     try {
       // 加载累计驻店时长
       await loadTotalHours();
@@ -338,16 +351,14 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
       // 获取当日兑换记录（待处理申请也占用限额）
       const today = new Date().toISOString().split('T')[0];
-      const dailyRedemptionsData = await getDailyRedemptions(userId, today);
+      const dailyRedemptionsData = await getDailyRedemptions(userId, today, { throwOnError: true });
       setDailyRedemptions(dailyRedemptionsData);
       const dailyCountValue = dailyRedemptionsData.reduce((sum, r) => sum + r.quantity, 0);
       setDailyCount(dailyCountValue);
 
 
       // 获取总兑换记录（待处理申请也占用限额）
-      const totalRedemptions = await getTotalRedemptions(userId);
-      const totalCountValue = totalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
-      setTotalCount(totalCountValue);
+      const totalRedemptions = await getTotalRedemptions(userId, { throwOnError: true });
 
       // Firestore is authoritative so every device shares the same cooldown.
       const sharedCooldown = getRedemptionCooldownSeconds(totalRedemptions);
@@ -361,22 +372,15 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       }
 
       // 获取本小时兑换记录（用于检查每小时限制）
-      try {
-        const now = new Date();
-        const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
-        const hourlyRedemptions = await getHourlyRedemptions(userId, hourKey);
-        const currentHourlyCount = hourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
-        setHourlyCount(currentHourlyCount);
+      const now = new Date();
+      const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
+      const hourlyRedemptions = await getHourlyRedemptions(userId, hourKey, { throwOnError: true });
+      const currentHourlyCount = hourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+      setHourlyCount(currentHourlyCount);
 
-        // 检查本小时是否还可以兑换（默认每小时只能兑换1次）
-        const effectiveHourlyLimit = userLimits.hourlyLimit !== undefined ? userLimits.hourlyLimit : 1;
-        setCanRedeemThisHour(currentHourlyCount < effectiveHourlyLimit);
-
-      } catch (error) {
-        // 如果获取失败，默认允许兑换（避免因为查询失败而禁用按钮）
-        setCanRedeemThisHour(true);
-        setHourlyCount(0);
-      }
+      // 检查本小时是否还可以兑换（默认每小时只能兑换1次）
+      const effectiveHourlyLimit = userLimits.hourlyLimit !== undefined ? userLimits.hourlyLimit : 1;
+      setCanRedeemThisHour(currentHourlyCount < effectiveHourlyLimit);
 
       // 获取 Day Pass 配置
       try {
@@ -389,7 +393,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         console.error('加载 Day Pass 配置失败:', e);
       }
     } catch (error) {
-      // 加载失败，静默处理
+      failed = true;
+    } finally {
+      setRedemptionStatus({ userId, loading: false, error: failed });
     }
   };
 
@@ -560,9 +566,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   }
 
   const dailyRemaining = Math.max(0, limits.dailyLimit - dailyCount);
-  const totalRemaining = Math.max(0, limits.totalLimit - totalCount);
+  const totalRemaining = totalCount === null ? null : Math.max(0, limits.totalLimit - totalCount);
   const dailyPercent = limits.dailyLimit > 0 ? (dailyCount / limits.dailyLimit) * 100 : 0;
-  const totalPercent = limits.totalLimit > 0 ? (totalCount / limits.totalLimit) * 100 : 0;
+  const totalPercent = totalCount !== null && limits.totalLimit > 0 ? (totalCount / limits.totalLimit) * 100 : 0;
 
   // 检查是否在截止时间之前
   const now = new Date();
@@ -646,7 +652,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 pendingPayment: Boolean(pendingPayments.request),
               });
               const isActiveMember = membershipAction === 'active';
-              const hasDayPass = currentSession?.dayPass?.isPurchased;
+              const checkedIn = isCurrentVisitCheckedIn(currentSession, user?.id);
+              const hasDayPass = checkedIn && currentSession?.dayPass?.isPurchased;
 
               // 计算显示用的限额
               const displayDailyLimit = hasDayPass ? (currentSession?.dayPass?.config.cigarAllowance ?? 1) : (isActiveMember ? limits.dailyLimit : 0);
@@ -655,7 +662,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               const displayDailyCount = hasDayPass ? dailyRedemptions.filter(r => r.isDayPass).reduce((sum, r) => sum + r.quantity, 0) : (isActiveMember ? dailyCount : 0);
 
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
-              if (!isActiveMember && !hasDayPass) {
+              if (membershipAction === 'blocked' || (!isActiveMember && !hasDayPass)) {
                 const needsRenewalReload = membershipAction === 'reload';
                 const blocked = membershipAction === 'blocked';
                 const checking = !blocked && pendingPayments.loading;
@@ -713,9 +720,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               const shouldReloadForCheckout = shouldShowCheckoutReload(
                 currentPoints,
                 checkoutPending,
-                checkoutPointsDue
+                checkoutPointsDue,
+                checkedIn
               );
-              const isLowPoints = shouldReloadForCheckout;
+              const checkingRedemptions = redemptionStatus.userId !== user?.id || redemptionStatus.loading;
 
               // 判断按钮状态和显示文本
               let buttonText = t('visitTimer.redeem');
@@ -734,15 +742,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 minWidth: 120
               };
 
-              // 如果是 Day Pass 模式，禁用 Redeem 按钮
-              if (hasDayPass) {
-                buttonText = t('visitTimer.redeem');
-                isDisabled = true;
-                buttonStyle.opacity = 0.5;
-                buttonIcon = <ShoppingCartOutlined />;
-              }
-              // 如果积分少于50，显示Reload按钮
-              else if (shouldReloadForCheckout) {
+              // Outside a visit, or when checkout needs payment, Reload takes precedence over quota/cooldown.
+              if (shouldReloadForCheckout) {
                 buttonText = t('visitTimer.reload');
                 buttonIcon = <ReloadOutlined />;
                 buttonOnClick = () => {
@@ -750,6 +751,18 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 };
                 isDisabled = false;
                 buttonStyle.opacity = 1;
+              }
+              else if (hasDayPass) {
+                isDisabled = true;
+                buttonStyle.opacity = 0.5;
+                buttonIcon = <ShoppingCartOutlined />;
+              }
+              else if (checkingRedemptions || redemptionStatus.error) {
+                buttonText = t(checkingRedemptions ? 'common.loading' : 'common.retry');
+                buttonIcon = checkingRedemptions ? <LoadingOutlined spin /> : <ReloadOutlined />;
+                buttonOnClick = () => loadData();
+                isDisabled = checkingRedemptions;
+                buttonStyle.opacity = isDisabled ? 0.5 : 1;
               }
               // 如果dailyCount >= dailyLimit，显示"No Quota"
               else if (dailyCount >= limits.dailyLimit) {
@@ -765,7 +778,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               }
               // 其他情况，检查是否可以兑换
               else {
-                isDisabled = !isBeforeCutoff || !currentSession || loading;
+                isDisabled = !isBeforeCutoff || !checkedIn || loading;
                 buttonStyle.opacity = isDisabled ? 0.5 : 1;
                 buttonIcon = countdownSeconds === null || countdownSeconds <= 0 ? <ShoppingCartOutlined /> : undefined;
               }
@@ -787,15 +800,17 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       padding: '0 16px'
                     }}
                     title={
-                      hasDayPass
+                      shouldReloadForCheckout
+                        ? undefined
+                        : hasDayPass
                         ? t('visitTimer.dayPassIncludesRedemption', { quantity: currentSession?.dayPass?.config.cigarAllowance ?? 1 })
-                        : isLowPoints
-                          ? t('visitTimer.insufficientPointsTooltip', { currentPoints })
+                        : redemptionStatus.error
+                          ? t('visitTimer.redemptionCheckFailed')
                           : dailyCount >= limits.dailyLimit
                             ? t('visitTimer.dailyQuotaExhausted')
                             : countdownSeconds !== null && countdownSeconds > 0
                               ? t('visitTimer.waitBeforeRedeem', { countdown: formatCountdown(countdownSeconds) })
-                              : !currentSession
+                              : !checkedIn
                                 ? t('visitTimer.pleaseCheckInFirst')
                                 : !isBeforeCutoff
                                   ? t('visitTimer.cutoffPassedRetry', { cutoffTime })
@@ -895,7 +910,11 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                     WebkitTextFillColor: 'transparent',
                     color: 'transparent',
                     display: 'inline-block'
-                  }}>{totalCount}</Text>
+                  }} title={totalCount !== null
+                    ? t('visitTimer.redemptionStatsDetails', { completed: redemptionStats.completedQuantity, pending: redemptionStats.pendingQuantity })
+                    : t(redemptionStats.status === 'initializing' ? 'visitTimer.redemptionStatsInitializing'
+                      : redemptionStats.status === 'error' ? 'visitTimer.redemptionStatsUnavailable' : 'common.loading')}
+                  >{totalCount ?? '-'}</Text>
                   <Text style={{ fontSize: 13, fontWeight: 400, color: '#9ca3af' }}>/ {currentCigarLimit} {t('visitTimer.cigars')}</Text>
                 </div>
               </div>

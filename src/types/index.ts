@@ -813,7 +813,8 @@ export interface ReloadRecord {
   
   // 充值信息
   requestedAmount: number;    // 用户请求的金额（RM）
-  pointsEquivalent: number;   // 对应的积分（基于汇率）
+  pointsEquivalent: number;   // Net reload points after this payment's annual fee, excluding rewards; pending values are estimates.
+  pointsEquivalentBasis?: 'net'; // Absent on legacy gross-point records.
   
   // 状态
   status: 'pending' | 'completed' | 'rejected';

@@ -170,7 +170,8 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
       }, { merge: true });
     }
     tx.update(recordRef, { ...audit, status: 'completed', verifiedAt: timestamp, actualAmount: gross,
-      pointsEquivalent: credit, pointsRecordId: creditId, walletAmount: initialPackage && !creditOnly ? 100 : gross,
+      pointsEquivalent: Math.round((credit - (activate ? fee : 0)) * 100) / 100, pointsEquivalentBasis: 'net',
+      pointsRecordId: creditId, walletAmount: initialPackage && !creditOnly ? 100 : gross,
       annualFeeAmount: activate ? fee : 0, balance, membershipActivated: activate });
     if (orderRef) {
       tx.update(orderRef, { ...audit, status: activate ? 'fulfilled' : 'credited', balance, fulfilledAt: timestamp });

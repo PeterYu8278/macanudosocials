@@ -54,7 +54,8 @@ export const eventHandler: EventHandler = async event => {
         // Serializes simultaneous requests for the same user even if the query was initially empty.
         tx.update(target.ref, { updatedAt: timestamp });
         tx.set(newRecord, { userId: body.userId, userName: target.data()?.displayName || '', requestedAmount: body.amount,
-          pointsEquivalent: Math.round(body.amount), storeId: body.storeId, paymentMethod: 'manual', status: 'pending',
+          pointsEquivalent: Math.round(body.amount), pointsEquivalentBasis: 'net', annualFeeAmount: 0,
+          storeId: body.storeId, paymentMethod: 'manual', status: 'pending',
           createdAt: timestamp, updatedAt: timestamp });
       });
       return reply(200, { success: true, recordId: newRecord.id });

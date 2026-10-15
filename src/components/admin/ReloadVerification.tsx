@@ -12,6 +12,7 @@ import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { useAuthStore } from '../../store/modules';
 import type { ReloadRecord, Store, User } from '../../types';
 import StoreSelect from '../common/StoreSelect';
+import { netReloadPoints } from '../../utils/reloadPoints';
 
 interface ReloadVerificationProps {
   onRefresh?: () => void;
@@ -296,7 +297,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
             reload: record.walletAmount, fee: record.annualFeeAmount,
           })}</div>}
           <div style={{ fontSize: 12, color: '#999' }}>
-            {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
+            {t(record.status === 'completed' ? 'pointsConfig.reloadVerification.pointsEquivalent' : 'pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(record) })}
           </div>
         </div>
       )
@@ -542,7 +543,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                         {t('annualPassPayment.reviewBreakdown', { reload: record.walletAmount, fee: record.annualFeeAmount })}
                       </div>}
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
-                        {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
+                        {t(record.status === 'completed' ? 'pointsConfig.reloadVerification.pointsEquivalent' : 'pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(record) })}
                       </div>
                       <div style={{
                         fontSize: 11,
@@ -710,7 +711,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
             <div style={{ marginBottom: 16, color: 'rgba(255, 255, 255, 0.85)' }}>
               <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.user')}: {currentRecord.userName || currentRecord.userId}</div>
               <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.amount')}: {currentRecord.requestedAmount} RM</div>
-              <div>{t('pointsConfig.reloadVerification.pointsEquivalent', { points: currentRecord.pointsEquivalent })}</div>
+              <div>{t('pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(currentRecord) })}</div>
             </div>
 
             <Form.Item

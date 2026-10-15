@@ -19,7 +19,7 @@ import {
   QueryConstraint,
   runTransaction
 } from '@/services/firebase/monitoredFirestore';
-import { db } from '../../config/firebase';
+import { auth, db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { User, Brand, Cigar, Event, Order, Transaction, InboundOrder, OutboundOrder, InventoryMovement, AuditLogModule } from '../../types';
 import { saveAuditLog } from './auditLog';
@@ -291,13 +291,23 @@ export const getBrandsByCountry = async (country: string): Promise<Brand[]> => {
 };
 
 // 雪茄相关操作
+const cigarRequests = new Map<string, Promise<Cigar[]>>();
 export const getCigars = async (options?: { limit?: number }): Promise<Cigar[]> => {
-  const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
-  if (options?.limit) constraints.push(limit(options.limit));
-  const q = query(collection(db, COLLECTIONS.CIGARS), ...constraints);
-  const querySnapshot = await getDocs(q);
-  console.log('[getCigars] docs returned:', querySnapshot.docs.length, '| project:', import.meta.env.VITE_FIREBASE_PROJECT_ID);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cigar));
+  const key = JSON.stringify([auth.currentUser?.uid ?? null, options?.limit || null]);
+  let pending = cigarRequests.get(key);
+  if (!pending) {
+    const constraints: QueryConstraint[] = [orderBy('createdAt', 'desc')];
+    if (options?.limit) constraints.push(limit(options.limit));
+    const q = query(collection(db, COLLECTIONS.CIGARS), ...constraints);
+    pending = getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Cigar)));
+    cigarRequests.set(key, pending);
+  }
+  try {
+    return (await pending).map(cigar => ({ ...cigar }));
+  } finally {
+    // Share concurrent reads, not stale results across refreshes or account changes.
+    if (cigarRequests.get(key) === pending) cigarRequests.delete(key);
+  }
 };
 
 export const getCigarById = async (id: string): Promise<Cigar | null> => {

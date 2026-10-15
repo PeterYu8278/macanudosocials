@@ -1,4 +1,9 @@
 {
+  "functions": [{
+    "source": "firebase-functions",
+    "codebase": "redemption-projections",
+    "ignore": ["node_modules", ".git", "*.log", ".env*", "*service-account*.json"]
+  }],
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"

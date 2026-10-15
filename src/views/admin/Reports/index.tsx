@@ -30,6 +30,7 @@ import { aggregateMemberReportMetrics } from '../../../utils/memberReport'
 import { annualMembershipReportRows } from '../../../utils/annualMembershipReport'
 import { inventoryCustomerFields, mysteryGiftReportRows, reportOrderType } from '../../../utils/operationReports'
 import AuditLogTab from './AuditLogTab'
+import { visibleReportRows } from '../../../utils/reportExport'
 import { getReportRecords } from '../../../services/firebase/reportRecords'
 import { GLOBAL_COLLECTIONS as C } from '../../../config/globalCollections'
 import type { MembershipFeeRecord, PointsRecord, ReloadRecord, User, VisitSession } from '../../../types'
@@ -53,6 +54,7 @@ const AdminReports: React.FC = () => {
 
   const downloadExcel = async (data: any[], fileName: string, sheetName: string) => {
     const XLSX = await import('xlsx')
+    data = visibleReportRows(data)
     const worksheet = XLSX.utils.json_to_sheet(data)
     if (data.length > 0 && worksheet['!ref']) {
       const headers = Object.keys(data[0])
@@ -73,11 +75,12 @@ const AdminReports: React.FC = () => {
     const XLSX = await import('xlsx')
     const workbook = XLSX.utils.book_new()
     for (const sheet of sheets) {
-      const worksheet = XLSX.utils.json_to_sheet(sheet.data)
-      if (sheet.data.length && worksheet['!ref']) {
+      const data = visibleReportRows(sheet.data)
+      const worksheet = XLSX.utils.json_to_sheet(data)
+      if (data.length && worksheet['!ref']) {
         worksheet['!autofilter'] = { ref: worksheet['!ref'] }
-        worksheet['!cols'] = Object.keys(sheet.data[0]).map(header => ({
-          wch: sheet.data.reduce((width, row) => Math.min(40, Math.max(width, String(row[header] ?? '').length + 2)), Math.min(40, header.length + 2))
+        worksheet['!cols'] = Object.keys(data[0]).map(header => ({
+          wch: data.reduce((width, row) => Math.min(40, Math.max(width, String(row[header] ?? '').length + 2)), Math.min(40, header.length + 2))
         }))
       }
       XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name)
@@ -110,7 +113,6 @@ const AdminReports: React.FC = () => {
         const metrics = metricsByUser.get(u.id)
         return {
           'No.': index + 1,
-          'User ID': u.id,
           'Member ID': u.memberId || '-',
           'Name': u.displayName || '-',
           'Email': u.email || '-',

@@ -130,7 +130,8 @@ describe('Annual Pass payment', () => {
     const responses = await Promise.all([review(body), review(body)]);
     expect(responses.map(response => response.status)).toEqual([200, 200]);
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ role: 'vip', status: 'active', membership: { points: 180, nextFirstVisitWaiverExpiresAt: null } });
-    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'completed', verifiedBy: 'operator', actualAmount: 250 });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'completed', verifiedBy: 'operator', actualAmount: 250,
+      pointsEquivalent: 100, pointsEquivalentBasis: 'net', annualFeeAmount: 150 });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('fulfilled');
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('fulfilled');
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
@@ -168,6 +169,7 @@ describe('Annual Pass payment', () => {
     expect((await review({ ...body, creditOnly: true })).status).toBe(200);
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status, membership: { points: 330 } });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('credited');
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ pointsEquivalent: 250, pointsEquivalentBasis: 'net', annualFeeAmount: 0 });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('credited');
     expect([...m.docs.values()].filter(value => value.source === 'membership_fee')).toHaveLength(0);
   });
@@ -215,6 +217,8 @@ describe('Annual Pass payment', () => {
     m.auth.mockResolvedValue({ uid: 'operator' });
     expect((await review({ action: 'approve', recordId: 'ordinary', actualAmount: 100 })).status).toBe(200);
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: points === 80 ? 'active' : 'inactive', membership: { points: points === 80 ? 30 : 120 } });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/ordinary`)).toMatchObject({ pointsEquivalent: points === 80 ? -50 : 100,
+      pointsEquivalentBasis: 'net', annualFeeAmount: points === 80 ? 150 : 0 });
   });
   it('never activates a first pass from an ordinary RM299 reload', async () => {
     m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: 299, pointsEquivalent: 299, status: 'pending' });
@@ -438,6 +442,8 @@ describe('Annual Pass payment', () => {
     expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'active', role: 'vip', membership: { points: 2, nextFirstVisitWaiverExpiresAt: null } });
     expect(m.docs.get(`${C.POINTS_RECORDS}/membership_${result.orderId}_fee`).amount).toBe(199);
     expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${result.orderId}`).requestedAmount).toBe(100);
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/membership_${result.orderId}`)).toMatchObject({ pointsEquivalent: -99,
+      pointsEquivalentBasis: 'net', annualFeeAmount: 199 });
   });
   it('credits an insufficient reload once without renewing, then permits a second reload', async () => {
     m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/old`, { userId: 'user', status: 'paid', amount: 199 });

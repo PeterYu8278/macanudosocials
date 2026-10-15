@@ -16,6 +16,10 @@ import {
   runTransaction,
   FieldValue,
   onSnapshot,
+  documentId,
+  startAfter,
+  type QueryDocumentSnapshot,
+  type QueryConstraint,
   type Unsubscribe
 } from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
@@ -731,7 +735,8 @@ export const subscribeToRedemptionRecordsBySession = (
  */
 export const getDailyRedemptions = async (
   userId: string,
-  dayKey: string
+  dayKey: string,
+  options?: { throwOnError?: boolean }
 ): Promise<RedemptionRecord[]> => {
   try {
     // 获取会员期限
@@ -782,7 +787,8 @@ export const getDailyRedemptions = async (
     
     return allRecords;
   } catch (error: any) {
-      return [];
+    if (options?.throwOnError) throw error;
+    return [];
   }
 };
 
@@ -792,7 +798,8 @@ export const getDailyRedemptions = async (
  */
 export const getHourlyRedemptions = async (
   userId: string,
-  hourKey: string
+  hourKey: string,
+  options?: { throwOnError?: boolean }
 ): Promise<RedemptionRecord[]> => {
   try {
     // 查询所有包含该userId的文档（每用户每小时最多50条驻店记录）
@@ -832,34 +839,40 @@ export const getHourlyRedemptions = async (
     
     return allRecords;
   } catch (error: any) {
-      return [];
+    if (options?.throwOnError) throw error;
+    return [];
   }
 };
 
 /**
  * 获取用户的总兑换记录（基于当前会员期限）
  */
-export const getTotalRedemptions = async (userId: string): Promise<RedemptionRecord[]> => {
+export const getTotalRedemptions = async (userId: string, options?: { throwOnError?: boolean }): Promise<RedemptionRecord[]> => {
   try {
     // 注意：REDEMPTION_RECORDS 集合中的文档是按 visitSessionId 分组的
     // 文档本身没有 redeemedAt 字段，该字段在 redemptions 数组项中
-    // limit(500) 防止无界读取；超出500条时仍以计数器字段作为精确计数的长远方案
-    const q = query(
-      collection(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS),
-      where('userId', '==', userId),
-      limit(500)
-    );
-
-    const snapshot = await getDocs(q);
+    // Eligibility still checks source records; paginate instead of silently truncating at 500.
+    const documents: QueryDocumentSnapshot[] = [];
+    let cursor: QueryDocumentSnapshot | undefined;
+    while (true) {
+      const constraints: QueryConstraint[] = [where('userId', '==', userId), orderBy(documentId()), limit(500)];
+      if (cursor) constraints.push(startAfter(cursor));
+      const snapshot = await getDocs(query(collection(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS), ...constraints));
+      documents.push(...snapshot.docs);
+      if (snapshot.docs.length < 500) break;
+      cursor = snapshot.docs.at(-1);
+    }
     let allRecords: RedemptionRecord[] = [];
     
-    snapshot.docs.forEach(docSnap => {
+    documents.forEach(docSnap => {
       const data = docSnap.data() as RedemptionRecordDocument;
       const redemptions = data.redemptions || [];
       
       redemptions.forEach(item => {
         // 跳过 Day Pass 兑换记录，不计入累计总数
-        if (item.isDayPass) return;
+        if (item.isDayPass || item.type === 'referral_reward' || item.cigarId === 'referral_reward'
+          || (item.userId && item.userId !== userId) || !Number.isSafeInteger(item.quantity) || item.quantity <= 0
+          || !['pending', 'completed'].includes(item.status || 'completed')) return;
 
         // 转换日期
         const redeemedAt = (item.redeemedAt as any)?.toDate?.() || (item.redeemedAt instanceof Date ? item.redeemedAt : new Date(item.redeemedAt as any));
@@ -883,6 +896,7 @@ export const getTotalRedemptions = async (userId: string): Promise<RedemptionRec
     return allRecords;
   } catch (error) {
     console.error('[getTotalRedemptions] Error:', error);
+    if (options?.throwOnError) throw error;
     return [];
   }
 };

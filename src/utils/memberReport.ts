@@ -1,4 +1,5 @@
 import type { RedemptionRecord, ReloadRecord, User, VisitSession } from '../types';
+import { netReloadPoints } from './reloadPoints';
 
 export interface MemberReportMetrics {
   totalReloadAmount: number;
@@ -32,7 +33,7 @@ export const aggregateMemberReportMetrics = (
     const metrics = getMetrics(reload.userId);
     if (!metrics) return;
     metrics.totalReloadAmount += Number(reload.requestedAmount || 0);
-    metrics.totalReloadPoints += Number(reload.pointsEquivalent || 0);
+    metrics.totalReloadPoints += netReloadPoints(reload);
   });
 
   sessions.forEach(session => {

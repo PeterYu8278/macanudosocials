@@ -22,6 +22,7 @@ export const eventHandler: Handler = async event => {
   } catch { return reply(400, 'invalid-request') }
   if (!phone) return reply(400, 'invalid-phone')
 
+  let stage = 'initialize'
   try {
     if (!getApps().length) {
       const credentials = process.env.FIREBASE_SERVICE_ACCOUNT
@@ -29,8 +30,17 @@ export const eventHandler: Handler = async event => {
       initializeApp({ credential: cert(JSON.parse(credentials)) })
     }
     const db = initializeFirestore(getApps()[0], { preferRest: true })
+    stage = 'load_channel'
     const { config, token, verified } = await loadWhatsApp(db)
-    if (!config.enabled || !config.features.passwordReset || config.defaultProvider !== 'whapi' || !token || !verified) return reply(503, 'service-unavailable')
+    const unavailable = !config.enabled ? 'channel_disabled'
+      : !config.features.passwordReset ? 'recovery_disabled'
+        : config.defaultProvider !== 'whapi' ? 'provider_unavailable'
+          : !token ? 'credentials_missing' : !verified ? 'verification_required' : null
+    if (unavailable) {
+      console.error('[phone-password-reset] Unavailable', { stage, reason: unavailable })
+      return reply(503, 'service-unavailable')
+    }
+    stage = 'rate_limit'
     const keys = [`ip:${event.headers['x-nf-client-connection-ip'] || 'local'}`, `phone:${phone}`]
       .map(value => createHash('sha256').update(value).digest('hex'))
     const now = Date.now()
@@ -48,21 +58,28 @@ export const eventHandler: Handler = async event => {
       return true
     })
     if (!allowed) return reply(429, 'too-many-requests')
+    stage = 'lookup'
     const users = await db.collection('users').where('profile.phone', '==', phone).limit(2).get()
     // Identical response for absent/ambiguous accounts. Never expose an email or reset link.
     if (users.docs.length !== 1) return reply(200)
     const email = users.docs[0].data().email
     if (typeof email !== 'string' || !email) return reply(200)
     let link: string
+    stage = 'generate_link'
     try { link = await getAuth().generatePasswordResetLink(email) } catch (error: any) {
       if (error.code === 'auth/user-not-found') return reply(200)
       throw error
     }
+    stage = 'submit_message'
     const response = await submitWhapi(token, phone, `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.`)
-    if (response.status !== 'accepted') return reply(503, 'service-unavailable')
+    if (response.status !== 'accepted') {
+      console.error('[phone-password-reset] Unavailable', { stage, reason: response.status === 'unknown' ? 'delivery_unknown' : 'delivery_failed' })
+      return reply(503, 'service-unavailable')
+    }
     return reply(200)
   } catch {
     // Do not log phone numbers, provider credentials or recovery links.
+    console.error('[phone-password-reset] Failed', { stage, reason: 'dependency_error' })
     return reply(503, 'service-unavailable')
   }
 }

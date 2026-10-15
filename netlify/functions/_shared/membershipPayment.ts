@@ -106,7 +106,8 @@ export async function fulfillMembershipPayment(db: Firestore, orderId: string, b
     tx.update(userRef, update);
     if (order.reloadAmount > 0 || creditOnly) tx.set(db.collection(C.RELOAD_RECORDS).doc(`membership_${orderId}`), {
       userId: order.userId, userName: user.displayName || '', requestedAmount: total,
-      pointsEquivalent: total, walletAmount: creditOnly || order.paymentMode === 'renewal_reload' ? total : order.reloadAmount,
+      pointsEquivalent: Math.round((total - (creditOnly ? 0 : order.annualFee)) * 100) / 100, pointsEquivalentBasis: 'net',
+      walletAmount: creditOnly || order.paymentMode === 'renewal_reload' ? total : order.reloadAmount,
       annualFeeAmount: creditOnly ? 0 : order.annualFee, paymentPurpose: 'annual_pass',
       billplzId: billId, status: 'completed', storeId: order.storeId,
       verifiedBy: 'system_billplz', verifiedAt: timestamp, createdAt: timestamp, updatedAt: timestamp,

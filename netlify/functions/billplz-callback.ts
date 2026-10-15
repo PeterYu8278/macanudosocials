@@ -100,7 +100,11 @@ export const eventHandler: Handler = async (event) => {
 
         const userId = recordData.userId;
         const amount = recordData.requestedAmount;
-        const points = recordData.pointsEquivalent;
+        // Ordinary reload callbacks credit the payment, never a net field from a membership record.
+        const points = Math.round(Number(amount));
+        if (!Number.isFinite(points) || points <= 0 || recordData.membershipOrderId || recordData.paymentPurpose) {
+          throw new Error('INVALID_RELOAD_AMOUNT');
+        }
 
         await db.runTransaction(async (transaction) => {
           const userRef = db.collection(GLOBAL_COLLECTIONS.USERS).doc(userId);
@@ -117,6 +121,9 @@ export const eventHandler: Handler = async (event) => {
           // Update Reload Record
           transaction.update(recordDoc.ref, {
             status: 'completed',
+            pointsEquivalent: points,
+            pointsEquivalentBasis: 'net',
+            annualFeeAmount: 0,
             verifiedAt: FieldValue.serverTimestamp(),
             verifiedBy: 'system_billplz',
             adminNotes: `Auto-verified via Billplz (ID: ${billId}, Paid: ${params.get('paid_at')})`,

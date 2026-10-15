@@ -1,4 +1,13 @@
+import type { VisitSession } from '../types'
+import { toDateOrNull } from '../services/firebase/core/sanitize'
+
 export const MINIMUM_RELOAD_AMOUNT_RM = 200
+
+export const isCurrentVisitCheckedIn = (
+  session: Pick<VisitSession, 'userId' | 'status' | 'checkInAt' | 'checkOutAt'> | null | undefined,
+  userId: string | undefined
+): boolean => Boolean(userId && session?.userId === userId && session.status === 'pending'
+  && toDateOrNull(session.checkInAt) && !session.checkOutAt)
 
 export interface CheckoutAffordability {
   canCheckout: boolean
@@ -24,11 +33,10 @@ export const calculateCheckoutAffordability = (
 export const shouldShowCheckoutReload = (
   currentPoints: number,
   checkoutPending: boolean,
-  pointsDueNow: number
+  pointsDueNow: number,
+  checkedIn: boolean
 ): boolean => {
-  const safePoints = Number.isFinite(currentPoints) ? currentPoints : 0
-  const safeDue = Number.isFinite(pointsDueNow) ? pointsDueNow : 0
-  return (checkoutPending && safePoints < safeDue) || safePoints < 50
+  return !checkedIn || shouldRedirectToCheckoutReload(currentPoints, checkoutPending, pointsDueNow)
 }
 
 export const shouldRedirectToCheckoutReload = (

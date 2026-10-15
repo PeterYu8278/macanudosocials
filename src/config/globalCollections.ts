@@ -51,6 +51,8 @@ export const GLOBAL_COLLECTIONS = {
   REDEMPTION_CONFIG: 'redemptionConfig',
   /** 兑换记录集合 */
   REDEMPTION_RECORDS: 'redemptionRecords',
+  REDEMPTION_STATS: '_redemptionStats',
+  REDEMPTION_STATS_META: '_redemptionStatsMeta',
   /** 功能可见性配置集合 */
   FEATURE_VISIBILITY: 'feature_visibility',
   /** 应用配置集合 */

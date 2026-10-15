@@ -1,9 +1,10 @@
 import dayjs from 'dayjs'
 import type { MembershipFeeRecord, PointsRecord, ReloadRecord, User, VisitSession } from '../types'
 import { toDateOrNull } from '../services/firebase/core/sanitize'
+import { netReloadPoints } from './reloadPoints'
 
 export type ReportRecord<T> = T & { migration?: { source?: string; batchId?: string; balanceNotApplied?: boolean } }
-type Reload = ReportRecord<ReloadRecord> & { actualAmount?: number; annualFeeAmount?: number; walletAmount?: number }
+type Reload = ReportRecord<ReloadRecord> & { annualFeeAmount?: number; walletAmount?: number }
 const format = (value: unknown) => {
   const date = toDateOrNull(value)
   return date ? dayjs(date).format('YYYY-MM-DD HH:mm:ss') : '-'
@@ -25,8 +26,8 @@ export function reloadReportRows(records: Reload[], users: User[]) {
   const members = new Map(users.map(user => [user.id, user]))
   return newestFirst(records, record => record.createdAt).map(record => ({
     'Reload ID': record.id, ...identity(record.userId, members, record.userName),
-    'Requested Amount (RM)': record.requestedAmount, 'Recorded Received Amount (RM)': numeric(record.actualAmount) ? record.actualAmount : '-',
-    'Points Equivalent': record.pointsEquivalent, 'Wallet Amount': record.walletAmount ?? '-', 'Annual Fee Amount': record.annualFeeAmount ?? '-',
+    'Requested Amount (RM)': record.requestedAmount,
+    'Points Equivalent': record.status === 'completed' ? netReloadPoints(record) : '-', 'Annual Fee Amount': record.annualFeeAmount ?? '-',
     Status: record.status, 'Payment Method': record.paymentMethod || (record.billplzId ? 'billplz' : '-'),
     'Payment Purpose': record.paymentPurpose || '-', 'Lounge ID': record.storeId || '-',
     'Created At': format(record.createdAt), 'Verified At': format(record.verifiedAt),

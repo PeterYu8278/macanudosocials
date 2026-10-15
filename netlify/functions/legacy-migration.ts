@@ -286,7 +286,7 @@ const processReloads = async (rows: AnyRow[], batchId: string) => {
       const at = Timestamp.fromDate(occurredAt)
       await ref.set({
         userId: user.id, userName: row.name || user.data.displayName,
-        requestedAmount: amount, pointsEquivalent: Math.round(amount), status: 'completed',
+        requestedAmount: amount, pointsEquivalent: Math.round(amount), pointsEquivalentBasis: 'net', annualFeeAmount: 0, status: 'completed',
         storeId: lounge.id, verifiedAt: at, verifiedBy: 'legacy_migration',
         adminNotes: 'Historical legacy import; wallet balance was restored from the member snapshot.',
         pointsRecordId: id, createdAt: at, updatedAt: Timestamp.now(),

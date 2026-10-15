@@ -46,7 +46,7 @@ export async function generatePointsRecords(
     const userBalances = new Map<string, number>()
     for (const record of reloadRecords) {
       const currentBalance = userBalances.get(record.userId) || 0
-      userBalances.set(record.userId, currentBalance + record.pointsEquivalent)
+      userBalances.set(record.userId, currentBalance + Math.round(record.requestedAmount))
     }
 
     // 生成充值积分记录
@@ -60,9 +60,9 @@ export async function generatePointsRecords(
         userId: record.userId,
         userName: record.userName,
         type: 'earn',
-        amount: record.pointsEquivalent,
+        amount: Math.round(record.requestedAmount),
         source: 'reload',
-        description: `充值 ${record.requestedAmount} RM (${record.pointsEquivalent} 积分)`,
+        description: `充值 ${record.requestedAmount} RM (${Math.round(record.requestedAmount)} 积分)`,
         relatedId: record.id,
         balance,
         createdAt: record.verifiedAt || record.createdAt,
@@ -77,7 +77,7 @@ export async function generatePointsRecords(
       totalGenerated++
 
       // 更新余额（减去当前记录的数量，因为后续记录应该基于之前的余额）
-      userBalances.set(record.userId, balance - record.pointsEquivalent)
+      userBalances.set(record.userId, balance - Math.round(record.requestedAmount))
 
       if (totalGenerated % batchSize === 0) {
         const progress = Math.round((totalGenerated / (reloadRecords.length * 2)) * 100)

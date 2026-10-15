@@ -1,5 +1,5 @@
 // @vitest-environment node
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 const m = vi.hoisted(() => ({ load: vi.fn(), send: vi.fn(), link: vi.fn(), query: vi.fn() }))
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}], cert: vi.fn(), initializeApp: vi.fn() }))
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ generatePasswordResetLink: m.link }) }))
@@ -13,6 +13,7 @@ const invoke = handler as unknown as (event: any) => Promise<{ statusCode: numbe
 const request = () => invoke({ httpMethod: 'POST', headers: {}, body: JSON.stringify({ phone: '0168008000' }) })
 const loaded = () => ({ config: { enabled: true, defaultProvider: 'whapi', features: { passwordReset: true } }, token: 'secret-token', verified: true })
 describe('phone recovery with managed WhatsApp channels', () => {
+  afterEach(() => vi.restoreAllMocks())
   beforeEach(() => {
     vi.resetAllMocks()
     m.load.mockResolvedValue(loaded())
@@ -51,5 +52,22 @@ describe('phone recovery with managed WhatsApp channels', () => {
     m.send.mockResolvedValue({ status: 'unknown' })
     expect((await request()).statusCode).toBe(503)
     expect(m.send).toHaveBeenCalledTimes(1)
+  })
+  it('identifies verification failures in server logs without exposing provider or member secrets', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    m.load.mockResolvedValue({ ...loaded(), verified: false })
+    const response = await request()
+    expect(response.statusCode).toBe(503)
+    expect(log).toHaveBeenCalledWith('[phone-password-reset] Unavailable', { stage: 'load_channel', reason: 'verification_required' })
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|0168008000|member@example/)
+    expect(response.body).not.toContain('verification_required')
+    expect(m.send).not.toHaveBeenCalled()
+  })
+  it('does not log raw errors containing recovery secrets', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {})
+    m.link.mockRejectedValue(new Error('secret-token member@example.com private-recovery-proof'))
+    expect((await request()).statusCode).toBe(503)
+    expect(log).toHaveBeenCalledWith('[phone-password-reset] Failed', { stage: 'generate_link', reason: 'dependency_error' })
+    expect(JSON.stringify(log.mock.calls)).not.toMatch(/secret-token|member@example|private-recovery-proof/)
   })
 })

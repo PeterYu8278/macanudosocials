@@ -17,6 +17,7 @@ import { usePendingPayments } from '../../../hooks/usePendingPayments';
 import { getMembershipPaymentStatus } from '../../../services/membershipActivation';
 import { toDateOrNull } from '../../../services/firebase/core/sanitize';
 import { getUserData } from '../../../services/firebase/auth';
+import { netReloadPoints } from '../../../utils/reloadPoints';
 
 const { Title, Text } = Typography;
 
@@ -297,7 +298,7 @@ const ReloadPage: React.FC = () => {
                 </Text>
                 <Text style={{ color: '#c0c0c0', fontSize: 14, display: 'block', marginBottom: 8 }}>
                   {t('reload.estimatedPoints')} <Text strong style={{ color: '#FFD700' }}>
-                    {pendingRecord.walletAmount ?? pendingRecord.pointsEquivalent} {t('visitTimer.points')}
+                    {netReloadPoints(pendingRecord)} {t('visitTimer.points')}
                   </Text>
                 </Text>
                 <Text style={{ color: '#999999', fontSize: 12, display: 'block' }}>

@@ -290,12 +290,26 @@ service cloud.firestore {
     // ================================
     // Redemption Records Collection
     // ================================
+    // Trusted server projections. Clients may read their count, never modify it.
+    match /_redemptionStats/{userId} {
+      allow get: if isPaymentOwner(userId) || isAnyAdmin();
+      allow list, write: if false;
+    }
+    match /_redemptionStatsMeta/{documentId} {
+      allow get: if isSignedIn() && documentId == 'default';
+      allow list, write: if false;
+    }
+    match /_redemptionStatsSources/{documentId} {
+      allow read, write: if false;
+    }
     match /redemptionRecords/{recordId} {
       function isValidPendingRedemption(item, sessionUserId) {
         return item.userId == sessionUserId
                && item.redeemedBy == sessionUserId
                && item.status == 'pending'
                && item.quantity == 1
+               && item.get('type', 'mystery_gift') == 'mystery_gift'
+               && item.get('isDayPass', false) == false
                && item.redeemedAt >= request.time - duration.value(5, 'm')
                && item.redeemedAt <= request.time + duration.value(5, 'm');
       }
@@ -310,6 +324,7 @@ service cloud.firestore {
         let after = request.resource.data.redemptions;
         let newItem = after[after.size() - 1];
         return after.size() == before.size() + 1
+               && after.hasAll(before)
                && isValidPendingRedemption(newItem, sessionUserId)
                && (before.size() == 0
                    || request.time >= before[before.size() - 1].redeemedAt + duration.value(1, 'h'));
@@ -353,6 +368,8 @@ service cloud.firestore {
         && request.resource.data.status == 'pending'
         && request.resource.data.requestedAmount in [100, 200, 500]
         && request.resource.data.pointsEquivalent == request.resource.data.requestedAmount
+        && request.resource.data.get('pointsEquivalentBasis', 'net') == 'net'
+        && request.resource.data.get('annualFeeAmount', 0) == 0
         && request.resource.data.billplzId is string
         && !request.resource.data.keys().hasAny(['membershipOrderId', 'verifiedBy', 'verifiedAt', 'pointsRecordId']);
 

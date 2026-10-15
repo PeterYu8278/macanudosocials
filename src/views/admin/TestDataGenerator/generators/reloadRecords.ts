@@ -40,6 +40,8 @@ function generateReloadRecordData(
     userName: user.displayName,
     requestedAmount,
     pointsEquivalent,
+    pointsEquivalentBasis: 'net',
+    annualFeeAmount: 0,
     status,
     verifiedAt,
     verifiedBy: status === 'completed' ? 'system' : undefined,

@@ -56,11 +56,28 @@ describe('wallet report reconciliation', () => {
 })
 
 describe('detailed member report worksheets', () => {
-  it('includes pending and historical reloads and preserves missing actual payment amounts', () => {
+  it('includes pending and historical reloads using the requested amount', () => {
     const records = [{ id: 'r', userId: 'u', requestedAmount: 299, pointsEquivalent: 299, status: 'pending',
       createdAt: new Date('2026-10-01'), migration: { source: 'legacy_workbook', batchId: 'old' } } as ReportRecord<ReloadRecord>]
     expect(reloadReportRows(records, [user])[0]).toMatchObject({ Name: 'Member', Phone: '+60123456789',
-      Status: 'pending', 'Recorded Received Amount (RM)': '-', 'Historical Import': 'Yes', 'Migration Batch': 'old' })
+      Status: 'pending', 'Requested Amount (RM)': 299, 'Historical Import': 'Yes', 'Migration Batch': 'old' })
+    expect(reloadReportRows(records, [user])[0]).not.toHaveProperty('Recorded Received Amount (RM)')
+    expect(reloadReportRows(records, [user])[0]['Points Equivalent']).toBe('-')
+    expect(reloadReportRows(records, [user])[0]).not.toHaveProperty('Wallet Amount')
+  })
+  it('does not substitute legacy received amounts for the requested amount', () => {
+    const record = { id: 'r', userId: 'u', requestedAmount: 299, actualAmount: 200,
+      pointsEquivalent: 299, status: 'completed', createdAt: new Date('2026-10-01'),
+      updatedAt: new Date('2026-10-01') } as ReloadRecord & { actualAmount: number }
+    const row = reloadReportRows([record], [user])[0]
+    expect(row['Requested Amount (RM)']).toBe(299)
+    expect(row).not.toHaveProperty('Recorded Received Amount (RM)')
+  })
+  it('shows the same net points for old and new annual payment records', () => {
+    const old = { id: 'old', userId: 'u', requestedAmount: 299, pointsEquivalent: 299,
+      annualFeeAmount: 199, status: 'completed', createdAt: new Date(), updatedAt: new Date() } as ReloadRecord
+    const current = { ...old, id: 'new', pointsEquivalent: 100, pointsEquivalentBasis: 'net' as const }
+    expect(reloadReportRows([old, current], [user]).map(row => row['Points Equivalent'])).toEqual([100, 100])
   })
   it('includes paid and scheduled fee records without substituting creation time for deduction time', () => {
     const record = { id: 'fee', userId: 'u', renewalType: 'renewal', amount: 199, status: 'pending', dueDate: new Date('2027-10-01'), createdAt: new Date('2026-10-01') } as MembershipFeeRecord

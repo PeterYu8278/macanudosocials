@@ -72,4 +72,10 @@ describe('Payment callback with monitoring enabled', () => {
     expect(m.writes).not.toHaveBeenCalled();
     expect(m.checkout).toHaveBeenCalledTimes(1);
   });
+  it('derives ordinary payment credit from the requested amount rather than the net display field', async () => {
+    m.docs.get(`${C.RELOAD_RECORDS}/reload`).pointsEquivalent = 1;
+    expect((await callback()).status).toBe(200);
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/reload`)).toMatchObject({ pointsEquivalent: 200, pointsEquivalentBasis: 'net', annualFeeAmount: 0 });
+    expect(m.writes).toHaveBeenCalledWith(`${C.USERS}/private-user`, expect.objectContaining({ 'membership.points': 200 }));
+  });
 });

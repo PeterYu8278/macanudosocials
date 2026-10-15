@@ -1232,6 +1232,10 @@
     "footerNote": "Keep visiting and referring to unlock more rewards!"
   },
   "visitTimer": {
+    "redemptionStatsDetails": "Completed: {{completed}} · Pending: {{pending}}",
+    "redemptionStatsInitializing": "Redemption statistics await server initialization.",
+    "redemptionStatsUnavailable": "Redemption statistics are temporarily unavailable.",
+    "redemptionCheckFailed": "Unable to check redemption availability. Retry before redeeming.",
     "lastCheckIn": "Last Check In",
     "stayDurationTimer": "Stay Duration Timer",
     "dailyLimit": "Daily Limit",
@@ -2632,7 +2636,8 @@
       "notesPlaceholder": "Enter verification notes...",
       "rejectReasonPlaceholder": "Enter rejection reason...",
       "rejectReasonRequired": "Please enter rejection reason",
-      "pointsEquivalent": "= {{points}} Points",
+      "pointsEquivalent": "= {{points}} Net Points",
+      "estimatedPointsEquivalent": "Estimated net points: {{points}}",
       "manualCreate": "Manual Reload",
       "manualCreateTitle": "Create Manual Reload",
       "manualCreateSuccess": "Manual reload created and verified successfully",

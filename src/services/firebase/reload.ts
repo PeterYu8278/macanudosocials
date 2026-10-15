@@ -67,6 +67,8 @@ export const createReloadRecord = async (
       userName: userName || userData.displayName,
       requestedAmount,
       pointsEquivalent,
+      pointsEquivalentBasis: 'net',
+      annualFeeAmount: 0,
       status: 'pending',
       ...(storeId !== undefined && { storeId }),
       ...(billplzId !== undefined && { billplzId }),

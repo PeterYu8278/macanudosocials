@@ -1232,6 +1232,10 @@
     "footerNote": "持续到店与邀请好友，解锁更多专属奖励！"
   },
   "visitTimer": {
+    "redemptionStatsDetails": "已完成：{{completed}}，待处理：{{pending}}",
+    "redemptionStatsInitializing": "兑换统计等待服务端初始化。",
+    "redemptionStatsUnavailable": "兑换统计暂时无法读取。",
+    "redemptionCheckFailed": "无法确认兑换资格，请重试后再兑换。",
     "lastCheckIn": "最后签到时间",
     "stayDurationTimer": "驻店时长计时器",
     "dailyLimit": "每日限额",
@@ -2632,7 +2636,8 @@
       "notesPlaceholder": "输入验证备注...",
       "rejectReasonPlaceholder": "输入拒绝原因...",
       "rejectReasonRequired": "请输入拒绝原因",
-      "pointsEquivalent": "= {{points}} 积分",
+      "pointsEquivalent": "= {{points}} 净积分",
+      "estimatedPointsEquivalent": "预计净积分：{{points}}",
       "manualCreate": "手动创建充值",
       "manualCreateTitle": "手动创建充值记录",
       "manualCreateSuccess": "手动充值已创建并验证成功",

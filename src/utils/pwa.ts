@@ -141,9 +141,6 @@ export const initializePWA = async (): Promise<void> => {
       // worker, which may still be held in a long-lived mobile browser cache.
       const wb = new Workbox('/sw.js?push-worker=2');
       
-      // Register service worker
-      await wb.register();
-      
       // Listen for updates
       wb.addEventListener('controlling', () => {
       });
@@ -157,6 +154,8 @@ export const initializePWA = async (): Promise<void> => {
       // Listen for activated
       wb.addEventListener('activated', () => {
       });
+      // Registration can emit waiting immediately when an update already exists.
+      await wb.register();
     }
     
   } catch (error) {
@@ -170,10 +169,13 @@ export const showInstallPrompt = async (): Promise<boolean> => {
   if (!deferredPrompt) {
     return false;
   }
+  const prompt = deferredPrompt;
+  deferredPrompt = null;
+  updateInstallState({ isInstallable: false, canInstall: false });
   
   try {
-    await deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    await prompt.prompt();
+    const { outcome } = await prompt.userChoice;
     if (outcome === 'accepted') {
       deferredPrompt = null;
       updateInstallState({
@@ -185,8 +187,6 @@ export const showInstallPrompt = async (): Promise<boolean> => {
       return true;
     }
 
-    deferredPrompt = null;
-    updateInstallState({ isInstallable: false, canInstall: false });
     return false;
   } catch (error) {
     return false;
