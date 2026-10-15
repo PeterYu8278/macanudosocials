@@ -1,0 +1,29 @@
+.redemption-cigar-select { width: 100%; min-width: 0; }
+.redemption-cigar-select .ant-input-affix-wrapper > input.ant-input {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+.redemption-cigar-options {
+  max-height: 240px;
+  overflow-y: auto;
+  margin-top: 4px;
+  background: #221c10;
+  border: 1px solid #8d692e;
+  border-radius: 6px;
+}
+.redemption-cigar-options:empty { display: none; }
+.redemption-cigar-option {
+  box-sizing: border-box;
+  padding: 10px 12px;
+  min-height: 40px;
+  color: #fff;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.redemption-cigar-option.is-active,
+.redemption-cigar-option[aria-selected="true"] {
+  background: #d6ad57;
+  color: #111;
+}
+.redemption-cigar-state { padding: 10px 12px; color: #c0c0c0; }

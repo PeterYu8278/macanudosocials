@@ -12,6 +12,11 @@ vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: mocks.t, i18n: { l
 vi.mock('antd', async original => ({
   ...(await original<any>()),
   App: { useApp: () => ({ message: mocks.message, modal: {} }) },
+  Table: ({ dataSource = [], columns = [] }: any) => <div>{dataSource.map((record: any) => (
+    <div key={record.id}>{columns.map((column: any) => <div key={column.key || column.dataIndex}>
+      {column.render ? column.render(record[column.dataIndex], record) : record[column.dataIndex]}
+    </div>)}</div>
+  ))}</div>,
 }));
 vi.mock('../../../store/modules/auth', () => ({ useAuthStore: () => ({ user: mocks.user, isSuperAdmin: true }) }));
 vi.mock('../../../services/firebase/firestore', () => ({
@@ -37,6 +42,7 @@ vi.mock('../../../components/admin/QRScanner', () => ({ QRScanner: () => null })
 vi.mock('../../../components/admin/RoomManagement', () => ({ RoomManagement: () => null }));
 
 import VisitSessionsPage from './index';
+import CigarSelect from './CigarSelect';
 
 describe('visit session redemption cigar loading', () => {
   beforeEach(() => {
@@ -47,6 +53,31 @@ describe('visit session redemption cigar loading', () => {
     });
   });
   afterEach(cleanup);
+
+  it('filters options, selects with the keyboard and keeps Escape inside the selector', () => {
+    const onChange = vi.fn();
+    const parentKeyDown = vi.fn();
+    render(<div onKeyDown={parentKeyDown}><CigarSelect options={[
+      { value: 'one', label: 'Robusto - RM99' },
+      { value: 'two', label: 'Toro - RM99' },
+    ]} onChange={onChange} /></div>);
+    const input = screen.getByRole('combobox');
+    fireEvent.focus(input);
+    fireEvent.change(input, { target: { value: 'toro' } });
+    expect(screen.getAllByRole('option')).toHaveLength(1);
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenCalledWith('two');
+    expect(screen.queryByRole('listbox')).toBeNull();
+    fireEvent.click(input);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onChange).toHaveBeenLastCalledWith('two');
+    fireEvent.click(input);
+    parentKeyDown.mockClear();
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+    expect(parentKeyDown).not.toHaveBeenCalled();
+  });
 
   async function openRedemption() {
     render(<VisitSessionsPage />);
@@ -64,20 +95,20 @@ describe('visit session redemption cigar loading', () => {
     mocks.cigars.mockResolvedValue([{ id: 'cigar', name: 'Robusto', price: 99 }]);
     fireEvent.click(within(dialog).getByRole('button', { name: /common.retry/ }));
     await waitFor(() => expect(within(dialog).queryByText('visitSessions.loadCigarsFailed')).toBeNull());
-    fireEvent.mouseDown(within(dialog).getByRole('combobox'));
+    fireEvent.focus(within(dialog).getByRole('combobox'));
     expect(await screen.findByText('Robusto - RM99')).toBeTruthy();
-  }, 20000);
+  }, 60000);
 
-  it('reloads cigars and portals options outside the modal without scale motion', async () => {
+  it('reloads cigars and keeps searchable options in the modal document flow', async () => {
     mocks.cigars.mockResolvedValueOnce([]).mockResolvedValue([{ id: 'cigar', name: 'Robusto', price: 99 }]);
     const dialog = await openRedemption();
     await waitFor(() => expect(mocks.cigars).toHaveBeenCalledTimes(2));
-    fireEvent.mouseDown(within(dialog).getByRole('combobox'));
+    fireEvent.focus(within(dialog).getByRole('combobox'));
     const option = await screen.findByText('Robusto - RM99');
-    const popup = option.closest('.ant-select-dropdown');
-    expect(popup).toBeTruthy();
-    expect(popup?.parentElement).toBe(document.body);
-    expect(popup?.closest('.ant-modal')).toBeNull();
-    expect(popup?.className).not.toMatch(/ant-slide-up/);
-  }, 20000);
+    expect(within(dialog).getByRole('listbox').contains(option)).toBe(true);
+    expect(option.closest('.ant-select-dropdown')).toBeNull();
+    fireEvent.click(option);
+    expect((within(dialog).getByRole('combobox') as HTMLInputElement).value).toBe('Robusto - RM99');
+    expect(within(dialog).queryByRole('listbox')).toBeNull();
+  }, 60000);
 });

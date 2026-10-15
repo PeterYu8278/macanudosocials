@@ -26,6 +26,7 @@ import { useTranslation } from 'react-i18next';
 import { QRScanner } from '../../../components/admin/QRScanner';
 import { OrderSkeleton } from '../../../components/features/admin/OrderSkeleton';
 import { RoomManagement } from '../../../components/admin/RoomManagement';
+import CigarSelect from './CigarSelect';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -92,15 +93,9 @@ const VisitSessionsPage: React.FC = () => {
     />
   ) : null;
   const cigarSelectState = {
-    // Measure outside the modal's transformed ancestors without slide/scale motion.
-    getPopupContainer: (trigger: HTMLElement) => trigger.ownerDocument.body,
-    transitionName: '',
-    classNames: { popup: { root: 'points-config-form' } },
     loading: cigarsLoading,
+    loadError: !!cigarsError,
     status: cigarsError ? 'error' as const : undefined,
-    notFoundContent: cigarsLoading
-      ? <Spin size="small" aria-label={t('common.loading')} />
-      : cigarsError ? t('visitSessions.loadCigarsFailed') : t('common.noData'),
   };
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
   const { data: sessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
@@ -1426,13 +1421,9 @@ const VisitSessionsPage: React.FC = () => {
                       rules={[{ required: true, message: t('visitSessions.selectCigar') }]}
                       style={{ flex: 1, marginBottom: 0 }}
                     >
-                      <Select
+                      <CigarSelect
                         {...cigarSelectState}
                         placeholder={t('visitSessions.selectCigar')}
-                        showSearch
-                        filterOption={(input, option) =>
-                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
                         options={cigars.map(cigar => ({
                           value: cigar.id,
                           label: `${cigar.name} - RM${cigar.price}`
@@ -1574,13 +1565,9 @@ const VisitSessionsPage: React.FC = () => {
             label={t('visitSessions.cigarName')}
             rules={[{ required: true, message: t('visitSessions.selectCigar') }]}
           >
-            <Select
+            <CigarSelect
               {...cigarSelectState}
               placeholder={t('visitSessions.selectCigar')}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
               options={cigars.map(cigar => ({
                 value: cigar.id,
                 label: `${cigar.name} - RM${cigar.price}`
