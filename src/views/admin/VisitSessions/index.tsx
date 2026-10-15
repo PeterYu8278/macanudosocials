@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
+import { Alert, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
 import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -74,7 +74,32 @@ const VisitSessionsPage: React.FC = () => {
   const [forceCheckoutModalVisible, setForceCheckoutModalVisible] = useState(false);
   const { item: selectedSession, openDrawer: openSessionDrawer, closeDrawer: closeSessionDrawer } = useDetailDrawer<VisitSession>();
   const { item: selectedRedemptionRecord, open: editRedemptionModalVisible, openDrawer: openRedemptionDrawer, closeDrawer: closeRedemptionDrawer } = useDetailDrawer<any>();
-  const { data: cigars = [] } = useFirestoreQuery(getCigars);
+  const { data: cigars = [], loading: cigarsLoading, error: cigarsError, refresh: refreshCigars } = useFirestoreQuery(getCigars, [user?.id]);
+  useEffect(() => {
+    if (addRedemptionModalVisible || editRedemptionModalVisible) {
+      void refreshCigars();
+    }
+  }, [addRedemptionModalVisible, editRedemptionModalVisible, refreshCigars]);
+
+  const cigarLoadNotice = cigarsError ? (
+    <Alert
+      type="error"
+      showIcon
+      message={t('visitSessions.loadCigarsFailed')}
+      description={cigarsError}
+      action={<Button size="small" icon={<ReloadOutlined />} loading={cigarsLoading} onClick={() => void refreshCigars()}>{t('common.retry')}</Button>}
+      style={{ marginBottom: 16 }}
+    />
+  ) : null;
+  const cigarSelectState = {
+    // Keep the popup in the modal's stacking and scrolling context.
+    getPopupContainer: (trigger: HTMLElement) => trigger.parentElement || trigger,
+    loading: cigarsLoading,
+    status: cigarsError ? 'error' as const : undefined,
+    notFoundContent: cigarsLoading
+      ? <Spin size="small" aria-label={t('common.loading')} />
+      : cigarsError ? t('visitSessions.loadCigarsFailed') : t('common.noData'),
+  };
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
   const { data: sessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
     () => {
@@ -621,7 +646,7 @@ const VisitSessionsPage: React.FC = () => {
                           <Button
                             icon={<ReloadOutlined />}
                             onClick={async () => {
-                              await Promise.all([refreshSessions(), loadAllRedemptions()])
+                              await Promise.all([refreshSessions(), loadAllRedemptions(), refreshCigars()])
                             }}
                             loading={loading}
                             style={{
@@ -681,7 +706,7 @@ const VisitSessionsPage: React.FC = () => {
                         <Button
                           icon={<ReloadOutlined />}
                           onClick={async () => {
-                            await Promise.all([refreshSessions(), loadAllRedemptions()])
+                            await Promise.all([refreshSessions(), loadAllRedemptions(), refreshCigars()])
                           }}
                           loading={loading}
                           style={{
@@ -1385,6 +1410,7 @@ const VisitSessionsPage: React.FC = () => {
         confirmLoading={addingRedemption}
         width={600}
       >
+        {cigarLoadNotice}
         <Form form={form} layout="vertical" className="points-config-form">
           <Form.List name="items">
             {(fields, { add, remove }) => (
@@ -1399,6 +1425,7 @@ const VisitSessionsPage: React.FC = () => {
                       style={{ flex: 1, marginBottom: 0 }}
                     >
                       <Select
+                        {...cigarSelectState}
                         placeholder={t('visitSessions.selectCigar')}
                         showSearch
                         filterOption={(input, option) =>
@@ -1538,6 +1565,7 @@ const VisitSessionsPage: React.FC = () => {
         confirmLoading={addingRedemption}
         width={500}
       >
+        {cigarLoadNotice}
         <Form form={form} layout="vertical" className="points-config-form">
           <Form.Item
             name="cigarId"
@@ -1545,6 +1573,7 @@ const VisitSessionsPage: React.FC = () => {
             rules={[{ required: true, message: t('visitSessions.selectCigar') }]}
           >
             <Select
+              {...cigarSelectState}
               placeholder={t('visitSessions.selectCigar')}
               showSearch
               filterOption={(input, option) =>
