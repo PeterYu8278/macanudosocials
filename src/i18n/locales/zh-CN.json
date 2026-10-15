@@ -1,4 +1,10 @@
 {
+  "systemUpdate": {
+    "available": "系统有新版本",
+    "description": "新版本已准备就绪，请完成当前操作后更新系统。",
+    "updateNow": "立即更新",
+    "failed": "暂时无法启用更新，请重试。"
+  },
   "annualPassPayment": {
     "checkingRequests": "查询申请中",
     "retryRequests": "重试查询申请",

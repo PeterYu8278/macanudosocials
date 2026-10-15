@@ -1,4 +1,10 @@
 {
+  "systemUpdate": {
+    "available": "System update available",
+    "description": "A new version is ready. Update after finishing your current operation.",
+    "updateNow": "Update Now",
+    "failed": "The update could not be activated. Please try again."
+  },
   "annualPassPayment": {
     "checkingRequests": "Checking Requests",
     "retryRequests": "Retry Request Check",

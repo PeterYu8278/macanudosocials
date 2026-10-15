@@ -16,6 +16,7 @@ import { PageLoading } from './components/common/LoadingSpinner'
 import OneSignalIntegration from './components/common/OneSignalIntegration'
 import NotificationOpenTracker from './components/common/NotificationOpenTracker'
 import AppMessageBridge from './components/common/AppMessageBridge'
+import SystemUpdateBanner from './components/common/SystemUpdateBanner'
 import { isFeatureVisible } from './services/firebase/featureVisibility'
 import { getLoginLandingPath } from './utils/loginLanding'
 
@@ -343,6 +344,7 @@ const AppContent: React.FC = () => {
             }} />
 
             <div style={{ position: 'relative', zIndex: 1, width: '100%', minWidth: 0 }}>
+              {user && ['/', '/admin'].includes(location.pathname) && <SystemUpdateBanner />}
               <Suspense fallback={<PageLoading />}>
                 <Routes>
                   {/* 认证路由 */}

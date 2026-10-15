@@ -7,7 +7,7 @@ vi.mock('workbox-window', () => ({ Workbox: class {
 } }));
 
 describe('PWA installation lifecycle', () => {
-  afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); });
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
   const setup = async () => {
     vi.resetModules();
     workbox.listeners.clear();
@@ -43,5 +43,38 @@ describe('PWA installation lifecycle', () => {
     expect(await pwa.showInstallPrompt()).toBe(false);
     expect(await pwa.showInstallPrompt()).toBe(false);
     expect(prompt).toHaveBeenCalledTimes(1);
+  });
+  it('publishes waiting updates without native confirmation or automatic activation', async () => {
+    const { pwa } = await setup();
+    const listener = vi.fn();
+    const stop = pwa.subscribeToUpdates(listener);
+    expect(pwa.getUpdateAvailable()).toBe(false);
+    (workbox.listeners.get('waiting') as () => void)();
+    expect(pwa.getUpdateAvailable()).toBe(true);
+    expect(listener).toHaveBeenCalledTimes(1);
+    stop();
+    pwa.showUpdateNotification();
+    expect(listener).toHaveBeenCalledTimes(1);
+  });
+  it('checks periodically and waits for activation after the user accepts', async () => {
+    vi.useFakeTimers();
+    const worker = Object.assign(new EventTarget(), { state: 'installed', postMessage: vi.fn() });
+    const registration = { waiting: worker, update: vi.fn().mockResolvedValue(undefined) };
+    const { pwa, handlers } = await setup();
+    workbox.register.mockResolvedValue(registration);
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
+    vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    await pwa.initializePWA();
+    expect(pwa.getUpdateAvailable()).toBe(true);
+    expect(worker.postMessage).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60000);
+    expect(registration.update).toHaveBeenCalledTimes(1);
+    handlers.get('focus')!(new Event('focus'));
+    expect(registration.update).toHaveBeenCalledTimes(1);
+    const result = pwa.applySystemUpdate();
+    expect(worker.postMessage).toHaveBeenCalledWith({ type: 'SKIP_WAITING' });
+    worker.state = 'activated';
+    worker.dispatchEvent(new Event('statechange'));
+    expect(await result).toBe(true);
   });
 });

@@ -1,6 +1,54 @@
 // PWA utility functions
 import { Workbox } from 'workbox-window';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
+
+let updateAvailable = false;
+let activatedUpdate = false;
+let appRegistration: ServiceWorkerRegistration | undefined;
+const updateListeners = new Set<() => void>();
+export const getUpdateAvailable = () => updateAvailable;
+export const subscribeToUpdates = (listener: () => void) => {
+  updateListeners.add(listener);
+  return () => { updateListeners.delete(listener); };
+};
+export const useSystemUpdate = () => useSyncExternalStore(subscribeToUpdates, getUpdateAvailable);
+
+export const applySystemUpdate = async (): Promise<boolean> => {
+  const worker = appRegistration?.waiting;
+  if (!worker) return activatedUpdate;
+  return new Promise(resolve => {
+    const finish = (success: boolean) => {
+      window.clearTimeout(timeout);
+      worker.removeEventListener('statechange', onStateChange);
+      resolve(success);
+    };
+    const onStateChange = () => {
+      if (worker.state === 'activated') finish(true);
+      else if (worker.state === 'redundant') finish(false);
+    };
+    const timeout = window.setTimeout(() => finish(false), 15000);
+    worker.addEventListener('statechange', onStateChange);
+    worker.postMessage({ type: 'SKIP_WAITING' });
+    onStateChange();
+  });
+};
+
+const monitorUpdates = (registration: ServiceWorkerRegistration) => {
+  appRegistration = registration;
+  if (registration.waiting) showUpdateNotification();
+  let checking = false, lastCheck = 0;
+  const check = async () => {
+    if (document.visibilityState === 'hidden' || !navigator.onLine || checking || Date.now() - lastCheck < 30000) return;
+    checking = true;
+    lastCheck = Date.now();
+    try { await registration.update(); } catch { /* Retry on the next foreground check. */ }
+    finally { checking = false; }
+  };
+  window.setInterval(() => { void check(); }, 60000);
+  window.addEventListener('focus', () => { void check(); });
+  window.addEventListener('online', () => { void check(); });
+  document.addEventListener('visibilitychange', () => { void check(); });
+};
 
 // PWA installation prompt
 export interface BeforeInstallPromptEvent extends Event {
@@ -152,10 +200,15 @@ export const initializePWA = async (): Promise<void> => {
       });
       
       // Listen for activated
-      wb.addEventListener('activated', () => {
+      wb.addEventListener('activated', event => {
+        if (event.isUpdate) {
+          activatedUpdate = true;
+          showUpdateNotification();
+        }
       });
       // Registration can emit waiting immediately when an update already exists.
-      await wb.register();
+      const registration = await wb.register();
+      if (registration) monitorUpdates(registration);
     }
     
   } catch (error) {
@@ -200,11 +253,8 @@ export const getInstallState = (): PWAInstallState => {
 
 // Show update notification
 export const showUpdateNotification = (): void => {
-  // This would typically show a toast notification or modal
-  // You can integrate this with your UI notification system
-  if (confirm('新版本可用！是否立即更新？')) {
-    window.location.reload();
-  }
+  updateAvailable = true;
+  updateListeners.forEach(listener => listener());
 };
 
 // Check for updates and activate a waiting worker when one is available.
