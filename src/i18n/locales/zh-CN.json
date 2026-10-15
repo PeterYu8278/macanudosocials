@@ -1,4 +1,28 @@
 {
+  "whatsappConnection": {
+    "title": "WhatsApp 连接", "replacement": "更换通道", "channelId": "新 Channel ID", "token": "新 API Token",
+    "connectActive": "连接当前通道", "migrate": "迁移当前凭证", "saveCandidate": "保存候选通道",
+    "candidate": "候选通道", "candidateSaved": "候选通道已保存，当前通道未改变。",
+    "connectCandidate": "连接候选通道", "activate": "启用通道", "confirmSwitch": "确认切换通道",
+    "switchSummary": "将当前通道 {{old}} 切换为 {{next}}（{{account}}）？旧任务不会通过新通道重新发送，旧通道不会自动退出。",
+    "activated": "托管通道已启用", "scanTitle": "关联 WhatsApp", "qrAlt": "WhatsApp 设备关联二维码",
+    "restart": "重新连接", "verified": "已验证", "unverified": "未验证",
+    "requestFailed": "暂时无法检查连接，请重试。", "invalidCredentials": "无法读取托管凭证，请更换凭证或恢复加密密钥。",
+    "keyMissing": "服务器尚未配置加密密钥，暂时无法迁移凭证或更换通道。",
+    "connectionBusy": "另一位管理员正在管理此连接。",
+    "source": { "managed": "数据库托管凭证", "environment": "环境变量凭证", "database-legacy": "旧数据库凭证", "legacy-config": "旧配置凭证" },
+    "status": { "unknown": "状态未知", "qr": "等待扫码", "connecting": "连接中", "connected": "已连接", "disconnected": "已断开", "stopped": "通道已停止", "expired": "扫码会话已过期" },
+    "errors": {
+      "encryption-key-missing": "服务器尚未配置加密密钥。", "credentials-invalid": "凭证或加密密钥无效。",
+      "invalid-credentials": "请输入有效的 Channel ID 与 API Token。", "credentials-missing": "请先配置通道及凭证。",
+      "connection-busy": "连接请求正在处理中，请稍候重试。", "connection-changed": "当前通道已改变，请刷新后继续。",
+      "candidate-expired": "候选通道已过期或改变，请重新保存凭证。", "session-expired": "扫码会话已过期，请重新连接。",
+      "channel-mismatch": "Token 不属于所填通道，请核对 Channel ID 与 Token。", "account-mismatch": "关联的 WhatsApp 账号已改变，请通过更换通道确认新账号。",
+      "identity-missing": "无法验证已连接的账号。", "verification-required": "请先完成通道验证。",
+      "connection-unavailable": "Whapi 暂时不可用，请重试。", "provider-response-invalid": "Whapi 返回的数据无效。",
+      "qr-unsupported": "此通道类型不支持扫码关联。", "too-many-requests": "操作过于频繁，请稍候重试。"
+    }
+  },
   "homePrompts": {
     "label": "系统与设备提示",
     "expand": "查看详情与其他提示",

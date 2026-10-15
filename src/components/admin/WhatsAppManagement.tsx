@@ -8,6 +8,7 @@ import { normalizePhoneNumber } from '../../utils/phoneNormalization'
 import { formatWhatsAppMessage } from '../../utils/whatsappMessage'
 import { defaultWhatsAppSettings, type WhatsAppManagementState } from '../../types/whatsapp'
 import './WhatsAppManagement.css'
+import WhatsAppConnectionPanel from './WhatsAppConnectionPanel'
 
 const providers = ['manual', 'whapi', 'whatsmeow', 'waba'] as const
 export default function WhatsAppManagement() {
@@ -56,12 +57,12 @@ export default function WhatsAppManagement() {
   }, [tab])
   const save = async () => {
     setBusy(true)
-    try { apply(await whatsappRequest('save', { config: await form.validateFields() })); message.success(t('common.saveSuccess')) }
+    try { await whatsappRequest('save', { config: await form.validateFields() }); await load(); message.success(t('common.saveSuccess')) }
     catch (reason) { showError(reason) } finally { setBusy(false) }
   }
   const health = async () => {
     setBusy(true)
-    try { const result = await whatsappRequest<WhatsAppManagementState>('health'); apply(result); message.success(label('verified')) }
+    try { await whatsappRequest<WhatsAppManagementState>('health'); await load(); message.success(label('verified')) }
     catch (reason) { showError(reason) } finally { setBusy(false) }
   }
   const loadRecords = async () => {
@@ -112,8 +113,8 @@ export default function WhatsAppManagement() {
             <div className="whatsapp-channel-heading"><strong>{label(provider)}</strong><Tag color={provider === 'whapi' && state.whapiVerified ? 'green' : 'default'}>{label(status(provider))}</Tag></div>
             {provider === 'manual' && <Typography.Text type="secondary">{label('manualStatus')}</Typography.Text>}
             {provider === 'whapi' && <>
-              <Form.Item name={['whapi', 'channelId']} label="Channel ID"><Input maxLength={200} /></Form.Item>
-              {state.whapiUserId && <Typography.Text type="secondary">{label('userId')}: {state.whapiUserId}</Typography.Text>}
+              <Form.Item name={['whapi', 'channelId']} label="Channel ID"><Input maxLength={200} disabled={state.managed || !manager || busy || !!error} /></Form.Item>
+              {state.whapiUserId && <Typography.Text type="secondary">{label('userId')}: ***{state.whapiUserId.slice(-4)}</Typography.Text>}
               <Space wrap><Tag>{label(state.whapiCredentials ? 'credentialsConfigured' : 'credentialsMissing')}</Tag>
                 <Button icon={<CheckCircleOutlined />} onClick={health} disabled={!manager || busy || !state.whapiCredentials}>{label('verifyConnection')}</Button></Space>
               <div className="whatsapp-webhook">
@@ -146,6 +147,7 @@ export default function WhatsAppManagement() {
       </div>
       {tab !== 'records' && <div className="whatsapp-save"><Button icon={<SaveOutlined />} type="primary" onClick={save} loading={busy} disabled={!manager || !!error}>{t('common.save')}</Button></div>}
     </Form>
+    {tab === 'channels' && manager && !error && <WhatsAppConnectionPanel state={state} onChanged={load} />}
     {tab === 'testing' && <Form form={testForm} layout="vertical" onValuesChange={() => { setTestRequest(null); setLastStatus('') }}>
       <div className="whatsapp-settings-grid">
         <Form.Item name="phone" label={label('phone')} rules={[{ required: true }]}><Input inputMode="tel" maxLength={30} /></Form.Item>

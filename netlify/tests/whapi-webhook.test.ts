@@ -231,6 +231,28 @@ describe('Whapi delivery callbacks', () => {
     await request()
     expect(task().status).toBe('delivered')
   })
+  it('accepts retired channel receipts without sending registration replies on that channel', async () => {
+    m.documents.set(`${C.WHATSAPP_CONFIG}/settings`, { credentialMode: 'managed', config: { whapi: { channelId: 'new-channel' } } })
+    const key = createHash('sha256').update('channel-one').digest('hex')
+    m.documents.set(`${C.WHATSAPP_CONFIG}/retired-${key}`, { channelId: 'channel-one' })
+    expect((await request()).status).toBe(200)
+    expect(task().status).toBe('delivered')
+    vi.stubEnv('WHATSAPP_REGISTRATION_ENABLED', 'true')
+    await register()
+    expect(m.send).not.toHaveBeenCalled()
+    expect(m.urlButton).not.toHaveBeenCalled()
+  })
+  it('does not guess a channel for unbound legacy tasks after managed activation', async () => {
+    m.documents.get(`${C.WHATSAPP_CONFIG}/settings`).credentialMode = 'managed'
+    delete task().channelId
+    await request()
+    expect(task().status).toBe('accepted')
+  })
+  it('rejects attaching a send result to a task claimed on a different channel', async () => {
+    const db = initializeFirestore({} as any, { preferRest: true })
+    await expect(attachSubmission(db, 'task-one', 'different-channel', { status: 'accepted', messageId: 'another-message' })).rejects.toThrow('submission-channel-mismatch')
+    expect(task().channelId).toBe('channel-one')
+  })
   it('ignores unrelated callbacks and pending/deleted statuses', async () => {
     await request({ ...payload(), event: { type: 'messages', event: 'post' }, messages: [{ text: { body: 'private' } }] })
     await request(payload('pending'))

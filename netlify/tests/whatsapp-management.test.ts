@@ -69,6 +69,9 @@ describe('WhatsApp management gateway', () => {
     m.documents.set(`${C.USERS}/operator`, { role: 'admin' })
     expect((await request('save', { config: config() })).statusCode).toBe(403)
     expect((await request('test', send)).statusCode).toBe(403)
+    expect((await request('candidate-save', { channelId: 'test', token: 'secret' })).statusCode).toBe(403)
+    expect((await request('connection-start', { target: 'active' })).statusCode).toBe(403)
+    expect((await request('candidate-activate', { confirm: true })).statusCode).toBe(403)
   })
   it('does not activate channels whose integration is pending', async () => {
     for (const provider of ['waba', 'whatsmeow']) {

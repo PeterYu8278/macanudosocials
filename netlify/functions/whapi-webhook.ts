@@ -7,6 +7,7 @@ import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
 import { loadWhatsApp, submitWhapi, submitWhapiButtons, submitWhapiQuickReply, submitWhapiUrlButton } from './_shared/whatsapp'
 import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, registrationTokenHash, startRegistration, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { refreshWhapiConnection } from './_shared/whatsappConnection'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
 async function handleRegistrationMessage(db: any, payload: any) {
@@ -38,7 +39,10 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const registrationCommand = restartReferral
     ? `/register ${restartReferral}`
     : command === 'to start again' ? '/register' : text
-  const whapiToken = (await loadWhatsApp(db)).token
+  const connection = await loadWhatsApp(db)
+  if (connection.config && connection.config.whapi.channelId !== payload.channel_id) throw new Error('channel-changed')
+  if (connection.managed && !connection.verified) throw new Error('verification-required')
+  const whapiToken = connection.token
   if (!whapiToken) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
     throw new Error('whapi-token-missing')
@@ -58,6 +62,10 @@ async function handleRegistrationMessage(db: any, payload: any) {
   }
   const ref = registrationSessionRef(db, phone)
   const existing = (await ref.get()).data() as WhatsAppRegistrationSession | undefined
+  if (existing && connection.managed && existing.connectionBinding !== connection.binding && !/^\/register(?:\s|$)/i.test(registrationCommand)) {
+    await send('The WhatsApp channel has changed. Please send /register to start again.')
+    return
+  }
   const expired = existing && existing.expiresAtMs <= Date.now()
   if (expired) await ref.set({ step: 'expired', expiredAt: Timestamp.now() }, { merge: true })
 
@@ -105,14 +113,14 @@ async function handleRegistrationMessage(db: any, payload: any) {
       await sendLogin()
       return
     }
-    if (existing && !expired && ['awaiting-form', 'awaiting-final-confirm'].includes(existing.step)) {
+    if (existing && !expired && (!connection.managed || existing.connectionBinding === connection.binding) && ['awaiting-form', 'awaiting-final-confirm'].includes(existing.step)) {
       await send(existing.step === 'awaiting-final-confirm'
         ? 'Your registration details are awaiting confirmation. Please tap Confirm in the previous message or reply CONFIRM.'
         : 'Your registration link is still valid. Please use Register now in the previous message. To restart, send CANCEL first.')
       return
     }
     const registrationToken = createRegistrationToken()
-    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode)
+    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode, connection.binding)
     const baseUrl = process.env.URL || 'https://macanudosocials.com'
     const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
     const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
@@ -184,13 +192,23 @@ export const eventHandler: EventHandler = async event => {
     }
     const db = initializeFirestore(getApps()[0], { preferRest: true })
     const settings = db.collection(C.WHATSAPP_CONFIG).doc('settings')
-    const channelId = (await settings.get()).data()?.config?.whapi?.channelId
-    if (!channelId || payload.channel_id !== channelId) return reply(403)
+    const config = (await settings.get()).data()
+    const activeChannel = config?.config?.whapi?.channelId
+    const channelId = payload.channel_id
+    if (typeof channelId !== 'string' || !channelId || channelId.length > 200) return reply(403)
+    const active = channelId === activeChannel
+    const retired = active ? null : (await db.collection(C.WHATSAPP_CONFIG).doc(`retired-${createHash('sha256').update(channelId).digest('hex')}`).get()).data()
+    if (!active && retired?.channelId !== channelId) return reply(403)
     const rawEvent = payload.event || {}
     const method = rawEvent.method || rawEvent.event
     const eventType = rawEvent.type || (typeof rawEvent.event === 'string' ? rawEvent.event.split('.')[0] : '')
     const eventMethod = typeof method === 'string' ? method.split('.').at(-1) : method
+    if (['channel', 'channels', 'users'].includes(eventType)) {
+      if (active) await refreshWhapiConnection(db, channelId)
+      return reply(200)
+    }
     if (eventType === 'messages' && ['post', 'put'].includes(eventMethod)) {
+      if (!active) return reply(200)
       const message = Array.isArray(payload.messages) ? payload.messages[0] : null
       const messageId = typeof message?.id === 'string' ? message.id : ''
       const owner = randomBytes(16).toString('hex')
@@ -239,9 +257,9 @@ export const eventHandler: EventHandler = async event => {
       receipts.push({ id: status.id, status: status.status === 'played' ? 'read' : status.status, statusAtMs: seconds * 1000 })
     }
     for (let index = 0; index < receipts.length; index += 5) {
-      await Promise.all(receipts.slice(index, index + 5).map(receipt => receiveReceipt(db, channelId, receipt.id, receipt)))
+      await Promise.all(receipts.slice(index, index + 5).map(receipt => receiveReceipt(db, channelId, receipt.id, receipt, config?.credentialMode !== 'managed')))
     }
-    await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
+    if (active) await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
     return reply(200)
   } catch { return reply(503) }
 }

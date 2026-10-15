@@ -1,8 +1,8 @@
 import type { Firestore } from 'firebase-admin/firestore'
 import { formatWhatsAppMessage } from '../../../src/utils/whatsappMessage'
-import { createHash } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { defaultWhatsAppSettings, type WhatsAppSettings } from '../../../src/types/whatsapp'
+import { connectionError, resolveWhatsAppCredentials } from './whatsappCredentials'
 
 export async function loadWhatsApp(db: Firestore) {
   const saved = (await db.collection(C.WHATSAPP_CONFIG).doc('settings').get()).data()
@@ -15,10 +15,20 @@ export async function loadWhatsApp(db: Firestore) {
     whapi: { channelId: legacy?.channelId || '' },
   }
   const secret = (await db.collection(C.WHATSAPP_CONFIG).doc('credentials').get()).data()
-  const token = process.env.WHAPI_API_TOKEN || secret?.whapiToken || legacy?.apiToken || ''
-  const tokenHash = createHash('sha256').update(token).digest('hex')
-  return { config, token, tokenHash, legacyToken: legacy?.apiToken || '', migrationToken: secret?.whapiToken || legacy?.apiToken || '',
-    verified: saved?.whapiVerified === true && saved?.whapiTokenHash === tokenHash }
+  const credentials = resolveWhatsAppCredentials(saved, secret, legacy)
+  return { config, ...credentials, legacyToken: legacy?.apiToken || '', migrationToken: secret?.whapiToken || legacy?.apiToken || '',
+    verified: !!credentials.token && saved?.whapiVerified === true && saved?.whapiTokenHash === credentials.tokenHash }
+}
+
+// Bind work to the channel snapshot it was claimed with, never to a later replacement.
+export async function assertWhatsAppBinding(db: Firestore, transaction: any, binding: string | undefined, requireVerified = false) {
+  if (!binding) return
+  const settings = (await transaction.get(db.collection(C.WHATSAPP_CONFIG).doc('settings'))).data()
+  const secret = (await transaction.get(db.collection(C.WHATSAPP_CONFIG).doc('credentials'))).data()
+  const legacy = (await transaction.get(db.collection(C.APP_CONFIG).doc('default'))).data()?.whapi
+  const credentials = resolveWhatsAppCredentials(settings, secret, legacy)
+  if (credentials.binding !== binding) throw connectionError('connection-changed')
+  if (requireVerified && (!credentials.token || settings?.whapiVerified !== true || settings?.whapiTokenHash !== credentials.tokenHash)) throw connectionError('verification-required')
 }
 
 export async function submitWhapi(token: string, phone: string, text: string) {

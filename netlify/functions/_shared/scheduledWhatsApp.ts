@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto'
 import { Timestamp, type Firestore } from 'firebase-admin/firestore'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
-import { loadWhatsApp, submitWhapi } from './whatsapp'
+import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './whatsapp'
 import { attachSubmission } from './whapiReceipts'
 
 const DAY = 86400000
@@ -88,7 +88,9 @@ export async function runScheduledWhatsApp(db: Firestore, now = new Date()) {
       const phone = normalizePhoneNumber(user?.profile?.phone || user?.phone || '')
       if (!eligible || !user || ['inactive', 'suspended'].includes(user.status)
         || user.preferences?.whatsapp !== true || !phone) { result.skipped++; return null }
+      if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
       transaction.create(task, { provider: 'whapi', kind: reminder.kind, userId: reminder.userId,
+        channelId: config.whapi.channelId, credentialVersion: loaded.credentialVersion || 'legacy',
         relatedId: reminder.relatedId, milestone: reminder.milestone, source: 'scheduled',
         phone: `***${phone.slice(-4)}`, test: false, status: 'submitting', createdAt: Timestamp.now() })
       return { phone, name: user.displayName || user.name || 'Member' }

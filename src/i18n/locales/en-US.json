@@ -1,4 +1,28 @@
 {
+  "whatsappConnection": {
+    "title": "WhatsApp Connection", "replacement": "Replacement Channel", "channelId": "New Channel ID", "token": "New API Token",
+    "connectActive": "Connect Current Channel", "migrate": "Migrate Current Credentials", "saveCandidate": "Save Candidate",
+    "candidate": "Candidate Channel", "candidateSaved": "Candidate saved. The current channel is unchanged.",
+    "connectCandidate": "Connect Candidate", "activate": "Activate Channel", "confirmSwitch": "Confirm Channel Switch",
+    "switchSummary": "Switch from {{old}} to {{next}} ({{account}})? Existing tasks will not be resent through the new channel. The old channel will not be logged out.",
+    "activated": "Managed channel activated", "scanTitle": "Link WhatsApp", "qrAlt": "WhatsApp linking QR code",
+    "restart": "Restart Connection", "verified": "Verified", "unverified": "Not verified",
+    "requestFailed": "Connection check unavailable. Please retry.", "invalidCredentials": "Managed credentials cannot be read. Replace the credentials or restore the encryption key.",
+    "keyMissing": "Server encryption key is not configured. Credential migration and replacement are unavailable.",
+    "connectionBusy": "Another administrator is managing this connection.",
+    "source": { "managed": "Managed credentials", "environment": "Environment credentials", "database-legacy": "Legacy database credentials", "legacy-config": "Legacy configuration" },
+    "status": { "unknown": "Status unknown", "qr": "Awaiting QR scan", "connecting": "Connecting", "connected": "Connected", "disconnected": "Disconnected", "stopped": "Channel stopped", "expired": "Connection session expired" },
+    "errors": {
+      "encryption-key-missing": "Server encryption key is not configured.", "credentials-invalid": "Invalid credentials or encryption key.",
+      "invalid-credentials": "Enter a valid Channel ID and API Token.", "credentials-missing": "Configure the channel and credentials first.",
+      "connection-busy": "A connection request is in progress. Please wait or retry.", "connection-changed": "The active channel changed. Reload before continuing.",
+      "candidate-expired": "The candidate expired or changed. Save the credentials again.", "session-expired": "The connection session expired. Restart the connection.",
+      "channel-mismatch": "The token belongs to a different channel. Check the Channel ID and Token.", "account-mismatch": "The linked WhatsApp account changed. Use Replacement Channel to confirm the new account.",
+      "identity-missing": "The connected account could not be verified.", "verification-required": "Verify the channel before continuing.",
+      "connection-unavailable": "Whapi is temporarily unavailable. Please retry.", "provider-response-invalid": "Whapi returned an invalid response.",
+      "qr-unsupported": "This channel type does not support QR linking.", "too-many-requests": "Too many requests. Please wait before retrying."
+    }
+  },
   "homePrompts": {
     "label": "System and device notices",
     "expand": "Show details and other notices",

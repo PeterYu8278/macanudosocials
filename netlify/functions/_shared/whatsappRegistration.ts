@@ -7,6 +7,7 @@ import { MemberIdentityError } from './memberIdentity'
 import { lockMemberIdentity } from './memberIdentityLock'
 
 export type RegistrationStep = 'awaiting-form' | 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
+  | 'completed' | 'cancelled' | 'expired' | 'locked'
 
 export interface WhatsAppRegistrationSession {
   phone: string
@@ -17,6 +18,7 @@ export interface WhatsAppRegistrationSession {
   referralCode?: string
   passwordCiphertext?: string
   registrationTokenHash?: string
+  connectionBinding?: string
   expiresAtMs: number
   attempts: number
   createdAt: Timestamp
@@ -60,12 +62,13 @@ export function messageText(message: any) {
   return typeof button?.title === 'string' ? button.title.trim().slice(0, 100) : ''
 }
 
-export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string, referralCode?: string) {
+export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string, referralCode?: string, connectionBinding?: string) {
   const now = Timestamp.now()
   const session: WhatsAppRegistrationSession = {
     phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : tokenHash ? 'awaiting-form' : 'awaiting-confirmation',
     ...(displayName ? { displayName } : {}), ...(email ? { email } : {}), expiresAtMs: Date.now() + 15 * 60_000,
     ...(tokenHash ? { registrationTokenHash: tokenHash } : {}), ...(referralCode ? { referralCode } : {}),
+    ...(connectionBinding ? { connectionBinding } : {}),
     attempts: 0, createdAt: now, updatedAt: now,
   }
   await registrationSessionRef(db, phone).set(session)

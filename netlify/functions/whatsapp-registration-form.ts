@@ -57,6 +57,10 @@ export const eventHandler: EventHandler = async event => {
     try { logoUrl = await loadAppLogo(db) } catch { /* Keep the configured public fallback logo. */ }
     const session = await loadSession(db, token)
     if (!session) return response(410, page('Registration link expired', recoveryBody(referralCode, 'Registration link expired'), logoUrl))
+    const whatsapp = await loadWhatsApp(db)
+    if (whatsapp.managed && (!whatsapp.verified || session.data.connectionBinding !== whatsapp.binding)) {
+      return response(410, page('Registration link expired', recoveryBody(referralCode, 'WhatsApp channel changed. Please start registration again.'), logoUrl))
+    }
     if (event.httpMethod === 'GET') return response(200, page('Register for Macanudo Socials', '<div class="intro"><h1>Register for Macanudo Socials</h1><p>Enter your name, email, and login password.</p></div><form method="post" onsubmit="const button=this.querySelector(\'button[type=submit]\');if(button.disabled)return false;button.disabled=true;button.textContent=\'Submitting...\';">' + '<div class="field"><label for="phone">Phone</label><input id="phone" type="tel" value="' + escapeHtml(session.data.phone) + '" readonly autocomplete="tel"></div>' + '<div class="field"><label for="name">Name</label><input id="name" name="name" placeholder="Enter your name" required minlength="2" maxlength="128" autocomplete="name"></div><div class="field"><label for="email">Email</label><input id="email" name="email" type="email" placeholder="you@example.com" required maxlength="254" autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" placeholder="At least 6 characters" required minlength="6" maxlength="128" autocomplete="new-password"></div><div class="field"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" placeholder="Re-enter your password" required minlength="6" maxlength="128" autocomplete="new-password"></div><button type="submit">Submit registration</button></form>', logoUrl))
     const form = new URLSearchParams(event.body || '')
     const name = (form.get('name') || '').trim()
@@ -65,7 +69,6 @@ export const eventHandler: EventHandler = async event => {
     const confirmPassword = form.get('confirmPassword') || ''
     if (name.length < 2 || name.length > 128 || !email || password.length < 6 || password.length > 128 || password !== confirmPassword) return response(400, page('Invalid registration details', '<h1>Invalid registration details</h1><p>Please check your name, email, and password. Passwords must match and contain at least 6 characters.</p><small>请确认姓名、Email 和两次密码输入正确，密码至少 6 位。</small>', logoUrl))
     await session.ref.set({ ...session.data, displayName: name, email, passwordCiphertext: encryptRegistrationPassword(password), step: 'awaiting-final-confirm', updatedAt: Timestamp.now() })
-    const whatsapp = await loadWhatsApp(db)
     const confirmation = `Welcome to Macanudo Socials. Please confirm your registration details:\nName: ${name}\nPhone: ${session.data.phone}\nEmail: ${email}${session.data.referralCode ? `\nReferral code: ${session.data.referralCode}` : ''}`
     const result = await submitWhapiButtons(whatsapp.token, session.data.phone, confirmation)
     if (result.status !== 'accepted') await submitWhapi(whatsapp.token, session.data.phone, `${confirmation}\n\nReply CONFIRM to continue or CANCEL to cancel.`)

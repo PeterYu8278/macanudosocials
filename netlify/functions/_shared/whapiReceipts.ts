@@ -16,13 +16,13 @@ export function advanceReceipt(current: Partial<Receipt> | undefined, next: Rece
   return next
 }
 
-export async function receiveReceipt(db: Firestore, channelId: string, messageId: string, next: Receipt) {
+export async function receiveReceipt(db: Firestore, channelId: string, messageId: string, next: Receipt, allowLegacy = true) {
   const ref = db.collection(C.WHATSAPP_RECEIPTS).doc(receiptId(channelId, messageId))
   // Also reconcile pre-webhook records that already stored a provider message ID.
   const matches = await db.collection(C.WHATSAPP_TASKS).where('messageId', '==', messageId).limit(2).get()
   const matching = matches.docs.filter(doc => {
     const task = doc.data()
-    return task.provider === 'whapi' && (!task.channelId || task.channelId === channelId)
+    return task.provider === 'whapi' && ((allowLegacy && !task.channelId) || task.channelId === channelId)
   })
   await db.runTransaction(async transaction => {
     const previous = (await transaction.get(ref)).data()
@@ -33,7 +33,7 @@ export async function receiveReceipt(db: Firestore, channelId: string, messageId
     const effective = changed || previous as Receipt | undefined
     if (changed) transaction.set(ref, { ...changed, channelId, messageId, taskId,
       receivedAt: Timestamp.now(), expiresAt: Timestamp.fromMillis(Date.now() + 30 * 86400000) }, { merge: true })
-    if (taskRef && task?.provider === 'whapi' && (!task.channelId || task.channelId === channelId) && effective) {
+    if (taskRef && task?.provider === 'whapi' && ((allowLegacy && !task.channelId) || task.channelId === channelId) && effective) {
       const update = advanceReceipt(task.status === 'sent' || task.status === 'failed' || task.status === 'delivered' || task.status === 'read'
         ? task as Receipt : undefined, effective)
       if (update) transaction.update(taskRef, { ...update, updatedAt: Timestamp.now() })
@@ -49,6 +49,7 @@ export async function attachSubmission(db: Firestore, taskId: string, channelId:
   return db.runTransaction(async transaction => {
     const task = (await transaction.get(taskRef)).data()
     const receipt = receiptRef ? (await transaction.get(receiptRef)).data() : undefined
+    if (task?.channelId && task.channelId !== channelId) throw new Error('submission-channel-mismatch')
     const existingStatus = task?.status && ['sent', 'delivered', 'read'].includes(task.status) ? task.status : ''
     const status = receipt?.status || existingStatus || submitted.status
     transaction.update(taskRef, { ...submitted, channelId, status,

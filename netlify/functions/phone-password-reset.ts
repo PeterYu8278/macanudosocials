@@ -4,7 +4,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { initializeFirestore } from './_shared/firestoreMonitoring'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
-import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
+import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './_shared/whatsapp'
 
 const reply = (statusCode: number, code?: string) => ({
   statusCode,
@@ -31,7 +31,8 @@ export const eventHandler: Handler = async event => {
     }
     const db = initializeFirestore(getApps()[0], { preferRest: true })
     stage = 'load_channel'
-    const { config, token, verified } = await loadWhatsApp(db)
+    const loaded = await loadWhatsApp(db)
+    const { config, token, verified } = loaded
     const unavailable = !config.enabled ? 'channel_disabled'
       : !config.features.passwordReset ? 'recovery_disabled'
         : config.defaultProvider !== 'whapi' ? 'provider_unavailable'
@@ -54,6 +55,7 @@ export const eventHandler: Handler = async event => {
           : { startedAt: now, count: 0 }
       })
       if (attempts.some(attempt => attempt.count >= 5)) return false
+      if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
       refs.forEach((ref, index) => transaction.set(ref, { ...attempts[index], count: attempts[index].count + 1, expiresAt: new Date(now + 300000) }))
       return true
     })
