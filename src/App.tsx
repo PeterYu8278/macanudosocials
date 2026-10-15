@@ -344,7 +344,7 @@ const AppContent: React.FC = () => {
             }} />
 
             <div style={{ position: 'relative', zIndex: 1, width: '100%', minWidth: 0 }}>
-              {user && ['/', '/admin'].includes(location.pathname) && <SystemUpdateBanner />}
+              {user && location.pathname === '/admin' && <SystemUpdateBanner />}
               <Suspense fallback={<PageLoading />}>
                 <Routes>
                   {/* 认证路由 */}

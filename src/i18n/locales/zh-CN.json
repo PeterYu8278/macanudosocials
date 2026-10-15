@@ -1,4 +1,10 @@
 {
+  "homePrompts": {
+    "label": "系统与设备提示",
+    "expand": "查看详情与其他提示",
+    "collapse": "收起提示",
+    "count": "{{count}} 条提示"
+  },
   "systemUpdate": {
     "available": "系统有新版本",
     "description": "新版本已准备就绪，请完成当前操作后更新系统。",

@@ -1,4 +1,11 @@
 {
+  "homePrompts": {
+    "label": "System and device notices",
+    "expand": "Show details and other notices",
+    "collapse": "Collapse notices",
+    "count_one": "{{count}} notice",
+    "count_other": "{{count}} notices"
+  },
   "systemUpdate": {
     "available": "System update available",
     "description": "A new version is ready. Update after finishing your current operation.",
