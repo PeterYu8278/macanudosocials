@@ -1528,6 +1528,7 @@
     "passwordResetFailed": "Failed to send reset email",
     "resetByEmail": "Reset by Email",
     "confirmWhatsappReset": "Confirm WhatsApp Reset",
+    "whatsappResetConfirm": "Send a password reset link via WhatsApp to {{phone}}? The password will only change after the user completes the reset.",
     "whatsappResetSuccess": "WhatsApp reset instruction sent",
     "resetByWhatsapp": "Reset by WhatsApp",
     "generateResetContentFailed": "Failed to generate reset content",

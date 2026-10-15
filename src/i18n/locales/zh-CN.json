@@ -1527,6 +1527,7 @@
     "passwordResetFailed": "发送密码重置邮件失败",
     "resetByEmail": "通过邮件重置",
     "confirmWhatsappReset": "确认通过 WhatsApp 重置",
+    "whatsappResetConfirm": "将通过 WhatsApp 向 {{phone}} 发送重置密码链接，确认发送？用户完成重置后密码才会更改。",
     "whatsappResetSuccess": "WhatsApp 重置指令已发送",
     "resetByWhatsapp": "通过 WhatsApp 重置",
     "generateResetContentFailed": "生成重置内容失败",

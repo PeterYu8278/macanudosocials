@@ -29,7 +29,9 @@
 
   /* 渐变背景 */
   --cigar-gradient-primary: linear-gradient(135deg, #0a0a0a 0%, #1a1a1a 50%, #2d2d2d 100%);
-  --cigar-gradient-gold: linear-gradient(135deg, #ffd700 0%, #ffed4e 50%, #e6b800 100%);
+  --cigar-gradient-gold: linear-gradient(to right, #FDE08D, #C48D3A);
+  --cigar-gradient-gold-hover: linear-gradient(to right, #FFE9A0, #D4A050);
+  --cigar-gradient-gold-active: linear-gradient(to right, #E8C777, #B17C30);
   --cigar-gradient-dark: linear-gradient(135deg, #0a0a0a 0%, #0f0f0f 100%);
 
   /* 阴影效果 */
@@ -207,16 +209,42 @@ a:hover {
   transition: all var(--cigar-transition-normal);
 }
 
+/* Apply the shared finish to ordinary primary actions, including portaled dialogs. */
+.ant-btn.ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-background-ghost):not(.cigar-button-success):not(.cigar-button-warning):not(:disabled):not(.ant-btn-disabled) {
+  background: var(--cigar-gradient-gold) !important;
+  border-color: #C48D3A !important;
+  color: #111 !important;
+}
+
+.ant-btn.ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-background-ghost):not(.cigar-button-success):not(.cigar-button-warning):not(:disabled):not(.ant-btn-disabled):hover {
+  background: var(--cigar-gradient-gold-hover) !important;
+  border-color: #D4A050 !important;
+}
+
+.ant-btn.ant-btn-primary:not(.ant-btn-dangerous):not(.ant-btn-background-ghost):not(.cigar-button-success):not(.cigar-button-warning):not(:disabled):not(.ant-btn-disabled):active {
+  background: var(--cigar-gradient-gold-active) !important;
+  border-color: #B17C30 !important;
+}
+
+.ant-btn.ant-btn-primary:disabled,
+.ant-btn.ant-btn-primary.ant-btn-disabled {
+  background: #333 !important;
+  border-color: #444 !important;
+  color: #888 !important;
+  box-shadow: none !important;
+  filter: none !important;
+}
+
 /* 统一的无边框金色渐变按钮样式（用于创建/保存/确认等提交类按钮） */
 .cigar-btn-gradient {
-  background: linear-gradient(to right, #FDE08D, #C48D3A) !important;
+  background: var(--cigar-gradient-gold) !important;
   color: #111 !important;
   font-weight: 600 !important;
   box-shadow: 0 4px 14px rgba(196, 141, 58, 0.35) !important;
 }
 
-.cigar-btn-gradient:hover,
-.cigar-btn-gradient:focus {
+.cigar-btn-gradient:not(:disabled):not(.ant-btn-disabled):hover,
+.cigar-btn-gradient:not(:disabled):not(.ant-btn-disabled):focus {
   filter: brightness(1.05);
   box-shadow: 0 6px 18px rgba(196, 141, 58, 0.45) !important;
 }
@@ -1506,6 +1534,26 @@ a:hover {
 
 .gemini-models-dropdown .ant-select-item-option-content {
   color: #FFFFFF !important;
+}
+
+/* Shared checkbox finish; disabled controls retain Ant Design's muted state. */
+.ant-checkbox.ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner {
+  background: var(--cigar-gradient-gold) !important;
+  border-color: #C48D3A !important;
+}
+
+.ant-checkbox-wrapper:hover .ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner,
+.ant-checkbox.ant-checkbox-checked:not(.ant-checkbox-disabled):hover .ant-checkbox-inner {
+  background: var(--cigar-gradient-gold-hover) !important;
+  border-color: #D4A050 !important;
+}
+
+.ant-checkbox.ant-checkbox-checked:not(.ant-checkbox-disabled) .ant-checkbox-inner::after {
+  border-color: #111 !important;
+}
+
+.ant-checkbox.ant-checkbox-indeterminate:not(.ant-checkbox-disabled) .ant-checkbox-inner::after {
+  background: var(--cigar-gradient-gold) !important;
 }
 
 /* Gold gradient Switch (checked state) */

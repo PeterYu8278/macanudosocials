@@ -2479,7 +2479,7 @@ const AdminUsers: React.FC = () => {
                 const phone = (resettingPassword as any).profile.phone
                 modal.confirm({
                   title: <span style={{ color: '#FFFFFF' }}>{t('usersAdmin.confirmWhatsappReset')}</span>,
-                  content: <span style={{ color: '#FFFFFF' }}>{t('usersAdmin.resetPasswordConfirm', { name: phone })}</span>,
+                  content: <span style={{ color: '#FFFFFF' }}>{t('usersAdmin.whatsappResetConfirm', { phone })}</span>,
                   okText: t('common.confirm'),
                   cancelText: t('common.cancel'),
                   centered: true,

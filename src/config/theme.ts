@@ -82,10 +82,18 @@ export const cigarTheme: ThemeConfig = {
       darkItemColor: '#c0c0c0',
     },
     Button: {
+      colorPrimary: '#C48D3A',
+      colorPrimaryHover: '#D4A050',
+      colorPrimaryActive: '#B17C30',
       primaryShadow: '0 2px 0 rgba(255, 215, 0, 0.1)',
       defaultShadow: '0 2px 0 rgba(0, 0, 0, 0.02)',
       dangerShadow: '0 2px 0 rgba(255, 77, 79, 0.1)',
       primaryColor: '#000000',
+    },
+    Checkbox: {
+      colorPrimary: '#C48D3A',
+      colorPrimaryHover: '#D4A050',
+      colorPrimaryBorder: '#C48D3A',
     },
     Card: {
       colorBgContainer: '#1a1a1a',
