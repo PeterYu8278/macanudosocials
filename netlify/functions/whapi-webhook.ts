@@ -10,7 +10,9 @@ import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWh
 import { refreshWhapiConnection } from './_shared/whatsappConnection'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
-async function handleRegistrationMessage(db: any, payload: any) {
+export async function handleRegistrationMessage(db: any, payload: any, transport?: {
+  binding: string; send: (phone: string, text: string) => Promise<{ status: string; messageId: string }>
+}) {
   if (process.env.WHATSAPP_REGISTRATION_ENABLED !== 'true') {
     console.info('whatsapp-registration', { stage: 'disabled' })
     return
@@ -40,25 +42,31 @@ async function handleRegistrationMessage(db: any, payload: any) {
     ? `/register ${restartReferral}`
     : command === 'to start again' ? '/register' : text
   const connection = await loadWhatsApp(db)
-  if (connection.config && connection.config.whapi.channelId !== payload.channel_id) throw new Error('channel-changed')
-  if (connection.managed && !connection.verified) throw new Error('verification-required')
+  if (!transport && connection.config?.defaultProvider === 'whatsmeow') return
+  if (!transport && connection.config && connection.config.whapi.channelId !== payload.channel_id) throw new Error('channel-changed')
+  if (!transport && connection.managed && !connection.verified) throw new Error('verification-required')
+  if (transport) { connection.binding = transport.binding; connection.managed = true }
   const whapiToken = connection.token
-  if (!whapiToken) {
+  if (!whapiToken && !transport) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
     throw new Error('whapi-token-missing')
   }
   const send = async (body: string) => {
-    if ((await submitWhapi(whapiToken, phone, body)).status !== 'accepted') throw new Error('whapi-send-failed')
+    const result = transport ? await transport.send(phone, body) : await submitWhapi(whapiToken, phone, body)
+    if (!['accepted', 'sent'].includes(result.status)) throw new Error('whatsapp-send-failed')
   }
+  const urlButton = (body: string, title: string, url: string) => transport
+    ? transport.send(phone, `${body}\n${url}`) : submitWhapiUrlButton(whapiToken, phone, body, title, url)
   const sendLogin = async () => {
     const loginUrl = `${(process.env.URL || 'https://macanudosocials.com').replace(/\/$/, '')}/?open=login&phone=${encodeURIComponent(phone)}`
     const body = 'This WhatsApp number is already registered. Tap Login now to sign in. If you forgot your password, use the password reset option on the website.'
-    const result = await submitWhapiUrlButton(whapiToken, phone, body, 'Login now', loginUrl)
-    if (result.status !== 'accepted') await send(`${body}\n${loginUrl}`)
+    const result = await urlButton(body, 'Login now', loginUrl)
+    if (result.status === 'failed') await send(`${body}\n${loginUrl}`)
   }
   const sendConfirmation = async (body: string) => {
+    if (transport) { await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`); return }
     const result = await submitWhapiButtons(whapiToken, phone, body)
-    if (result.status !== 'accepted') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
+    if (result.status === 'failed') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
   }
   const ref = registrationSessionRef(db, phone)
   const existing = (await ref.get()).data() as WhatsAppRegistrationSession | undefined
@@ -121,13 +129,14 @@ async function handleRegistrationMessage(db: any, payload: any) {
     }
     const registrationToken = createRegistrationToken()
     await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode, connection.binding)
+    if (transport) await ref.set({ provider: 'whatsmeow' }, { merge: true })
     const baseUrl = process.env.URL || 'https://macanudosocials.com'
     const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
     const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
     const formMessage = 'Welcome to Macanudo Socials. Tap Register now to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
     try {
-      const button = await submitWhapiUrlButton(whapiToken, phone, formMessage, 'Register now', formUrl)
-      if (button.status !== 'accepted') await send(`${formMessage}\n${formUrl}`)
+      const button = await urlButton(formMessage, 'Register now', formUrl)
+      if (button.status === 'failed') await send(`${formMessage}\n${formUrl}`)
     } catch (error) {
       // Failed delivery must not leave the user stuck with an inaccessible valid link.
       await db.runTransaction(async (transaction: any) => {
@@ -147,8 +156,9 @@ async function handleRegistrationMessage(db: any, payload: any) {
   if (command === 'cancel' || command === '/cancel') {
     if (existing) await ref.set({ step: 'cancelled', cancelledAt: Timestamp.now() }, { merge: true })
     const restartId = existing?.referralCode ? `register_start_${existing.referralCode}` : 'register_start'
+    if (transport) { await send('Registration cancelled.\n\nReply /register to start again.'); return }
     const result = await submitWhapiQuickReply(whapiToken, phone, 'Registration cancelled.', 'To start again', restartId)
-    if (result.status !== 'accepted') await send('Registration cancelled.\n\nReply /register to start again.')
+    if (result.status === 'failed') await send('Registration cancelled.\n\nReply /register to start again.')
     return
   }
   if (!existing || expired || existing.step !== 'awaiting-final-confirm') return
@@ -162,8 +172,8 @@ async function handleRegistrationMessage(db: any, payload: any) {
   try {
     const result = await createWhatsAppMember(db, session)
     const successText = '注册成功。请点击 Open App 打开 Macanudo Socials。'
-    const button = await submitWhapiUrlButton(whapiToken, phone, successText, 'Open App', process.env.URL || 'https://macanudosocials.com')
-    if (button.status !== 'accepted') await send(successText)
+    const button = await urlButton(successText, 'Open App', process.env.URL || 'https://macanudosocials.com')
+    if (button.status === 'failed') await send(successText)
   } catch (error) {
     const code = (error as { code?: string })?.code
     if (code === 'email-and-phone-in-use') await send('Both this email and phone number are already registered. Please use a different email and phone number.')

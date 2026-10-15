@@ -4,6 +4,7 @@ import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
 import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './whatsapp'
 import { attachSubmission } from './whapiReceipts'
+import { assertMeowBinding, loadMeow, submitMeow } from './whatsmeow'
 
 const DAY = 86400000
 const date = (value: any): Date => value?.toDate?.() || new Date(value)
@@ -23,7 +24,10 @@ export async function runScheduledWhatsApp(db: Firestore, now = new Date()) {
   const loaded = await loadWhatsApp(db)
   const result = { accepted: 0, failed: 0, unknown: 0, duplicate: 0, skipped: 0, deferred: false }
   const { config } = loaded
-  if (!config.enabled || config.defaultProvider !== 'whapi' || !loaded.token || !loaded.verified) return result
+  if (!config.enabled || !['whapi', 'whatsmeow'].includes(config.defaultProvider)) return result
+  const meow = config.defaultProvider === 'whatsmeow' ? await loadMeow(db) : null
+  if (!meow && (!loaded.token || !loaded.verified)) return result
+  const channelId = meow ? `whatsmeow:${meow.gatewayId}:${meow.sessionId}` : config.whapi.channelId
 
   // Each hourly run can continue remaining recipients without resending completed or uncertain submissions.
   const deadline = Date.now() + 12000
@@ -88,18 +92,20 @@ export async function runScheduledWhatsApp(db: Firestore, now = new Date()) {
       const phone = normalizePhoneNumber(user?.profile?.phone || user?.phone || '')
       if (!eligible || !user || ['inactive', 'suspended'].includes(user.status)
         || user.preferences?.whatsapp !== true || !phone) { result.skipped++; return null }
-      if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
-      transaction.create(task, { provider: 'whapi', kind: reminder.kind, userId: reminder.userId,
-        channelId: config.whapi.channelId, credentialVersion: loaded.credentialVersion || 'legacy',
+      if (meow) await assertMeowBinding(db, transaction, meow)
+      else if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
+      transaction.create(task, { provider: meow ? 'whatsmeow' : 'whapi', kind: reminder.kind, userId: reminder.userId,
+        channelId, credentialVersion: meow?.version || loaded.credentialVersion || 'legacy',
         relatedId: reminder.relatedId, milestone: reminder.milestone, source: 'scheduled',
         phone: `***${phone.slice(-4)}`, test: false, status: 'submitting', createdAt: Timestamp.now() })
       return { phone, name: user.displayName || user.name || 'Member' }
     })
     if (!recipient) continue
     let submitted
-    try { submitted = await submitWhapi(loaded.token, recipient.phone, reminder.text(recipient.name).slice(0, 4000)) }
+    try { submitted = meow ? await submitMeow(meow, id, recipient.phone, reminder.text(recipient.name).slice(0, 4000), Date.now() + 5 * 60000)
+      : await submitWhapi(loaded.token, recipient.phone, reminder.text(recipient.name).slice(0, 4000)) }
     catch { submitted = { status: 'unknown', messageId: '' } }
-    await attachSubmission(db, id, config.whapi.channelId, submitted)
+    await attachSubmission(db, id, channelId, submitted)
     if (submitted.status === 'accepted') result.accepted++
     else if (submitted.status === 'failed') result.failed++
     else result.unknown++

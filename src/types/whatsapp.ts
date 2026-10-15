@@ -10,6 +10,7 @@ export interface WhatsAppSettings {
   testPhones: string[]
 }
 export interface WhatsAppManagementState {
+  meowGateways?: string[]
   config: WhatsAppSettings
   whapiCredentials: boolean
   whapiVerified: boolean

@@ -1,10 +1,11 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
-import { createHash } from 'node:crypto'
+import { createHash, randomUUID } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { initializeFirestore } from './_shared/firestoreMonitoring'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './_shared/whatsapp'
+import { assertMeowBinding, loadMeow, submitMeow } from './_shared/whatsmeow'
 
 const reply = (statusCode: number, code?: string) => ({
   statusCode,
@@ -33,10 +34,11 @@ export const eventHandler: Handler = async event => {
     stage = 'load_channel'
     const loaded = await loadWhatsApp(db)
     const { config, token, verified } = loaded
+    const meow = config.defaultProvider === 'whatsmeow' ? await loadMeow(db) : null
     const unavailable = !config.enabled ? 'channel_disabled'
       : !config.features.passwordReset ? 'recovery_disabled'
-        : config.defaultProvider !== 'whapi' ? 'provider_unavailable'
-          : !token ? 'credentials_missing' : !verified ? 'verification_required' : null
+        : !meow && config.defaultProvider !== 'whapi' ? 'provider_unavailable'
+          : !meow && !token ? 'credentials_missing' : !meow && !verified ? 'verification_required' : null
     if (unavailable) {
       console.error('[phone-password-reset] Unavailable', { stage, reason: unavailable })
       return reply(503, 'service-unavailable')
@@ -55,7 +57,8 @@ export const eventHandler: Handler = async event => {
           : { startedAt: now, count: 0 }
       })
       if (attempts.some(attempt => attempt.count >= 5)) return false
-      if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
+      if (meow) await assertMeowBinding(db, transaction, meow)
+      else if (loaded.binding) await assertWhatsAppBinding(db, transaction, loaded.binding, true)
       refs.forEach((ref, index) => transaction.set(ref, { ...attempts[index], count: attempts[index].count + 1, expiresAt: new Date(now + 300000) }))
       return true
     })
@@ -73,7 +76,8 @@ export const eventHandler: Handler = async event => {
       throw error
     }
     stage = 'submit_message'
-    const response = await submitWhapi(token, phone, `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.`)
+    const text = `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.`
+    const response = meow ? await submitMeow(meow, randomUUID(), phone, text, Date.now() + 60000) : await submitWhapi(token, phone, text)
     if (response.status !== 'accepted') {
       console.error('[phone-password-reset] Unavailable', { stage, reason: response.status === 'unknown' ? 'delivery_unknown' : 'delivery_failed' })
       return reply(503, 'service-unavailable')

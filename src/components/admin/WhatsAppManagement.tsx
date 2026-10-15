@@ -9,6 +9,7 @@ import { formatWhatsAppMessage } from '../../utils/whatsappMessage'
 import { defaultWhatsAppSettings, type WhatsAppManagementState } from '../../types/whatsapp'
 import './WhatsAppManagement.css'
 import WhatsAppConnectionPanel from './WhatsAppConnectionPanel'
+import WhatsmeowConnectionPanel from './WhatsmeowConnectionPanel'
 
 const providers = ['manual', 'whapi', 'whatsmeow', 'waba'] as const
 export default function WhatsAppManagement() {
@@ -91,7 +92,8 @@ export default function WhatsAppManagement() {
   }
   if (!state) return <div className="whatsapp-management"><Button loading>{t('common.loading')}</Button></div>
   const status = (provider: typeof providers[number]) => provider === 'manual' ? 'manualReady'
-    : provider === 'whapi' ? state.whapiVerified ? 'verified' : state.whapiCredentials ? 'unverified' : 'notConfigured' : 'pendingIntegration'
+    : provider === 'whapi' ? state.whapiVerified ? 'verified' : state.whapiCredentials ? 'unverified' : 'notConfigured'
+    : provider === 'whatsmeow' && state.config.defaultProvider === 'whatsmeow' ? 'verified' : 'pendingIntegration'
   return <section className="whatsapp-management">
     {error && <Alert type="error" message={error} action={<Button icon={<ReloadOutlined />} loading={busy} onClick={load}>{t('common.retry')}</Button>} />}
     <Form form={form} initialValues={defaultWhatsAppSettings} layout="vertical" disabled={!manager || busy || !!error}>
@@ -106,7 +108,7 @@ export default function WhatsAppManagement() {
       ]} />
       <div hidden={tab !== 'channels'}>
         <Form.Item name="defaultProvider" label={label('defaultProvider')}><Select options={providers.map(provider => ({
-          value: provider, label: label(provider), disabled: provider === 'waba' || provider === 'whatsmeow',
+          value: provider, label: label(provider), disabled: provider === 'waba' || (provider === 'whatsmeow' && state.config.defaultProvider !== 'whatsmeow'),
         }))} /></Form.Item>
         <div className="whatsapp-channel-list">
           {providers.map(provider => <div className="whatsapp-channel" key={provider}>
@@ -125,8 +127,8 @@ export default function WhatsAppManagement() {
               </div>
             </>}
             {provider === 'whatsmeow' && <div className="whatsapp-settings-grid">
-              <Form.Item name={['whatsmeow', 'baseUrl']} label={label('gatewayUrl')} rules={[{ type: 'url' }]}><Input placeholder="https://" maxLength={500} /></Form.Item>
-              <Form.Item name={['whatsmeow', 'phone']} label={label('phone')}><Input maxLength={30} /></Form.Item>
+              <Form.Item name={['whatsmeow', 'baseUrl']} label={label('gatewayUrl')}><Input disabled /></Form.Item>
+              <Form.Item name={['whatsmeow', 'phone']} label={label('phone')}><Input disabled /></Form.Item>
             </div>}
             {provider === 'waba' && <div className="whatsapp-settings-grid">
               <Form.Item name={['waba', 'wabaId']} label="WABA ID"><Input maxLength={200} /></Form.Item>
@@ -148,6 +150,7 @@ export default function WhatsAppManagement() {
       {tab !== 'records' && <div className="whatsapp-save"><Button icon={<SaveOutlined />} type="primary" onClick={save} loading={busy} disabled={!manager || !!error}>{t('common.save')}</Button></div>}
     </Form>
     {tab === 'channels' && manager && !error && <WhatsAppConnectionPanel state={state} onChanged={load} />}
+    {tab === 'channels' && manager && !error && <WhatsmeowConnectionPanel gateways={state.meowGateways || []} onChanged={load} />}
     {tab === 'testing' && <Form form={testForm} layout="vertical" onValuesChange={() => { setTestRequest(null); setLastStatus('') }}>
       <div className="whatsapp-settings-grid">
         <Form.Item name="phone" label={label('phone')} rules={[{ required: true }]}><Input inputMode="tel" maxLength={30} /></Form.Item>
@@ -155,7 +158,7 @@ export default function WhatsAppManagement() {
       </div>
       <Space wrap>
         <Button icon={<LinkOutlined />} disabled={busy || !state.config.enabled} onClick={() => send('manual')}>{label('openWhatsApp')}</Button>
-        <Button icon={<SendOutlined />} disabled={busy || !manager || !state.whapiVerified} onClick={() => send('test')}>{label('sendTest')}</Button>
+        <Button icon={<SendOutlined />} disabled={busy || !manager || (!state.whapiVerified && state.config.defaultProvider !== 'whatsmeow')} onClick={() => send('test')}>{label('sendTest')}</Button>
       </Space>
       {lastStatus && <Alert className="whatsapp-result" type={lastStatus === 'failed' || lastStatus === 'unknown' || lastStatus === 'submitting' ? 'warning' : 'info'} message={label(`status.${lastStatus}`)} />}
     </Form>}

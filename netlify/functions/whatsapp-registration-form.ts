@@ -4,6 +4,8 @@ import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { loadWhatsApp, submitWhapi, submitWhapiButtons } from './_shared/whatsapp'
 import { encryptRegistrationPassword, maskEmail, registrationTokenHash, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
+import { loadMeow, submitMeow } from './_shared/whatsmeow'
+import { createHash } from 'node:crypto'
 
 const htmlHeaders = { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' }
 const DEFAULT_APP_LOGO_URL = 'https://res.cloudinary.com/kcwja8y0/image/upload/v1789926866/macanudo_socials/app-config/cropped-image_1789926865771_1789926865771_uiei5t4w8jk.png'
@@ -58,7 +60,9 @@ export const eventHandler: EventHandler = async event => {
     const session = await loadSession(db, token)
     if (!session) return response(410, page('Registration link expired', recoveryBody(referralCode, 'Registration link expired'), logoUrl))
     const whatsapp = await loadWhatsApp(db)
-    if (whatsapp.managed && (!whatsapp.verified || session.data.connectionBinding !== whatsapp.binding)) {
+    const meow = session.data.provider === 'whatsmeow' ? await loadMeow(db) : null
+    if (meow ? whatsapp.config.defaultProvider !== 'whatsmeow' || session.data.connectionBinding !== `whatsmeow:${meow.version}`
+      : whatsapp.config.defaultProvider === 'whatsmeow' || whatsapp.managed && (!whatsapp.verified || session.data.connectionBinding !== whatsapp.binding)) {
       return response(410, page('Registration link expired', recoveryBody(referralCode, 'WhatsApp channel changed. Please start registration again.'), logoUrl))
     }
     if (event.httpMethod === 'GET') return response(200, page('Register for Macanudo Socials', '<div class="intro"><h1>Register for Macanudo Socials</h1><p>Enter your name, email, and login password.</p></div><form method="post" onsubmit="const button=this.querySelector(\'button[type=submit]\');if(button.disabled)return false;button.disabled=true;button.textContent=\'Submitting...\';">' + '<div class="field"><label for="phone">Phone</label><input id="phone" type="tel" value="' + escapeHtml(session.data.phone) + '" readonly autocomplete="tel"></div>' + '<div class="field"><label for="name">Name</label><input id="name" name="name" placeholder="Enter your name" required minlength="2" maxlength="128" autocomplete="name"></div><div class="field"><label for="email">Email</label><input id="email" name="email" type="email" placeholder="you@example.com" required maxlength="254" autocomplete="email"></div><div class="field"><label for="password">Password</label><input id="password" name="password" type="password" placeholder="At least 6 characters" required minlength="6" maxlength="128" autocomplete="new-password"></div><div class="field"><label for="confirmPassword">Confirm password</label><input id="confirmPassword" name="confirmPassword" type="password" placeholder="Re-enter your password" required minlength="6" maxlength="128" autocomplete="new-password"></div><button type="submit">Submit registration</button></form>', logoUrl))
@@ -70,10 +74,12 @@ export const eventHandler: EventHandler = async event => {
     if (name.length < 2 || name.length > 128 || !email || password.length < 6 || password.length > 128 || password !== confirmPassword) return response(400, page('Invalid registration details', '<h1>Invalid registration details</h1><p>Please check your name, email, and password. Passwords must match and contain at least 6 characters.</p><small>请确认姓名、Email 和两次密码输入正确，密码至少 6 位。</small>', logoUrl))
     await session.ref.set({ ...session.data, displayName: name, email, passwordCiphertext: encryptRegistrationPassword(password), step: 'awaiting-final-confirm', updatedAt: Timestamp.now() })
     const confirmation = `Welcome to Macanudo Socials. Please confirm your registration details:\nName: ${name}\nPhone: ${session.data.phone}\nEmail: ${email}${session.data.referralCode ? `\nReferral code: ${session.data.referralCode}` : ''}`
-    const result = await submitWhapiButtons(whatsapp.token, session.data.phone, confirmation)
-    if (result.status !== 'accepted') await submitWhapi(whatsapp.token, session.data.phone, `${confirmation}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
+    const result = meow ? await submitMeow(meow, createHash('sha256').update(`form:${token}`).digest('hex'), session.data.phone,
+      `${confirmation}\n\nReply CONFIRM to continue or CANCEL to cancel.`, Math.min(session.data.expiresAtMs, Date.now() + 60000))
+      : await submitWhapiButtons(whatsapp.token, session.data.phone, confirmation)
+    if (!meow && result.status === 'failed') await submitWhapi(whatsapp.token, session.data.phone, `${confirmation}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
     const settings = (await db.collection(C.WHATSAPP_CONFIG).doc('settings').get()).data()
-    const businessWhatsAppId = typeof settings?.whapiUserId === 'string' && /^\d{8,15}$/.test(settings.whapiUserId)
+    const businessWhatsAppId = meow ? meow.account.slice(1) : typeof settings?.whapiUserId === 'string' && /^\d{8,15}$/.test(settings.whapiUserId)
       ? settings.whapiUserId : DEFAULT_WHAPI_USER_ID
     const appUrl = `whatsapp://send?phone=${businessWhatsAppId}`
     const webUrl = `https://wa.me/${businessWhatsAppId}`

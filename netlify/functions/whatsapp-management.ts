@@ -9,6 +9,7 @@ import type { WhatsAppSettings } from '../../src/types/whatsapp'
 import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './_shared/whatsapp'
 import { attachSubmission } from './_shared/whapiReceipts'
 import { connectionSummary, manageWhatsAppConnection } from './_shared/whatsappConnection'
+import { assertMeowBinding, loadMeow, manageMeow, registeredGateways, submitMeow } from './_shared/whatsmeow'
 
 const reply = (statusCode: number, data = {}) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
@@ -63,6 +64,10 @@ export const eventHandler: Handler = async event => {
     const manager = managers.includes(operator?.role)
     const admin = manager || operator?.role === 'admin'
     if (!admin && input.action !== 'send') return reply(403)
+    if (['meow-stage', 'meow-pair', 'meow-status', 'meow-activate'].includes(input.action)) {
+      if (!manager) return reply(403)
+      return reply(200, await manageMeow(db, identity.uid, input))
+    }
     if (['candidate-save', 'candidate-migrate', 'candidate-activate', 'connection-start', 'connection-status', 'connection-qr', 'connection-cancel'].includes(input.action)) {
       if (!manager) return reply(403)
       return reply(200, await manageWhatsAppConnection(db, identity.uid, input))
@@ -85,6 +90,7 @@ export const eventHandler: Handler = async event => {
       const candidate = manager ? (await db.collection(C.WHATSAPP_CONFIG).doc('candidate').get()).data() : null
       const session = manager ? (await db.collection(C.WHATSAPP_CONFIG).doc('connection-session').get()).data() : null
       return reply(200, { ...state(), credentialSource: loaded.credentialSource, managed: loaded.managed,
+        meowGateways: manager ? Object.keys(registeredGateways()) : [],
         credentialsInvalid: loaded.credentialsInvalid, connectionStatus: webhook?.whapiConnectionStatus || 'unknown',
         verifiedAt: webhook?.verifiedAt?.toDate?.().toISOString() || null,
         ...connectionSummary(candidate, session, identity.uid) })
@@ -94,10 +100,13 @@ export const eventHandler: Handler = async event => {
       const next = validateConfig(input.config)
       if (loaded.managed && next.whapi.channelId !== config.whapi.channelId) throw fail('use-channel-switch', 409)
       const verified = loaded.verified && next.whapi.channelId === config.whapi.channelId
-      if (['waba', 'whatsmeow'].includes(next.defaultProvider)) throw fail('channel-unavailable', 409)
+      if (next.defaultProvider === 'waba') throw fail('channel-unavailable', 409)
+      const meow = next.defaultProvider === 'whatsmeow' ? await loadMeow(db) : null
+      if (meow && (config.defaultProvider !== 'whatsmeow' || next.whatsmeow.baseUrl !== meow.baseUrl || next.whatsmeow.phone !== meow.account)) throw fail('use-channel-switch', 409)
       if (next.defaultProvider === 'whapi' && next.enabled && (!loaded.token || !verified)) throw fail('verification-required', 409)
       await db.runTransaction(async batch => {
       await assertWhatsAppBinding(db, batch, loaded.binding)
+      if (meow) await assertMeowBinding(db, batch, meow)
       batch.set(ref, { config: next, whapiVerified: verified, whapiTokenHash: verified ? loaded.tokenHash : '', updatedAt: Timestamp.now(), updatedBy: identity.uid }, { merge: true })
       if (!loaded.managed && loaded.legacyToken) batch.set(db.collection(C.WHATSAPP_CONFIG).doc('credentials'), { whapiToken: loaded.migrationToken }, { merge: true })
       batch.set(db.collection(C.APP_CONFIG).doc('default'), { whapi: { enabled: next.enabled && next.defaultProvider === 'whapi',
@@ -158,9 +167,12 @@ export const eventHandler: Handler = async event => {
     const test = input.action === 'test'
     if (test && (!manager || !config.testPhones.includes(phone))) throw fail('test-number-required', 403)
     if (!test && !config.enabled) throw fail('sending-paused', 409)
-    const provider = input.action === 'manual' ? 'manual' : test ? 'whapi' : config.defaultProvider
+    const provider = input.action === 'manual' ? 'manual' : test && config.defaultProvider !== 'whatsmeow' ? 'whapi' : config.defaultProvider
     if (input.action === 'manual' && !admin) return reply(403)
-    if (provider !== 'manual' && provider !== 'whapi') throw fail('channel-unavailable', 409)
+    if (provider !== 'manual' && provider !== 'whapi' && provider !== 'whatsmeow') throw fail('channel-unavailable', 409)
+    const meow = provider === 'whatsmeow' ? await loadMeow(db) : null
+    const channelId = meow ? `whatsmeow:${meow.gatewayId}:${meow.sessionId}` : config.whapi.channelId
+    const expiresAtMs = Date.now() + 5 * 60000
     if (provider === 'manual' && input.action !== 'manual') throw fail('manual-action-required', 409)
     if (provider === 'whapi' && (!loaded.token || !loaded.verified)) throw fail('verification-required', 409)
     if (!test && input.action !== 'manual') {
@@ -186,17 +198,19 @@ export const eventHandler: Handler = async event => {
       const count = counter && counter.expiresAtMs > Date.now() ? Number(counter.count) || 0 : 0
       if (count >= 20) throw fail('too-many-requests', 429)
       if (provider === 'whapi') await assertWhatsAppBinding(db, transaction, loaded.binding, true)
+      if (meow) await assertMeowBinding(db, transaction, meow)
       transaction.set(attempt, { count: count + 1, expiresAtMs: counter && counter.expiresAtMs > Date.now() ? counter.expiresAtMs : Date.now() + 300000 })
       transaction.create(task, { provider, phone: `***${phone.slice(-4)}`, fingerprint, kind: input.kind || 'custom', test,
         ...(provider === 'whapi' ? { channelId: config.whapi.channelId, credentialVersion: loaded.credentialVersion } : {}),
+        ...(meow ? { channelId, credentialVersion: meow.version, expiresAtMs } : {}),
         status: provider === 'manual' ? 'opened' : 'submitting', createdAt: Timestamp.now(), operatorId: identity.uid })
       return null
     })
     if (result) return reply(200, { status: result, taskId: id })
     if (provider === 'manual') return reply(200, { status: 'opened', taskId: id })
     let submitted
-    try { submitted = await submitWhapi(loaded.token, phone, input.text) } catch { submitted = { status: 'unknown', messageId: '' } }
-    const status = await attachSubmission(db, id, config.whapi.channelId, submitted)
+    try { submitted = meow ? await submitMeow(meow, id, phone, input.text, expiresAtMs) : await submitWhapi(loaded.token, phone, input.text) } catch { submitted = { status: 'unknown', messageId: '' } }
+    const status = await attachSubmission(db, id, channelId, submitted)
     return reply(200, { ...submitted, status, taskId: id })
   } catch (error) {
     const safe = error as { status?: number; code?: string }

@@ -1,4 +1,20 @@
 {
+  "whatsmeowConnection": {
+    "title": "Whatsmeow connection",
+    "notRegistered": "No gateway registered on the server.",
+    "gateway": "Registered gateway",
+    "token": "Gateway API token",
+    "stage": "Verify candidate gateway",
+    "open": "Open connection",
+    "waiting": "Waiting for connection status",
+    "account": "Connected number",
+    "pair": "Connect / Show QR",
+    "confirmAccount": "Confirm full WhatsApp number (+country code)",
+    "activate": "Activate verified connection",
+    "activateTitle": "Switch to Whatsmeow?",
+    "activateWarning": "New messages will use this gateway. Existing tasks retain their original channel. Business sending and notification switches stay unchanged.",
+    "failed": "Gateway request failed. Check server configuration and retry."
+  },
   "whatsappConnection": {
     "title": "WhatsApp Connection", "replacement": "Replacement Channel", "channelId": "New Channel ID", "token": "New API Token",
     "connectActive": "Connect Current Channel", "migrate": "Migrate Current Credentials", "saveCandidate": "Save Candidate",

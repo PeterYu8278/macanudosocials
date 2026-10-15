@@ -1,4 +1,20 @@
 {
+  "whatsmeowConnection": {
+    "title": "Whatsmeow 连接",
+    "notRegistered": "服务端尚未登记网关。",
+    "gateway": "已登记网关",
+    "token": "网关 API 令牌",
+    "stage": "验证候选网关",
+    "open": "打开连接",
+    "waiting": "等待连接状态",
+    "account": "已连接号码",
+    "pair": "连接 / 显示二维码",
+    "confirmAccount": "确认完整 WhatsApp 号码（含 + 国家代码）",
+    "activate": "启用已验证连接",
+    "activateTitle": "切换至 Whatsmeow？",
+    "activateWarning": "新消息将使用此网关，已有任务仍绑定原通道。业务发送和通知开关保持不变。",
+    "failed": "网关请求失败，请检查服务端配置后重试。"
+  },
   "whatsappConnection": {
     "title": "WhatsApp 连接", "replacement": "更换通道", "channelId": "新 Channel ID", "token": "新 API Token",
     "connectActive": "连接当前通道", "migrate": "迁移当前凭证", "saveCandidate": "保存候选通道",

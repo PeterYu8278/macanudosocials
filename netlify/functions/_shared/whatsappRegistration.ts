@@ -10,6 +10,7 @@ export type RegistrationStep = 'awaiting-form' | 'awaiting-confirmation' | 'awai
   | 'completed' | 'cancelled' | 'expired' | 'locked'
 
 export interface WhatsAppRegistrationSession {
+  provider?: 'whapi' | 'whatsmeow'
   phone: string
   chatId: string
   step: RegistrationStep
