@@ -92,8 +92,10 @@ const VisitSessionsPage: React.FC = () => {
     />
   ) : null;
   const cigarSelectState = {
-    // Keep the popup in the modal's stacking and scrolling context.
-    getPopupContainer: (trigger: HTMLElement) => trigger.parentElement || trigger,
+    // Measure outside the modal's transformed ancestors without slide/scale motion.
+    getPopupContainer: (trigger: HTMLElement) => trigger.ownerDocument.body,
+    transitionName: '',
+    classNames: { popup: { root: 'points-config-form' } },
     loading: cigarsLoading,
     status: cigarsError ? 'error' as const : undefined,
     notFoundContent: cigarsLoading

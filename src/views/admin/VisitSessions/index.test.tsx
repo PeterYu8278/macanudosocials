@@ -65,14 +65,19 @@ describe('visit session redemption cigar loading', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: /common.retry/ }));
     await waitFor(() => expect(within(dialog).queryByText('visitSessions.loadCigarsFailed')).toBeNull());
     fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-    expect(await within(dialog).findByText('Robusto - RM99')).toBeTruthy();
+    expect(await screen.findByText('Robusto - RM99')).toBeTruthy();
   }, 20000);
 
-  it('reloads cigars on opening when the initial list was empty', async () => {
+  it('reloads cigars and portals options outside the modal without scale motion', async () => {
     mocks.cigars.mockResolvedValueOnce([]).mockResolvedValue([{ id: 'cigar', name: 'Robusto', price: 99 }]);
     const dialog = await openRedemption();
     await waitFor(() => expect(mocks.cigars).toHaveBeenCalledTimes(2));
     fireEvent.mouseDown(within(dialog).getByRole('combobox'));
-    expect(await within(dialog).findByText('Robusto - RM99')).toBeTruthy();
+    const option = await screen.findByText('Robusto - RM99');
+    const popup = option.closest('.ant-select-dropdown');
+    expect(popup).toBeTruthy();
+    expect(popup?.parentElement).toBe(document.body);
+    expect(popup?.closest('.ant-modal')).toBeNull();
+    expect(popup?.className).not.toMatch(/ant-slide-up/);
   }, 20000);
 });
