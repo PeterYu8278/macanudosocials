@@ -1,9 +1,13 @@
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   cigars: vi.fn(),
+  recentSessions: vi.fn(),
+  checkout: vi.fn(),
+  confirm: vi.fn(),
+  warning: vi.fn(),
   t: (key: string) => key,
   user: { id: 'admin', role: 'admin' },
   message: { error: vi.fn(), success: vi.fn(), warning: vi.fn() },
@@ -11,7 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: mocks.t, i18n: { language: 'en-US' } }) }));
 vi.mock('antd', async original => ({
   ...(await original<any>()),
-  App: { useApp: () => ({ message: mocks.message, modal: {} }) },
+  App: { useApp: () => ({ message: mocks.message, modal: { confirm: mocks.confirm, warning: mocks.warning } }) },
   Table: ({ dataSource = [], columns = [] }: any) => <div>{dataSource.map((record: any) => (
     <div key={record.id}>{columns.map((column: any) => <div key={column.key || column.dataIndex}>
       {column.render ? column.render(record[column.dataIndex], record) : record[column.dataIndex]}
@@ -24,8 +28,8 @@ vi.mock('../../../services/firebase/firestore', () => ({
 }));
 vi.mock('../../../services/firebase/visitSessions', () => ({
   getUserVisitSessions: async () => [], getAllPendingVisitSessions: async () => [],
-  getAllVisitSessions: async () => [], getExpiredVisitSessions: async () => [],
-  completeVisitSession: vi.fn(), addRedemptionToSession: vi.fn(),
+  getAllVisitSessions: mocks.recentSessions, getExpiredVisitSessions: async () => [],
+  completeVisitSession: mocks.checkout, addRedemptionToSession: vi.fn(),
 }));
 vi.mock('../../../services/firebase/redemption', () => ({
   createRedemptionRecord: vi.fn(), updateRedemptionRecord: vi.fn(),
@@ -47,12 +51,41 @@ import CigarSelect from './CigarSelect';
 describe('visit session redemption cigar loading', () => {
   beforeEach(() => {
     mocks.cigars.mockReset();
+    mocks.recentSessions.mockReset().mockResolvedValue([]);
+    mocks.checkout.mockReset();
+    mocks.confirm.mockReset();
+    mocks.warning.mockReset();
+    mocks.message.error.mockClear();
     window.matchMedia = vi.fn().mockReturnValue({
       matches: false, addListener: vi.fn(), removeListener: vi.fn(),
       addEventListener: vi.fn(), removeEventListener: vi.fn(),
     });
   });
   afterEach(cleanup);
+
+  it.each([true, false])('uses a persistent modal only for insufficient points (insufficient: %s)', async insufficient => {
+    mocks.cigars.mockResolvedValue([]);
+    mocks.recentSessions.mockResolvedValue([{
+      id: 'visit', userId: 'member', userName: 'Member', storeId: 'lounge', status: 'pending',
+      checkInAt: new Date('2026-10-15T12:00:00Z'), checkInBy: 'admin',
+      createdAt: new Date(), updatedAt: new Date(),
+    }]);
+    const error = insufficient ? 'Current balance: 64; amount due: 513; shortfall: 449; minimum reload: RM 200.' : 'Other checkout failure';
+    mocks.checkout.mockResolvedValue({ success: false, error, ...(insufficient ? { code: 'INSUFFICIENT_POINTS' } : {}) });
+    render(<VisitSessionsPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /visitSessions.checkout$/ }, { timeout: 15000 }));
+    expect(mocks.confirm).toHaveBeenCalledTimes(1);
+    await act(async () => { await mocks.confirm.mock.calls[0][0].onOk(); });
+    if (insufficient) {
+      expect(mocks.warning).toHaveBeenCalledWith(expect.objectContaining({
+        title: 'visitSessions.insufficientPointsTitle', content: error, okText: 'common.confirm', centered: true, maskClosable: false,
+      }));
+      expect(mocks.message.error).not.toHaveBeenCalled();
+    } else {
+      expect(mocks.warning).not.toHaveBeenCalled();
+      expect(mocks.message.error).toHaveBeenCalledWith(error);
+    }
+  }, 60000);
 
   it('filters options, selects with the keyboard and keeps Escape inside the selector', () => {
     const onChange = vi.fn();

@@ -913,33 +913,8 @@ a:hover {
   text-align: center !important;
 }
 
-.cigar-equal-tabs .ant-tabs-tab.ant-tabs-tab-active {
-  color: transparent !important;
-  background-image: linear-gradient(to right, #FDE08D, #C48D3A) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-}
-
-.cigar-equal-tabs .ant-tabs-tab.ant-tabs-tab-active .ant-tabs-tab-btn {
-  color: transparent !important;
-  background-image: linear-gradient(to right, #FDE08D, #C48D3A) !important;
-  -webkit-background-clip: text !important;
-  background-clip: text !important;
-}
-
-/* Active tab 图标颜色 - 使用渐变起始色以匹配文字渐变效果 */
-.cigar-equal-tabs .ant-tabs-tab.ant-tabs-tab-active .anticon {
-  color: #FDE08D !important;
-}
-
-/* Active tab 图标 SVG 填充颜色 */
-.cigar-equal-tabs .ant-tabs-tab.ant-tabs-tab-active .anticon svg {
-  fill: #FDE08D !important;
-}
-
 .cigar-equal-tabs .ant-tabs-ink-bar {
   height: 2px !important;
-  background: linear-gradient(to right, #FDE08D, #C48D3A) !important;
   border-radius: 1px !important;
 }
 
@@ -1556,12 +1531,42 @@ a:hover {
   background: var(--cigar-gradient-gold) !important;
 }
 
-/* Gold gradient Switch (checked state) */
-.gold-switch.ant-switch-checked {
-  background: linear-gradient(to right, #FDE08D, #C48D3A) !important;
+/* Shared gold finish; no per-page opt-in is needed. */
+.ant-switch.ant-switch-checked:not(.ant-switch-disabled):not(:disabled) {
+  background: var(--cigar-gradient-gold) !important;
 }
-.gold-switch.ant-switch-checked:hover {
-  background: linear-gradient(to right, #FFE9A0, #D4A050) !important;
+.ant-switch.ant-switch-checked:not(.ant-switch-disabled):not(:disabled):hover {
+  background: var(--cigar-gradient-gold-hover) !important;
+}
+.ant-switch.ant-switch-checked:not(.ant-switch-disabled):not(:disabled):active {
+  background: var(--cigar-gradient-gold-active) !important;
+}
+
+.ant-tabs .ant-tabs-tab.ant-tabs-tab-active:not(.ant-tabs-tab-disabled) .ant-tabs-tab-btn {
+  color: #FDE08D !important;
+}
+
+@supports ((background-clip: text) or (-webkit-background-clip: text)) {
+  .ant-tabs .ant-tabs-tab.ant-tabs-tab-active:not(.ant-tabs-tab-disabled) .ant-tabs-tab-btn {
+    color: transparent !important;
+    background-image: var(--cigar-gradient-gold) !important;
+    -webkit-background-clip: text;
+    background-clip: text;
+  }
+  .ant-tabs .ant-tabs-tab.ant-tabs-tab-active:not(.ant-tabs-tab-disabled):hover .ant-tabs-tab-btn {
+    background-image: var(--cigar-gradient-gold-hover) !important;
+  }
+  .ant-tabs .ant-tabs-tab.ant-tabs-tab-active:not(.ant-tabs-tab-disabled):active .ant-tabs-tab-btn {
+    background-image: var(--cigar-gradient-gold-active) !important;
+  }
+}
+
+.ant-tabs .ant-tabs-tab.ant-tabs-tab-active:not(.ant-tabs-tab-disabled) .ant-tabs-tab-btn .anticon {
+  color: #FDE08D !important;
+}
+
+.ant-tabs .ant-tabs-ink-bar {
+  background: var(--cigar-gradient-gold) !important;
 }
 
 .ant-select-dropdown .ant-select-item-option-active,

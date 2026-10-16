@@ -25,6 +25,7 @@ describe('phone recovery with managed WhatsApp channels', () => {
     const result = await request()
     expect(result.statusCode).toBe(200)
     expect(m.send).toHaveBeenCalledWith('secret-token', '+60168008000', expect.stringContaining('private-recovery-proof'))
+    expect(m.send.mock.calls[0][2]).toBe('[Macanudo Socials]\nReset your password using this link:\nhttps://example.com/private-recovery-proof\nIf you did not request this, ignore this message. Your password has not been changed.')
     expect(result.body).not.toContain('private-recovery-proof')
     expect(result.body).not.toContain('secret-token')
   })

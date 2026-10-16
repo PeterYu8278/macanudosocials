@@ -28,6 +28,7 @@ import { getAllReloadRecords } from '../../../services/firebase/reload'
 import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import OrderDetails from '../Orders/OrderDetails'
 import CurrentVisits from './CurrentVisits'
+import LoungeClosingMonitor from '../../../components/admin/LoungeClosingMonitor'
 import { getRevenueTotals } from './revenue'
 import { canAccessRoute } from '../../../config/permissions'
 
@@ -1483,6 +1484,7 @@ const AdminDashboard: React.FC = () => {
       </div>
 
       <CurrentVisits users={users} cigars={cigars} />
+      <LoungeClosingMonitor />
 
       <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'minmax(0, 1fr)' : 'repeat(2, minmax(0, 1fr))', gap: 18, paddingInline: 8, marginBottom: 16, alignItems: 'start' }}>
       {/* Reload trend */}

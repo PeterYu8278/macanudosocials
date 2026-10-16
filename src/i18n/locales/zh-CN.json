@@ -1,4 +1,42 @@
 {
+  "loungeOperations": {
+    "test": {
+      "title": "测试日报", "preview": "预览测试日报", "send": "发送测试日报", "checkStatus": "检查送达状态",
+      "notice": "仅测试：不会签退、扣积分、产生库存变动或修改正式日结批次。英文消息带有 [TEST] 标记。",
+      "confirmTitle": "确认发送这份测试日报？",
+      "confirmBody": "将预览内容发送到通道 {{channel}} 已验证的 Whapi user.id {{recipient}}。这会发送真实 WhatsApp 消息，但不会执行结算。",
+      "target": "已验证接收号码：{{recipient}} · 通道：{{channel}}"
+    },
+    "processingError": "结算或日报处理出错，请检查后重试。",
+    "closingInProgress": "本次驻店已于 23:00 结束，正在处理最终结算；待选择的雪茄兑换将保留。",
+    "title": "会所营运", "hours": "营业时间", "enabled": "启用定时结束驻店",
+    "disabled": "当前服务器尚未启用自动日终结算；配置好 WhatsApp 后仍可手动测试日报。",
+    "negativeWarning": "23:00 将结束驻店，余额不足时保留负余额。充值用于偿还现有余额，不会重复收取费用。",
+    "opensAt": "开始营业时间", "exceptions": "特殊日期", "date": "营业日期", "open": "营业",
+    "reportEnabled": "通过 Whapi 发送英文日报", "channel": "已验证的 Whapi 通道 ID",
+    "recipient": "接收人：已验证 Whapi 通道自身的 user.id。发送还需开启服务端日报开关。",
+    "closing": "日终批次", "preview": "预览结算", "remaining": "未解决驻店", "delivery": "日报提交状态",
+    "retry": "重试批次", "retryConfirm": "重试未解决的结算并生成新版日报？已完成的驻店不会重复扣款。",
+    "queued": "后台任务已排队，请刷新检查结果。", "previewTotal": "共 {{total}} 条到期驻店，最多预览 50 条；不会修改数据。",
+    "session": "驻店记录", "fee": "总费用（积分）", "balance": "预计余额", "error": "会所营运服务暂不可用，请检查后台连接。",
+    "days": ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
+    "status": { "running": "执行中", "waiting": "等待下一轮", "completed": "完成", "incomplete": "未完成：需要处理", "not-sent": "未发送", "accepted": "已提交（尚未确认送达）", "sent": "已发出", "delivered": "已送达", "read": "已读", "failed": "发送失败", "unknown": "结果未知：重新发送前请核实" },
+    "errors": {
+      "backend-unavailable": "无法连接会所营运后台。本地使用时，请启动 8888 端口的 Netlify Functions 服务，再点击重试。",
+      "invalid-report-date": "请选择不晚于今天的有效营业日期。",
+      "test-report-not-found": "找不到这份测试预览，或它属于其他操作员。",
+      "test-confirm-required": "发送测试 WhatsApp 消息前需要确认。",
+      "test-report-expired": "测试预览已过期，请重新生成预览。",
+      "test-report-rate-limit": "请等待一分钟后再发送此会所的另一份测试日报。",
+      "invalid-hours": "请检查营业时间、特殊日期和日报通道。", "invalid-request": "无效的会所操作。",
+      "forbidden": "没有操作此会所的权限。", "not-ready": "启用会所前，请配置并验证服务端日终任务。",
+      "not-enabled": "此会所尚未启用定时结算。", "outside-hours": "会所当前不营业，请查看营业时间设置。",
+      "already-checked-in": "该会员已有进行中的驻店。", "membership-inactive": "需要有效的会员状态。",
+      "insufficient-checkin": "积分不足以支付首小时费用。", "lounge-unavailable": "会所暂不可用。",
+      "active-visits": "请先结束所有进行中的驻店，再更改定时结算开关。", "channel-unverified": "请先验证指定的 Whapi 通道。",
+      "before-closing": "仅可在该营业日 23:00 后重试日终结算。", "busy": "日终批次正在执行，请稍后刷新。"
+    }
+  },
   "whatsmeowConnection": {
     "title": "Whatsmeow 连接",
     "notRegistered": "服务端尚未登记网关。",
@@ -181,6 +219,7 @@
       "lounge-not-found": "找不到会所。",
       "invalid-config": "Day Pass 配置无效，请联系管理员。",
       "insufficient-points": "积分不足，无法购买 Day Pass。",
+      "outside-hours": "会所当前不营业，仅可在营业时间内购买 Day Pass 并签到。",
       "invalid-session": "此到访无法用于购买 Day Pass，请刷新后重试。",
       "account-suspended": "此账号已暂停。",
       "service-unavailable": "Day Pass 服务暂时无法使用，请稍后重试。"
@@ -880,6 +919,9 @@
     "to": "至"
   },
   "visitSessions": {
+    "insufficientPointsTitle": "积分不足",
+    "insufficientPointsCheckout": "积分不足，无法 Check-out。当前 {{currentPoints}} 分，需扣 {{pointsDue}} 分，还需充值 {{shortfall}} 分（最低充值 RM {{minimumReload}}）",
+    "insufficientPointsCheckin": "积分不足，无法 Check-in。当前 {{currentPoints}} 分，首小时需 {{pointsDue}} 分，还需充值 {{shortfall}} 分（最低充值 RM {{minimumReload}}）",
     "unknownUser": "未知用户",
     "title": "驻店记录",
     "subtitle": "管理用户的会所消费和活动记录",
@@ -1769,6 +1811,9 @@
     "orderTotal": "订单总计"
   },
   "inventory": {
+    "operatorSystem": "系统",
+    "operatorHistoricalImport": "历史导入",
+    "operatorUnknown": "未知用户",
     "cigarName": "雪茄名称",
     "productName": "产品名称",
     "spec": "规格",

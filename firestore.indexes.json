@@ -1,6 +1,14 @@
 {
   "indexes": [
     {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "inventorySettlementStatus", "order": "ASCENDING" }]
+    },
+    {
       "collectionGroup": "_membershipPaymentStatuses",
       "queryScope": "COLLECTION",
       "fields": [

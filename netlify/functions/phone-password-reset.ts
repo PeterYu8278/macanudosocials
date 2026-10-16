@@ -4,6 +4,7 @@ import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
 import { initializeFirestore } from './_shared/firestoreMonitoring'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
+import { passwordResetLinkMessage } from '../../src/utils/whatsappPasswordReset'
 import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './_shared/whatsapp'
 import { assertMeowBinding, loadMeow, submitMeow } from './_shared/whatsmeow'
 
@@ -76,7 +77,7 @@ export const eventHandler: Handler = async event => {
       throw error
     }
     stage = 'submit_message'
-    const text = `Macanudo Socials: Reset your password using this link:\n${link}\nIf you did not request this, ignore this message. Your password has not been changed.`
+    const text = passwordResetLinkMessage(link)
     const response = meow ? await submitMeow(meow, randomUUID(), phone, text, Date.now() + 60000) : await submitWhapi(token, phone, text)
     if (response.status !== 'accepted') {
       console.error('[phone-password-reset] Unavailable', { stage, reason: response.status === 'unknown' ? 'delivery_unknown' : 'delivery_failed' })

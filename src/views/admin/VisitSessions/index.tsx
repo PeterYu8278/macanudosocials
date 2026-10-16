@@ -27,6 +27,8 @@ import { QRScanner } from '../../../components/admin/QRScanner';
 import { OrderSkeleton } from '../../../components/features/admin/OrderSkeleton';
 import { RoomManagement } from '../../../components/admin/RoomManagement';
 import CigarSelect from './CigarSelect';
+import { sortVisitSessions } from '../../../utils/visitSessionSort';
+import { compareRedemptionsPendingFirst } from '../../../utils/redemptionSort';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -98,7 +100,7 @@ const VisitSessionsPage: React.FC = () => {
     status: cigarsError ? 'error' as const : undefined,
   };
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
-  const { data: sessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
+  const { data: fetchedSessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
     () => {
       if (searchUserId) {
         const storeId = isSuperAdmin ? undefined : user?.storeId;
@@ -109,12 +111,18 @@ const VisitSessionsPage: React.FC = () => {
       if (statusFilter === 'pending') {
         return getAllPendingVisitSessions(isSuperAdmin ? undefined : user?.storeId);
       }
+      if (statusFilter === 'all') {
+        const storeId = isSuperAdmin ? undefined : user?.storeId;
+        return Promise.all([getAllVisitSessions(200, storeId), getAllPendingVisitSessions(storeId)])
+          .then(([recent, pending]) => [...new Map([...pending, ...recent].map(session => [session.id, session])).values()]);
+      }
       return getAllVisitSessions(200, isSuperAdmin ? undefined : user?.storeId).then(allSessions =>
-        statusFilter !== 'all' ? allSessions.filter(s => s.status === statusFilter) : allSessions
+        allSessions.filter(s => s.status === statusFilter)
       );
     },
     [statusFilter, searchUserId, isSuperAdmin, user?.storeId]
   );
+  const sessions = useMemo(() => sortVisitSessions(fetchedSessions), [fetchedSessions]);
   const [addingRedemption, setAddingRedemption] = useState(false);
   const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
   const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
@@ -218,7 +226,7 @@ const VisitSessionsPage: React.FC = () => {
         record.visitSessionId,
       ].some(value => value.toLowerCase().includes(keyword));
       return matchesStatus && matchesType && matchesSearch;
-    });
+    }).sort(compareRedemptionsPendingFirst);
   }, [allRedemptionRecords, redemptionSearch, redemptionStatus, redemptionType]);
 
   useEffect(() => {
@@ -352,6 +360,14 @@ const VisitSessionsPage: React.FC = () => {
                 : checkoutMessage);
               // 重新加载所有数据
               await refreshSessions();
+            } else if (result.code === 'INSUFFICIENT_POINTS') {
+              modal.warning({
+                title: t('visitSessions.insufficientPointsTitle'),
+                content: result.error || t('visitSessions.checkoutFailed'),
+                okText: t('common.confirm'),
+                centered: true,
+                maskClosable: false,
+              });
             } else {
               message.error(result.error || t('visitSessions.checkoutFailed'));
             }

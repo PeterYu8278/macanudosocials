@@ -1,7 +1,7 @@
 // Inventory Management Page
 import React, { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, InputNumber, Dropdown, Checkbox, Upload, Row, Col, App, Divider, AutoComplete, DatePicker } from 'antd'
+import { Table, Button, Tag, Space, Typography, Input, Select, Modal, Form, InputNumber, Dropdown, Checkbox, Upload, Row, Col, App, Divider, AutoComplete, DatePicker, Tooltip } from 'antd'
 import dayjs from 'dayjs'
 import { PlusOutlined, EditOutlined, DeleteOutlined, SearchOutlined, WarningOutlined, UploadOutlined, DownloadOutlined, MinusCircleOutlined, FilePdfOutlined, FileImageOutlined, EyeOutlined, ThunderboltOutlined, LoadingOutlined } from '@ant-design/icons'
 import type { Cigar, Brand, InboundOrder, OutboundOrder, InventoryMovement, Event, Store } from '../../../types'
@@ -21,6 +21,10 @@ import { collection, getDocs } from 'firebase/firestore'
 import { db } from '../../../config/firebase'
 import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections'
 import { reconcileOrderOutboundMovements } from '../../../utils/inventoryMovementReconciliation'
+import { formatInventoryReason } from '../../../utils/inventoryReason'
+import { inventoryOperatorName } from '../../../utils/inventoryOperator'
+import { getUserDisplayNames } from '../../../services/firebase/userDisplayNames'
+import './InventoryProductLogs.css'
 
 import { useAuthStore } from '../../../store/modules/auth'
 const { Title } = Typography
@@ -43,6 +47,28 @@ const AdminInventory: React.FC = () => {
   const { data: inboundOrders, refresh: refreshInboundOrders } = useFirestoreQuery<InboundOrder>(() => getAllInboundOrders(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
   const { data: outboundOrders, refresh: refreshOutboundOrders } = useFirestoreQuery<OutboundOrder>(() => getAllOutboundOrders(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
   const { data: inventoryMovements, refresh: refreshInventoryMovements } = useFirestoreQuery<InventoryMovement>(() => getAllInventoryMovements(isSuperAdmin ? undefined : currentUser?.storeId), [isSuperAdmin, currentUser?.storeId])
+  const knownOperatorNames = useMemo(() => {
+    const names: Record<string, string> = Object.create(null)
+    for (const member of users) {
+      const name = member.displayName?.trim()
+      if (!name) continue
+      for (const key of [member.id, member.authUid, name]) if (key) names[key] = name
+    }
+    return names
+  }, [users])
+  const [extraOperatorNames, setExtraOperatorNames] = useState<Record<string, string>>({})
+  const missingOperatorIds = useMemo(() => [...new Set([...inboundOrders, ...outboundOrders]
+    .map(order => order.operatorId).filter(id => id && id !== 'system' && id !== 'legacy_migration' && !knownOperatorNames[id]))],
+    [inboundOrders, outboundOrders, knownOperatorNames])
+  useEffect(() => {
+    let cancelled = false
+    getUserDisplayNames(missingOperatorIds).then(names => { if (!cancelled) setExtraOperatorNames(names) })
+    return () => { cancelled = true }
+  }, [missingOperatorIds])
+  const operatorNames = useMemo(() => ({ ...extraOperatorNames, ...knownOperatorNames }), [extraOperatorNames, knownOperatorNames])
+  const formatOperatorName = (id?: string) => inventoryOperatorName(id, operatorNames, {
+    system: t('inventory.operatorSystem'), historical: t('inventory.operatorHistoricalImport'), unknown: t('inventory.operatorUnknown'),
+  })
   const effectiveInventoryMovements = useMemo(
     () => reconcileOrderOutboundMovements(inventoryMovements, orders),
     [inventoryMovements, orders]
@@ -661,8 +687,8 @@ const AdminInventory: React.FC = () => {
         </Button>
       ) : '-'
     },
-    { title: t('inventory.reason'), dataIndex: 'reason', key: 'reason', render: (v: any) => v || '-' },
-    { title: t('inventory.operator'), dataIndex: 'operatorId', key: 'operatorId', render: (v: any) => v || '-' },
+    { title: t('inventory.reason'), dataIndex: 'reason', key: 'reason', render: formatInventoryReason },
+    { title: t('inventory.operator'), dataIndex: 'operatorId', key: 'operatorId', render: formatOperatorName },
   ]
 
   const inLogs = useMemo(() => {
@@ -3314,7 +3340,7 @@ const AdminInventory: React.FC = () => {
                           title: t('inventory.reason'),
                           dataIndex: 'reason',
                           key: 'reason',
-                          render: (reason: string) => reason || '-'
+                          render: formatInventoryReason
                         },
                         {
                           title: t('common.status'),
@@ -4011,7 +4037,7 @@ const AdminInventory: React.FC = () => {
                                     fontSize: 11,
                                     color: 'rgba(255,255,255,0.6)'
                                   }}>
-                                    {group.reason}
+                                    {formatInventoryReason(group.reason)}
                                   </div>
                                 )}
                               </div>
@@ -4380,7 +4406,7 @@ const AdminInventory: React.FC = () => {
                                 ) : log.source === 'manual' ? (
                                   <span>{t('inventory.source')}: {t('inventory.manual')}</span>
                                 ) : (
-                                  <span>{t('inventory.reason')}: {log.reason || '-'}</span>
+                                  <span>{t('inventory.reason')}: {formatInventoryReason(log.reason)}</span>
                                 )}
                               </div>
                               <div style={{ marginTop: 6, fontSize: 11, color: '#888' }}>
@@ -5310,8 +5336,8 @@ const AdminInventory: React.FC = () => {
               { title: t('inventory.time'), dataIndex: 'createdAt', key: 'createdAt', render: (v: any) => { const d = toDateSafe(v); return d ? d.toLocaleString() : '-' } },
               { title: t('inventory.product'), dataIndex: 'cigarId', key: 'cigarId', render: (id: string) => items.find(i => i.id === id)?.name || id },
               { title: t('inventory.quantity'), dataIndex: 'quantity', key: 'quantity' },
-              { title: t('inventory.reason'), dataIndex: 'reason', key: 'reason', render: (v: any) => v || '-' },
-              { title: t('inventory.operator'), dataIndex: 'operatorId', key: 'operatorId', render: (v: any) => v || '-' },
+              { title: t('inventory.reason'), dataIndex: 'reason', key: 'reason', render: formatInventoryReason },
+              { title: t('inventory.operator'), dataIndex: 'operatorId', key: 'operatorId', render: formatOperatorName },
             ]}
             dataSource={currentReferenceLogs}
             rowKey="id"
@@ -5354,19 +5380,22 @@ const AdminInventory: React.FC = () => {
 
       {/* 产品出入库记录弹窗 */}
       <Modal
+        className="inventory-product-logs-modal"
+        zIndex={2100}
         title={`${t('inventory.productLogs')} - ${items.find(i => i.id === viewingProductLogs)?.name || viewingProductLogs}`}
         open={!!viewingProductLogs}
         onCancel={() => setViewingProductLogs(null)}
         footer={null}
-        width={isMobile ? '100%' : 900}
-        style={isMobile ? { top: 0, paddingBottom: 0, maxHeight: '100vh' } : {}}
+        width={isMobile ? '100%' : 'calc(100vw - 32px)'}
+        style={isMobile ? { top: 0, paddingBottom: 0, maxHeight: '100vh' } : { top: 16, paddingBottom: 0, maxWidth: 1600 }}
         styles={(() => {
           const baseStyles = getModalThemeStyles(isMobile, true);
           return {
             ...baseStyles,
             body: {
               ...(baseStyles?.body || {}),
-              ...(isMobile ? { padding: '12px', maxHeight: 'calc(100vh - 55px)', overflow: 'auto' } : {})
+              ...(isMobile ? { padding: '12px', maxHeight: 'calc(100vh - 55px)', overflow: 'auto' }
+                : { padding: 0, maxHeight: 'calc(100dvh - 110px)', overflow: 'auto' })
             }
           };
         })()}
@@ -5381,9 +5410,10 @@ const AdminInventory: React.FC = () => {
                     title: t('inventory.time'),
                     dataIndex: 'createdAt',
                     key: 'createdAt',
+                    width: 148,
                     render: (v: any) => {
                       const d = toDateSafe(v);
-                      return d ? d.toLocaleString() : '-'
+                      return d ? dayjs(d).format('YYYY-MM-DD HH:mm') : '-'
                     },
                     sorter: (a: any, b: any) => {
                       const da = toDateSafe(a.createdAt)?.getTime() || 0
@@ -5395,6 +5425,7 @@ const AdminInventory: React.FC = () => {
                     title: t('inventory.type'),
                     dataIndex: 'type',
                     key: 'type',
+                    width: 106,
                     render: (type: string) => {
                       const color = type === 'in' ? 'green' : type === 'out' ? 'red' : 'blue'
                       const text = type === 'in' ? t('inventory.stockIn') : type === 'out' ? t('inventory.stockOut') : t('inventory.adjustment')
@@ -5411,6 +5442,8 @@ const AdminInventory: React.FC = () => {
                     title: t('inventory.quantity'),
                     dataIndex: 'quantity',
                     key: 'quantity',
+                    width: 88,
+                    align: 'right',
                     render: (quantity: number, record: any) => {
                       const color = record.type === 'in' ? 'green' : record.type === 'out' ? 'red' : 'blue'
                       const prefix = record.type === 'in' ? '+' : record.type === 'out' ? '-' : ''
@@ -5424,24 +5457,34 @@ const AdminInventory: React.FC = () => {
                     title: t('inventory.unitPrice'),
                     dataIndex: 'unitPrice',
                     key: 'unitPrice',
+                    width: 96,
+                    align: 'right',
                     render: (price: number) => price ? `RM${price.toFixed(2)}` : '-'
                   },
                   {
                     title: t('inventory.referenceNo'),
                     dataIndex: 'referenceNo',
                     key: 'referenceNo',
+                    width: 174,
+                    ellipsis: true,
                     render: (v: any) => v || '-'
                   },
                   {
                     title: t('inventory.reason'),
                     dataIndex: 'reason',
                     key: 'reason',
-                    render: (v: any) => v || '-'
+                    width: 240,
+                    ellipsis: { showTitle: false },
+                    render: (reason: string) => <Tooltip title={formatInventoryReason(reason)}>
+                      <span className="inventory-product-log-reason">{formatInventoryReason(reason)}</span>
+                    </Tooltip>
                   },
                   {
                     title: t('inventory.customer'),
                     dataIndex: 'userId',
                     key: 'userId',
+                    width: 148,
+                    ellipsis: true,
                     render: (userId: string, record: any) => {
                       // 1. 优先使用记录中直接保存的 userName
                       if (record.userName) return record.userName;
@@ -5470,13 +5513,18 @@ const AdminInventory: React.FC = () => {
                     title: t('inventory.operator'),
                     dataIndex: 'operatorId',
                     key: 'operatorId',
-                    render: (v: any) => v || '-'
+                    width: 132,
+                    ellipsis: true,
+                    render: formatOperatorName
                   },
                 ]}
                 dataSource={currentProductLogs}
                 rowKey="id"
+                tableLayout="fixed"
+                scroll={{ x: 1132, y: 'calc(100dvh - 240px)' }}
                 pagination={{
-                  pageSize: 10,
+                  defaultPageSize: 20,
+                  pageSizeOptions: [10, 20, 50, 100],
                   showSizeChanger: true,
                   showQuickJumper: true,
                   showTotal: (total, range) => t('common.paginationTotal', { start: range[0], end: range[1], total })
@@ -5487,20 +5535,10 @@ const AdminInventory: React.FC = () => {
                 }}
               />
             </div>
-            <div style={{
-              marginTop: 16,
-              padding: 12,
-              background: 'rgba(255, 255, 255, 0.05)',
-              borderRadius: 12,
-              border: '1px solid rgba(244,175,37,0.2)',
-              backdropFilter: 'blur(10px)'
-            }}>
-              <div style={{ fontWeight: 'bold', marginBottom: 8, color: '#FFFFFF' }}>{t('inventory.summary')}</div>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: '8px 24px' }}>
+            <div className="inventory-product-logs-summary" aria-label={t('inventory.summary')}>
+              <div className="inventory-product-logs-summary-grid">
                 <div style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('inventory.totalRecords')}: {currentProductLogs.length} {t('inventory.records')}</div>
                 <div style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('inventory.currentStock')}: {getComputedStock(viewingProductLogs || '')} {t('inventory.sticks')}</div>
-
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.05)', gridColumn: '1 / -1', margin: '4px 0' }} />
 
                 <div>
                   <div style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('inventory.totalInStock')}: {currentProductLogs.filter(log => log.type === 'in').reduce((sum, log) => sum + (log.quantity || 0), 0)} {t('inventory.sticks')}</div>
@@ -5673,7 +5711,7 @@ const AdminInventory: React.FC = () => {
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ color: 'rgba(255,255,255,0.5)' }}>{t('inventory.reason')}</span>
                           <span style={{ color: '#fff', fontWeight: 500, textAlign: 'right', flex: 1, marginLeft: 8 }}>
-                            {log.reason}
+                            {formatInventoryReason(log.reason)}
                           </span>
                         </div>
                       )}
@@ -5702,7 +5740,7 @@ const AdminInventory: React.FC = () => {
                       {log.operatorId && (
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <span style={{ color: 'rgba(255,255,255,0.5)' }}>👨‍💼 {t('inventory.operator')}</span>
-                          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>{log.operatorId}</span>
+                          <span style={{ color: 'rgba(255,255,255,0.7)', fontSize: 11 }}>{formatOperatorName(log.operatorId)}</span>
                         </div>
                       )}
                     </div>

@@ -166,9 +166,12 @@ export const cigarTheme: ThemeConfig = {
     },
     Tabs: {
       colorText: '#c0c0c0',
-      colorTextSecondary: '#ffd700',
+      colorTextSecondary: '#FDE08D',
       colorBorderSecondary: '#333333',
-      inkBarColor: '#ffd700',
+      itemSelectedColor: '#FDE08D',
+      itemHoverColor: '#D4A050',
+      itemActiveColor: '#C48D3A',
+      inkBarColor: '#C48D3A',
     },
     Descriptions: {
       labelBg: 'transparent',
@@ -234,7 +237,7 @@ export const cigarTheme: ThemeConfig = {
     },
     Switch: {
       colorPrimary: '#C48D3A',
-      colorPrimaryHover: '#ffed4e',
+      colorPrimaryHover: '#D4A050',
       handleBg: '#FFFFFF',
     },
     Slider: {

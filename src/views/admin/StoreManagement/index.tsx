@@ -38,6 +38,7 @@ import {
 import { getAppConfig } from '../../../services/firebase/appConfig';
 import type { Store, AppConfig } from '../../../types';
 import { RoomManagement } from '../../../components/admin/RoomManagement';
+import { LoungeOperations } from '../../../components/admin/LoungeOperations';
 
 const { Title, Text } = Typography;
 const { Option } = Select;
@@ -392,6 +393,7 @@ const StoreManagement: React.FC = () => {
                 borderTop: '1px solid rgba(255,255,255,0.05)',
                 display: 'flex',
                 justifyContent: 'flex-end',
+                flexWrap: 'wrap',
                 background: 'rgba(255,255,255,0.01)'
               }}>
                 <Button
@@ -403,6 +405,7 @@ const StoreManagement: React.FC = () => {
                 >
                   {t('roomManagement.roomConfigTitle', 'Room Management')}
                 </Button>
+                <LoungeOperations store={store} onSaved={refresh} />
               </div>
 
               {/* Subtle gold border glow on the left */}

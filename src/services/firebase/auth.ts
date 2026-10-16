@@ -1,5 +1,6 @@
 // Firebase认证服务
 import { formatWhatsAppMessage } from '../../utils/whatsappMessage';
+import { temporaryPasswordMessage } from '../../utils/whatsappPasswordReset';
 import { 
   signInWithEmailAndPassword, 
   signOut,
@@ -808,14 +809,9 @@ const resetPasswordByPhoneCore = async (phone: string): Promise<ResetPasswordByP
 
     const appConfig = await getAppConfig();
     const appName = appConfig?.appName || 'MS';
-    const displayName = (userData as any).displayName || '用户';
+    const displayName = (userData as any).displayName || 'member';
 
-    const message = `[${appName}] 重置密码
-您好 ${displayName}，您的密码已重置。
-
-临时密码：${tempPassword}
-
-请尽快登录并修改密码。如非本人操作，请立即联系管理员。`;
+    const message = temporaryPasswordMessage(appName, displayName, tempPassword);
 
     return {
       success: true,

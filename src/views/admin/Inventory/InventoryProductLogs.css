@@ -1,0 +1,62 @@
+@media (min-width: 769px) {
+  .inventory-product-logs-modal .ant-modal-content {
+    padding: 16px;
+    border-radius: 8px;
+  }
+
+  .inventory-product-logs-modal .ant-modal-header {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .inventory-product-logs-modal .ant-modal-title {
+    padding-right: 28px;
+    font-size: 16px;
+    line-height: 22px;
+    overflow-wrap: anywhere;
+  }
+
+  .inventory-product-logs-modal .ant-table-thead > tr > th,
+  .inventory-product-logs-modal .ant-table-tbody > tr > td {
+    padding: 7px 10px !important;
+    font-size: 12px;
+    line-height: 20px;
+    white-space: nowrap;
+  }
+
+  .inventory-product-logs-modal .ant-tag {
+    margin-inline-end: 0;
+    font-size: 11px;
+    line-height: 18px;
+  }
+
+  .inventory-product-logs-modal .ant-table-body {
+    overscroll-behavior: contain;
+  }
+
+  .inventory-product-logs-modal .ant-pagination {
+    margin: 10px 0 !important;
+  }
+
+  .inventory-product-log-reason {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .inventory-product-logs-summary {
+    margin-top: 8px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(244, 175, 37, 0.2);
+    font-size: 12px;
+    line-height: 20px;
+  }
+
+  .inventory-product-logs-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 8px 16px;
+    overflow-wrap: anywhere;
+  }
+}

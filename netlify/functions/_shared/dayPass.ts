@@ -1,5 +1,8 @@
 import type { Firestore, Timestamp, Transaction } from 'firebase-admin/firestore';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
+import { firstVisitCutoff, loungeAvailability } from '../../../src/utils/loungeOperations';
+import { Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
+import { authorizeLounge } from './loungeVisits';
 
 const validId = (id: unknown): id is string => typeof id === 'string' && id.trim().length > 0
   && id.length <= 128 && !/[\u0000-\u001f/]/.test(id) && id !== '.' && id !== '..';
@@ -66,6 +69,11 @@ export async function executeDayPass(db: Firestore, uid: string, input: any, now
     const redemptionSnap = await tx.get(redemptionRef);
     if (session && (session.userId !== input.userId || session.storeId !== input.storeId)) throw new Error('invalid-session');
     if (session?.dayPass?.isPurchased) return { sessionId: sessionRef.id, alreadyPurchased: true };
+    if (storeSnap.data()?.operations?.enabled) {
+      await authorizeLounge(tx, db, uid, input.userId, input.storeId);
+      if (process.env.LOUNGE_OPERATIONS_ENABLED !== 'true') throw new Error('outside-hours');
+      if (storeSnap.data()?.status !== 'active' || !loungeAvailability(storeSnap.data()?.operations, now.toDate()).allowed) throw new Error('outside-hours');
+    }
     if (session && (session.status !== 'pending' || session.checkInType === 'membership')) throw new Error('invalid-session');
     if (configSnap.data()?.dayPass?.enabled === false) throw new Error('disabled');
     const raw = configSnap.data()?.dayPass || {};
@@ -94,6 +102,8 @@ export async function executeDayPass(db: Firestore, uid: string, input: any, now
       ...(!session && { userId: input.userId, userName, storeId: input.storeId, storeName: store.name || '',
         checkInAt: now, checkInBy: uid, status: 'pending', createdAt: now }),
       checkInType: 'daypass', dayPass: { isPurchased: true, purchasedAt: now, config },
+      ...(store.operations?.enabled ? { managedClosing: true,
+        scheduledCheckOutAt: AdminTimestamp.fromDate(firstVisitCutoff(session?.checkInAt?.toDate?.() || now.toDate())) } : {}),
       redemptions: [...(session?.redemptions || []), ...sessionEntitlements], updatedAt: now,
     }, { merge: true });
     tx.set(db.collection(C.POINTS_RECORDS).doc(`daypass_${sessionRef.id}`), {

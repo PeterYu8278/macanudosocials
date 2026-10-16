@@ -1,4 +1,42 @@
 {
+  "loungeOperations": {
+    "test": {
+      "title": "Test Daily Report", "preview": "Preview test report", "send": "Send test report", "checkStatus": "Check delivery status",
+      "notice": "Test only: no checkout, point deduction, stock movement or official closing batch changes. The English message is marked [TEST].",
+      "confirmTitle": "Send this test daily report?",
+      "confirmBody": "Send the preview to verified Whapi user.id {{recipient}} on channel {{channel}}. This sends a real WhatsApp message but does not execute settlement.",
+      "target": "Verified recipient: {{recipient}} · Channel: {{channel}}"
+    },
+    "processingError": "Processing or report error: review and retry.",
+    "closingInProgress": "This visit ended at 23:00. Final settlement is being processed. Pending cigar selections are retained.",
+    "title": "Lounge Operations", "hours": "Business Hours", "enabled": "Enable scheduled closing",
+    "disabled": "Automatic lounge closing is not enabled on this server. Manual report tests are available when WhatsApp is configured.",
+    "negativeWarning": "At 23:00, visits end even if the wallet becomes negative. Reloads repay the existing balance; fees are not charged twice.",
+    "opensAt": "Opening time", "exceptions": "Special Dates", "date": "Business date", "open": "Open",
+    "reportEnabled": "English daily report via Whapi", "channel": "Verified Whapi channel ID",
+    "recipient": "Recipient: the verified Whapi channel's own user.id. Sending also requires the server-side daily report switch.",
+    "closing": "Closing Batches", "preview": "Preview settlement", "remaining": "Unresolved visits", "delivery": "Report submission",
+    "retry": "Retry batch", "retryConfirm": "Retry unresolved settlement and generate a new report revision? Completed visits will not be charged again.",
+    "queued": "Background job queued. Refresh to check the result.", "previewTotal": "{{total}} due visits. Preview shows up to 50 visits; no data has been changed.",
+    "session": "Visit session", "fee": "Total fee (points)", "balance": "Estimated balance", "error": "Lounge operations unavailable. Check the backend connection.",
+    "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
+    "status": { "running": "Running", "waiting": "Waiting for next round", "completed": "Complete", "incomplete": "Incomplete: action required", "not-sent": "Not sent", "accepted": "Submitted (delivery not yet confirmed)", "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed", "unknown": "Unknown: verify before resending" },
+    "errors": {
+      "backend-unavailable": "Cannot connect to the lounge operations backend. For localhost, start the local Netlify Functions server on port 8888, then retry.",
+      "invalid-report-date": "Choose a valid business date no later than today.",
+      "test-report-not-found": "This test preview was not found or belongs to another operator.",
+      "test-confirm-required": "Confirm before sending the test WhatsApp message.",
+      "test-report-expired": "This test preview has expired. Generate a new preview.",
+      "test-report-rate-limit": "Wait one minute before sending another test for this lounge.",
+      "invalid-hours": "Check all opening times, special dates and the report channel.", "invalid-request": "Invalid lounge operation.",
+      "forbidden": "You do not have permission for this lounge.", "not-ready": "Configure and verify the server-side closing job before enabling this lounge.",
+      "not-enabled": "Scheduled closing is not enabled for this lounge.", "outside-hours": "This lounge is closed. Check the configured business hours.",
+      "already-checked-in": "The member already has an ongoing visit.", "membership-inactive": "An active membership is required.",
+      "insufficient-checkin": "Insufficient points for the first-hour charge.", "lounge-unavailable": "The lounge is unavailable.",
+      "active-visits": "Finish all ongoing visits before changing the scheduled closing switch.", "channel-unverified": "Verify the configured Whapi channel first.",
+      "before-closing": "Closing retries are available only after the business date's 23:00 cutoff.", "busy": "The closing batch is already running."
+    }
+  },
   "whatsmeowConnection": {
     "title": "Whatsmeow connection",
     "notRegistered": "No gateway registered on the server.",
@@ -182,6 +220,7 @@
       "lounge-not-found": "Lounge not found.",
       "invalid-config": "Day Pass configuration is invalid. Contact an administrator.",
       "insufficient-points": "Insufficient points to purchase a Day Pass.",
+      "outside-hours": "This lounge is closed. Day Pass check-in is available only during its business hours.",
       "invalid-session": "This visit cannot be used for a Day Pass purchase. Refresh and try again.",
       "account-suspended": "This account is suspended.",
       "service-unavailable": "Day Pass service is unavailable. Please try again later."
@@ -881,6 +920,9 @@
     "to": "to"
   },
   "visitSessions": {
+    "insufficientPointsTitle": "Insufficient Points",
+    "insufficientPointsCheckout": "Insufficient points to check out. Current balance: {{currentPoints}} points; amount due: {{pointsDue}} points; shortfall: {{shortfall}} points (minimum reload: RM {{minimumReload}}).",
+    "insufficientPointsCheckin": "Insufficient points to check in. Current balance: {{currentPoints}} points; first-hour charge: {{pointsDue}} points; shortfall: {{shortfall}} points (minimum reload: RM {{minimumReload}}).",
     "unknownUser": "Unknown User",
     "title": "Visit Sessions",
     "subtitle": "Manage users' lounge consumption and activity records",
@@ -1770,6 +1812,9 @@
     "orderTotal": "Order Total"
   },
   "inventory": {
+    "operatorSystem": "System",
+    "operatorHistoricalImport": "Historical Import",
+    "operatorUnknown": "Unknown User",
     "cigarName": "Cigar Name",
     "productName": "Product Name",
     "spec": "Specification",

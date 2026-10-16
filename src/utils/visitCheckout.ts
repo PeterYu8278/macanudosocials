@@ -4,10 +4,11 @@ import { toDateOrNull } from '../services/firebase/core/sanitize'
 export const MINIMUM_RELOAD_AMOUNT_RM = 200
 
 export const isCurrentVisitCheckedIn = (
-  session: Pick<VisitSession, 'userId' | 'status' | 'checkInAt' | 'checkOutAt'> | null | undefined,
+  session: Pick<VisitSession, 'userId' | 'status' | 'checkInAt' | 'checkOutAt' | 'scheduledCheckOutAt'> | null | undefined,
   userId: string | undefined
 ): boolean => Boolean(userId && session?.userId === userId && session.status === 'pending'
-  && toDateOrNull(session.checkInAt) && !session.checkOutAt)
+  && toDateOrNull(session.checkInAt) && !session.checkOutAt
+  && (!session.scheduledCheckOutAt || (toDateOrNull(session.scheduledCheckOutAt)?.getTime() ?? 0) > Date.now()))
 
 export interface CheckoutAffordability {
   canCheckout: boolean

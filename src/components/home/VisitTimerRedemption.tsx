@@ -264,7 +264,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     const updateDuration = () => {
       const now = new Date();
       const checkInAt = currentSession.checkInAt;
-      const diffMs = now.getTime() - checkInAt.getTime();
+      const end = currentSession.scheduledCheckOutAt ? Math.min(now.getTime(), currentSession.scheduledCheckOutAt.getTime()) : now.getTime();
+      const diffMs = Math.max(0, end - checkInAt.getTime());
       const hours = Math.floor(diffMs / (1000 * 60 * 60));
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
@@ -600,6 +601,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       styles={{ body: { padding: 16 } }}
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        {currentSession?.scheduledCheckOutAt && currentSession.status === 'pending'
+          && currentSession.scheduledCheckOutAt.getTime() <= Date.now()
+          && <Alert showIcon type="info" message={t('loungeOperations.closingInProgress')} />}
         {/* 上半部分：计时器区域 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           {/* 左侧：计时器信息 */}

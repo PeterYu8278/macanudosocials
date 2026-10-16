@@ -1,4 +1,7 @@
 // 驻店记录服务
+import i18n from 'i18next';
+import { visitRedemptionStockOutReason } from '../../utils/inventoryReason';
+import { loungeRequest, managedCheckin, managedCheckout } from '../loungeOperations';
 import { 
   collection, 
   doc, 
@@ -43,6 +46,7 @@ const processVisitSessionData = (data: any, docId: string): VisitSession => {
     checkOutAt: data.checkOutAt?.toDate?.() || data.checkOutAt,
     calculatedAt: data.calculatedAt?.toDate?.() || data.calculatedAt,
     nextDeductionAt: data.nextDeductionAt?.toDate?.() || data.nextDeductionAt,
+    scheduledCheckOutAt: data.scheduledCheckOutAt?.toDate?.() || data.scheduledCheckOutAt,
     checkoutPending: data.checkoutPending ? {
       ...data.checkoutPending,
       requestedAt: data.checkoutPending.requestedAt?.toDate?.() || new Date(data.checkoutPending.requestedAt)
@@ -79,6 +83,8 @@ export const createVisitSession = async (
   userName?: string
 ): Promise<{ success: boolean; sessionId?: string; error?: string }> => {
   try {
+    const lounge = await getDoc(doc(db, GLOBAL_COLLECTIONS.STORES, storeId));
+    if (lounge.data()?.operations?.enabled) return await managedCheckin(userId, storeId);
     
     // 检查用户是否有未完成的session
     let pendingSession: VisitSession | null = null;
@@ -145,7 +151,10 @@ export const createVisitSession = async (
     if (!initialAffordability.canCheckout) {
       return {
         success: false,
-        error: `积分不足，无法 Check-in。当前 ${userData.membership?.points || 0} 分，首小时需 ${initialDeduction} 分，还需充值 ${initialAffordability.shortfall} 分（最低充值 RM ${MINIMUM_RELOAD_AMOUNT_RM}）`
+        error: i18n.t('visitSessions.insufficientPointsCheckin', {
+          currentPoints: userData.membership?.points || 0, pointsDue: initialDeduction,
+          shortfall: initialAffordability.shortfall, minimumReload: MINIMUM_RELOAD_AMOUNT_RM
+        })
       };
     }
 
@@ -187,7 +196,10 @@ export const createVisitSession = async (
       const latestAffordability = calculateCheckoutAffordability(latestPoints, initialDeduction);
       if (!latestAffordability.canCheckout) {
         throw new Error(
-          `积分不足，无法 Check-in。当前 ${latestPoints} 分，首小时需 ${initialDeduction} 分，还需充值 ${latestAffordability.shortfall} 分（最低充值 RM ${MINIMUM_RELOAD_AMOUNT_RM}）`
+          i18n.t('visitSessions.insufficientPointsCheckin', {
+            currentPoints: latestPoints, pointsDue: initialDeduction,
+            shortfall: latestAffordability.shortfall, minimumReload: MINIMUM_RELOAD_AMOUNT_RM
+          })
         );
       }
 
@@ -258,6 +270,10 @@ export const processSessionRealtimeDeduction = async (
   if (!sessionDoc.exists()) return { deducted: 0, count: 0 };
 
   const data = sessionDoc.data() as any;
+  if (data.storeId) {
+    const lounge = await getDoc(doc(db, GLOBAL_COLLECTIONS.STORES, data.storeId));
+    if (lounge.data()?.operations?.enabled) return loungeRequest('realtime', { sessionId, storeId: data.storeId });
+  }
   if (!data.realtimeDeductionsEnabled || data.status !== 'pending') return { deducted: 0, count: 0 };
 
   const nextDeductionAt: Date = data.nextDeductionAt?.toDate?.() ?? null;
@@ -393,7 +409,7 @@ export const completeVisitSession = async (
   checkOutBy: string,
   currentStoreId?: string,
   forceHours?: number // 强制使用指定小时数（忘记check-out时）
-): Promise<{ success: boolean; pointsDeducted?: number; rebatePoints?: number; error?: string }> => {
+): Promise<{ success: boolean; pointsDeducted?: number; rebatePoints?: number; error?: string; code?: 'INSUFFICIENT_POINTS' }> => {
   try {
     const sessionDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, sessionId));
     if (!sessionDoc.exists()) {
@@ -401,6 +417,10 @@ export const completeVisitSession = async (
     }
 
     const sessionData = sessionDoc.data() as any;
+    if (sessionData.storeId) {
+      const lounge = await getDoc(doc(db, GLOBAL_COLLECTIONS.STORES, sessionData.storeId));
+      if (lounge.data()?.operations?.enabled) return await managedCheckout(sessionId, sessionData.storeId, forceHours);
+    }
     
     // 转换 redemptions 数组中的日期字段
     const redemptions = (sessionData.redemptions || []).map((r: any) => ({
@@ -518,7 +538,11 @@ export const completeVisitSession = async (
             });
             return {
               success: false,
-              error: `积分不足，无法 Check-out。当前 ${realtimeResult.insufficient.currentPoints} 分，需扣 ${realtimeResult.insufficient.pointsDue} 分，还需充值 ${realtimeResult.insufficient.shortfall} 分（最低充值 RM ${MINIMUM_RELOAD_AMOUNT_RM}）`
+              code: 'INSUFFICIENT_POINTS',
+              error: i18n.t('visitSessions.insufficientPointsCheckout', {
+                currentPoints: realtimeResult.insufficient.currentPoints, pointsDue: realtimeResult.insufficient.pointsDue,
+                shortfall: realtimeResult.insufficient.shortfall, minimumReload: MINIMUM_RELOAD_AMOUNT_RM
+              })
             };
           }
           // 读取最新已扣总量，写入 session 作为 pointsDeducted 汇总字段
@@ -605,7 +629,11 @@ export const completeVisitSession = async (
       });
       return {
         success: false,
-        error: `积分不足，无法 Check-out。当前 ${settlement.currentPoints} 分，需扣 ${Math.max(0, pointsDueNow)} 分，还需充值 ${settlement.shortfall} 分（最低充值 RM ${MINIMUM_RELOAD_AMOUNT_RM}）`
+        code: 'INSUFFICIENT_POINTS',
+        error: i18n.t('visitSessions.insufficientPointsCheckout', {
+          currentPoints: settlement.currentPoints, pointsDue: Math.max(0, pointsDueNow),
+          shortfall: settlement.shortfall, minimumReload: MINIMUM_RELOAD_AMOUNT_RM
+        })
       };
     }
 
@@ -933,7 +961,7 @@ export const completeVisitSession = async (
             const outboundOrderData: Omit<OutboundOrder, 'id' | 'updatedAt'> = {
               referenceNo: newOrderId,
               type: 'sale',
-              reason: `驻店兑换出库 (Session: ${sessionId})`,
+              reason: visitRedemptionStockOutReason(sessionId),
               items: outboundItems,
               totalQuantity: outboundTotalQty,
               totalValue: outboundTotalValue,
@@ -1004,6 +1032,10 @@ export const reconcileCompletedSessionRedemptions = async (
 
     const session = processVisitSessionData(sessionSnap.data(), sessionSnap.id);
     if (session.status !== 'completed') return { success: true, deferred: true };
+    if (session.managedClosing) {
+      await loungeRequest('sync-redemptions', { sessionId, storeId: session.storeId });
+      return { success: true };
+    }
 
     const { getRedemptionRecordsBySession } = await import('./redemption');
     const canonicalRecords = await getRedemptionRecordsBySession(sessionId);
@@ -1111,7 +1143,7 @@ export const reconcileCompletedSessionRedemptions = async (
       outboundOrderId = await createOutboundOrder({
         referenceNo: orderId,
         type: 'sale',
-        reason: `驻店兑换出库 (Session: ${sessionId})`,
+        reason: visitRedemptionStockOutReason(sessionId),
         items: deltaItems,
         totalQuantity: deltaItems.reduce((sum, item) => sum + item.quantity, 0),
         totalValue: deltaItems.reduce((sum, item) => sum + (item.subtotal || 0), 0),

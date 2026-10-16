@@ -672,6 +672,8 @@ export interface PointsRecord {
 
 // 驻店记录类型（Check-in/Check-out）
 export interface VisitSession {
+  managedClosing?: boolean;
+  scheduledCheckOutAt?: Date;
   id: string;
   userId: string;
   userName?: string;
@@ -922,6 +924,7 @@ export interface ReferralRecord {
 }
 
 export interface Store {
+  operations?: import('../utils/loungeOperations').LoungeOperations;
   id: string;
   name: string;
   address: string;

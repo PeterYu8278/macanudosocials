@@ -14,6 +14,9 @@ export const GLOBAL_COLLECTIONS = {
   /** 用户集合 */
   USERS: 'users',
   STORES: 'stores',
+  LOUNGE_BATCHES: '_loungeClosingBatches',
+  LOUNGE_REPORTS: '_loungeDailyReports',
+  LOUNGE_TEST_REPORTS: '_loungeTestReports',
   MEMBER_IDENTITY_LOCKS: '_memberIdentityLocks',
   REGISTRATION_ATTEMPTS: '_registrationAttempts',
   /** 品牌集合 */

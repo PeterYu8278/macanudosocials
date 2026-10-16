@@ -21,6 +21,7 @@ import { isFeatureVisible } from '../../../services/firebase/featureVisibility'
 import { getAllStores, createStore, updateStore, deleteStore } from '../../../services/firebase/stores'
 import { getAppConfig } from '../../../services/firebase/appConfig'
 import { RoomManagement } from '../../../components/admin/RoomManagement'
+import { LoungeOperations } from '../../../components/admin/LoungeOperations'
 import type { Store, AppConfig } from '../../../types'
 import dayjs from 'dayjs'
 
@@ -477,10 +478,11 @@ const SystemConfig: React.FC = () => {
                       {store.email && <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><MailOutlined style={{ color: 'rgba(253,224,141,0.4)', fontSize: 12 }} /><Text style={{ color: 'rgba(255,255,255,0.5)', fontSize: 12 }}>{store.email}</Text></div>}
                     </div>
                   </div>
-                  <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', justifyContent: 'flex-end', background: 'rgba(255,255,255,0.01)' }}>
+                  <div style={{ padding: '12px 20px', borderTop: '1px solid rgba(255,255,255,0.05)', display: 'flex', flexWrap: 'wrap', gap: 12, justifyContent: 'flex-end', background: 'rgba(255,255,255,0.01)' }}>
                     <Button type="link" size="small" icon={<CalendarOutlined />} onClick={() => openRoomDrawer(store.id)} style={{ color: '#FDE08D', padding: 0, height: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
                       {t('roomManagement.roomConfigTitle', 'Room Management')}
                     </Button>
+                    <LoungeOperations store={store} onSaved={refreshStores} />
                   </div>
                   <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: store.status === 'active' ? 'linear-gradient(to bottom,#FDE08D,#C48D3A)' : 'rgba(255,255,255,0.1)', borderRadius: '16px 0 0 16px' }} />
                 </div>
