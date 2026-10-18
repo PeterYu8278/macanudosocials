@@ -320,6 +320,7 @@
     "loading": "加载中...",
     "pageLoading": "页面加载中...",
     "save": "保存",
+    "saveSuccess": "保存成功",
     "saveScreenshot": "保存截图",
     "screenshotSaved": "截图已保存",
     "screenshotSaveFailed": "截图保存失败",

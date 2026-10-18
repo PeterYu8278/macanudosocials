@@ -321,6 +321,7 @@
     "loading": "Loading...",
     "pageLoading": "Page loading...",
     "save": "Save",
+    "saveSuccess": "Saved successfully",
     "saveScreenshot": "Save Screenshot",
     "screenshotSaved": "Screenshot saved",
     "screenshotSaveFailed": "Failed to save screenshot",
