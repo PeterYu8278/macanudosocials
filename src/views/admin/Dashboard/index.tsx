@@ -22,12 +22,14 @@ import { useTranslation } from 'react-i18next'
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../../store/modules/auth'
 import { getAppConfig } from '../../../services/firebase/appConfig'
-import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
+import { useVisitSummary } from './useVisitSummary'
 import { getAllRoomBookings } from '../../../services/firebase/rooms'
 import { getAllReloadRecords } from '../../../services/firebase/reload'
 import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import OrderDetails from '../Orders/OrderDetails'
 import CurrentVisits from './CurrentVisits'
+import OccupancyTrendChart from './OccupancyTrendChart'
+import { occupancyWeekDates } from '../../../utils/occupancyWeek'
 import LoungeClosingMonitor from '../../../components/admin/LoungeClosingMonitor'
 import { getRevenueTotals } from './revenue'
 import { canAccessRoute } from '../../../config/permissions'
@@ -827,10 +829,10 @@ const AdminDashboard: React.FC = () => {
     [isSuperAdmin, user?.storeId]
   )
   const { data: cigars, refresh: refreshCigars } = useFirestoreQuery<Cigar>(getCigars)
-  const { data: visitSessions, loading: visitSessionsLoading, refresh: refreshVisitSessions } = useFirestoreQuery<any>(
-    () => getAllVisitSessions(undefined, isSuperAdmin ? undefined : user?.storeId),
-    [isSuperAdmin, user?.storeId]
-  )
+  const { data: visitSummary, loading: visitSessionsLoading, refresh: refreshVisitSessions } = useVisitSummary(user?.id, isSuperAdmin, user?.storeId)
+  const visitSummaryMessage = (status?: string) => t(status === 'initializing'
+    ? 'dashboard.visitSummaryInitializing' : status === 'timezone'
+      ? 'dashboard.visitSummaryTimezone' : 'dashboard.visitSummaryUnavailable')
   const { data: roomBookings, refresh: refreshRoomBookings } = useFirestoreQuery<any>(
     () => getAllRoomBookings(isSuperAdmin ? undefined : user?.storeId),
     [isSuperAdmin, user?.storeId]
@@ -931,23 +933,12 @@ const AdminDashboard: React.FC = () => {
 
   const getTrendData = () => {
     const dataMap = new Map<string, number>()
+    const trendNow = trendType === 'members' ? dayjs(visitSummary?.evaluatedAt) : dayjs()
     
     if (trendType === 'members') {
-      // 聚合驻店签到人数
-      visitSessions.forEach(s => {
-        const dateObj = s.checkInAt instanceof Date ? s.checkInAt : new Date(s.checkInAt)
-        if (!dateObj || isNaN(dateObj.getTime())) return
-        
-        if (trendPeriod === 'daily') {
-          const key = dayjs(dateObj).format('YYYY-MM-DD')
-          dataMap.set(key, (dataMap.get(key) || 0) + 1)
-        } else if (trendPeriod === 'monthly') {
-          const key = dayjs(dateObj).format('YYYY-MM')
-          dataMap.set(key, (dataMap.get(key) || 0) + 1)
-        } else if (trendPeriod === 'yearly') {
-          const key = dayjs(dateObj).format('YYYY')
-          dataMap.set(key, (dataMap.get(key) || 0) + 1)
-        }
+      if (visitSummary?.status !== 'ready') return []
+      Object.entries(visitSummary.counts).forEach(([key, value]) => {
+        if (key.startsWith(`${trendPeriod}_`)) dataMap.set(key.slice(trendPeriod.length + 1), value)
       })
     } else {
       // 聚合房间预订数
@@ -973,7 +964,7 @@ const AdminDashboard: React.FC = () => {
     if (trendPeriod === 'daily') {
       // 过去15天
       for (let i = 14; i >= 0; i--) {
-        const d = dayjs().subtract(i, 'day')
+        const d = trendNow.subtract(i, 'day')
         const key = d.format('YYYY-MM-DD')
         const label = d.format('DD MMM')
         list.push({ label, value: dataMap.get(key) || 0 })
@@ -981,14 +972,14 @@ const AdminDashboard: React.FC = () => {
     } else if (trendPeriod === 'monthly') {
       // 过去12个月
       for (let i = 11; i >= 0; i--) {
-        const m = dayjs().subtract(i, 'month')
+        const m = trendNow.subtract(i, 'month')
         const key = m.format('YYYY-MM')
         const label = m.format('MMM YY')
         list.push({ label, value: dataMap.get(key) || 0 })
       }
     } else if (trendPeriod === 'yearly') {
       // 过去5年
-      const currentYear = dayjs().year()
+      const currentYear = trendNow.year()
       for (let i = 4; i >= 0; i--) {
         const y = currentYear - i
         const key = String(y)
@@ -1101,38 +1092,21 @@ const AdminDashboard: React.FC = () => {
   )
 
   const occupancyTrendData = useMemo(() => {
-    const now = dayjs()
-    const toDate = (value: any): Date | null => {
-      if (!value) return null
-      const date = value?.toDate ? value.toDate() : value instanceof Date ? value : new Date(value)
-      return Number.isNaN(date.getTime()) ? null : date
-    }
-
-    const buckets = occupancyTrendPeriod === 'hours24'
+    const now = dayjs(visitSummary?.evaluatedAt)
+    if (visitSummary?.occupancy.status !== 'ready') return []
+    const values = visitSummary.occupancy[occupancyTrendPeriod]
+    return occupancyTrendPeriod === 'hours24'
       ? Array.from({ length: 24 }, (_, index) => {
           const start = now.subtract(23 - index, 'hour').startOf('hour')
-          return { start, end: start.add(1, 'hour'), label: start.format('HH:00') }
+          return { label: start.format('HH:00'), value: values[index],
+            redemptions: visitSummary.redemptions?.status === 'ready' ? visitSummary.redemptions.hours24[index] : null }
         })
-      : Array.from({ length: 7 }, (_, index) => {
-          const start = now.subtract(6 - index, 'day').startOf('day')
-          return { start, end: start.add(1, 'day'), label: start.format('ddd') }
+      : occupancyWeekDates(now.toDate()).map((date, index) => {
+          const start = dayjs(date)
+          return { label: start.format('ddd'), value: values[index],
+            redemptions: visitSummary.redemptions?.status === 'ready' ? visitSummary.redemptions.days7[index] : null }
         })
-
-    return buckets.map(bucket => {
-      const people = new Set<string>()
-      visitSessions.forEach(session => {
-        const checkIn = toDate(session.checkInAt)
-        if (!checkIn) return
-        const checkOut = toDate(session.checkOutAt)
-          || (session.status === 'pending' ? now.toDate() : toDate(session.updatedAt))
-          || checkIn
-        if (checkIn < bucket.end.toDate() && checkOut >= bucket.start.toDate()) {
-          people.add(session.userId || session.id)
-        }
-      })
-      return { label: bucket.label, value: people.size }
-    })
-  }, [visitSessions, occupancyTrendPeriod])
+  }, [visitSummary, occupancyTrendPeriod])
 
   const ordersRevenueTrendData = useMemo(() => {
     const orderTotals = new Map<string, number>()
@@ -1623,7 +1597,7 @@ const AdminDashboard: React.FC = () => {
                     cursor: 'pointer'
                   }}
                 >
-                  {period === 'hours24' ? t('dashboard.last24Hours') : t('dashboard.last7Days')}
+                  {period === 'hours24' ? t('dashboard.last24Hours') : t('dashboard.thisWeek')}
                 </button>
               )
             })}
@@ -1632,14 +1606,16 @@ const AdminDashboard: React.FC = () => {
 
         {visitSessionsLoading ? (
           <div style={{ minHeight: 220, display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Spin /></div>
+        ) : visitSummary?.occupancy.status !== 'ready' ? (
+          <Alert type="warning" showIcon message={visitSummaryMessage(visitSummary?.occupancy.status)} />
         ) : (
-          <TrendChart
+          <>
+          <OccupancyTrendChart
             data={occupancyTrendData}
             isMobile={isMobile}
-            chartId="occupancy"
-            valueUnit={t('dashboard.peopleUnit')}
-            xLabelStride={occupancyTrendPeriod === 'hours24' ? 3 : 1}
           />
+          <Typography.Text type="secondary">{t('dashboard.visitSummaryAsOf', { time: dayjs(visitSummary.occupancy.asOf).format('DD MMM YYYY HH:mm') })}</Typography.Text>
+          </>
         )}
       </section>
 
@@ -1911,7 +1887,10 @@ const AdminDashboard: React.FC = () => {
 
           {/* 趋势折线图 */}
           <div style={{ marginTop: '8px' }}>
-            <TrendChart data={getTrendData()} isMobile={isMobile} />
+            {trendType === 'members' && visitSessionsLoading ? <Spin />
+              : trendType === 'members' && visitSummary?.status !== 'ready'
+                ? <Alert type="warning" showIcon message={visitSummaryMessage(visitSummary?.status)} />
+                : <TrendChart data={getTrendData()} isMobile={isMobile} />}
           </div>
 
           {/* 数据明细列表 */}

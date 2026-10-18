@@ -145,7 +145,7 @@ service cloud.firestore {
                     && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'email', 'emailAuth', 'emailChange', 'phone'])
                     && !request.resource.data.get('profile', {}).diff(resource.data.get('profile', {})).affectedKeys().hasAny(['phone', 'phoneAuth'])
                     && (((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid)) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status'])
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'storeId'])
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['membership'])
                            || request.resource.data.membership.points <= resource.data.membership.points))
                     || isAdmin()
@@ -284,6 +284,57 @@ service cloud.firestore {
     // ================================
     // Visit Sessions Collection
     // ================================
+    // Global counts are restricted to global roles; other operators need an assigned store.
+      function canReadDashboardScope(scope) {
+        return hasRole('superAdmin') || hasRole('developer')
+          || (isPointsOperator() && getUserData().get('storeId', '') != ''
+              && scope == 'store_' + getUserData().storeId);
+      }
+    match /_dashboardVisitStats/{scope} {
+      allow get: if canReadDashboardScope(scope);
+      allow list, write: if false;
+      match /buckets/{bucket} {
+        allow get: if canReadDashboardScope(scope);
+        allow list, write: if false;
+      }
+    }
+    match /_dashboardVisitStatsMeta/{documentId} {
+      allow get: if isPointsOperator() && documentId == 'default';
+      allow list, write: if false;
+    }
+    match /_dashboardVisitStatsSources/{documentId} {
+      allow read, write: if false;
+    }
+    match /_dashboardRedemptionStats/{scope} {
+      allow get: if canReadDashboardScope(scope);
+      allow list, write: if false;
+      match /buckets/{bucket} {
+        allow get: if canReadDashboardScope(scope);
+        allow list, write: if false;
+      }
+    }
+    match /_dashboardRedemptionStatsMeta/{documentId} {
+      allow get: if isPointsOperator() && documentId == 'default';
+      allow list, write: if false;
+    }
+    match /_dashboardRedemptionStatsSources/{documentId} {
+      allow read, write: if false;
+    }
+    match /_visitMemberStats/{userId} {
+      allow get: if isPaymentOwner(userId) || isAnyAdmin();
+      allow list, write: if false;
+    }
+    match /_visitMemberStatsMeta/{documentId} {
+      allow get: if isSignedIn() && documentId == 'default';
+      allow list, write: if false;
+    }
+    match /_visitMemberStatsSources/{documentId} {
+      allow read, write: if false;
+    }
+    match /_adminVisitPaginationMeta/{documentId} {
+      allow get: if isPointsOperator() && documentId == 'default';
+      allow list, write: if false;
+    }
     match /visitSessions/{sessionId} {
       // 读取：用户可以查看自己的驻店记录，任意管理员可以查看所有
       allow read: if isOwner(resource.data.userId) || isAnyAdmin();

@@ -37,8 +37,10 @@ export default function SystemMonitoring() {
     return () => controller.abort();
   }, [days, granularity, revision]);
   const filtered = rows.filter(row => (source === 'all' || source === row.source) &&
-    `${row.collection} ${row.feature}`.toLowerCase().includes(search.toLowerCase()));
+    `${row.collection} ${row.feature} ${row.operation ?? ''}`.toLowerCase().includes(search.toLowerCase()));
   const failures = filtered.reduce((sum, row) => sum + row.failures, 0);
+  const total = (key: 'requests' | 'readRequests') => filtered.some(row => row[key] !== undefined)
+    ? filtered.reduce((sum, row) => sum + (row[key] ?? 0), 0) : '-';
   return <div className="system-monitoring-page">
     <Typography.Title level={4}>{t('systemMonitoring.title')}</Typography.Title>
     <Space wrap style={{ marginBottom: 20 }}>
@@ -57,18 +59,29 @@ export default function SystemMonitoring() {
     {error && <Alert type="error" showIcon message={t('systemMonitoring.loadError')} style={{ marginBottom: 16 }} />}
     {truncated && <Alert type="warning" showIcon message={t('systemMonitoring.truncated')} style={{ marginBottom: 16 }} />}
     <MonitoringChart rows={filtered} days={days} loading={loading} granularity={granularity} />
-    <Statistic title={t('systemMonitoring.failures')} value={failures} style={{ marginBottom: 20 }} />
-    <Table<Row> rowKey="id" size="small" loading={loading} dataSource={filtered} scroll={{ x: 980 }}
+    <Space wrap size="large" style={{ marginBottom: 20 }}>
+      <Statistic title={t('systemMonitoring.requests')} value={total('requests')} />
+      <Statistic title={t('systemMonitoring.readRequests')} value={total('readRequests')} />
+      <Statistic title={t('systemMonitoring.failures')} value={failures} />
+    </Space>
+    <Table<Row> rowKey="id" size="small" loading={loading} dataSource={filtered} scroll={{ x: 1800 }}
       locale={{ emptyText: t('systemMonitoring.empty') }} pagination={{ pageSize: 20, showSizeChanger: true }}
       columns={[
         { title: t(granularity === 'hour' ? 'systemMonitoring.hour' : 'systemMonitoring.date'),
           render: (_, row) => granularity === 'hour' ? row.hour?.replace('T', ' ') + ':00' : row.date },
         { title: t('systemMonitoring.collection'), dataIndex: 'collection' },
         { title: t('systemMonitoring.feature'), dataIndex: 'feature' },
+        { title: t('systemMonitoring.operation'), dataIndex: 'operation', render: value => value ?? '-' },
         { title: t('systemMonitoring.source'), dataIndex: 'source', render: value => t(`systemMonitoring.${value}Source`) },
         ...(['reads', 'writes', 'deletes', 'failures', 'cacheReads'] as const).map(key => ({
           title: t(`systemMonitoring.${key}`), dataIndex: key, sorter: (a: Row, b: Row) => a[key] - b[key],
         })),
+        ...(['requests', 'readRequests', 'listenerInitialSnapshots', 'listenerChangeSnapshots', 'listenerInitialReads', 'listenerChangeReads'] as const).map(key => ({
+          title: t(`systemMonitoring.${key}`), dataIndex: key, render: (value: number | undefined) => value ?? '-',
+          sorter: (a: Row, b: Row) => (a[key] ?? 0) - (b[key] ?? 0),
+        })),
+        { title: t('systemMonitoring.averageLatency'), render: (_, row) => row.latencySamples
+          ? Math.round((row.latencyMs ?? 0) / row.latencySamples) : '-' },
       ]} />
     <Button style={{ marginTop: 20 }} icon={<DatabaseOutlined />} href="https://console.firebase.google.com/project/macanudosocial/firestore/usage" target="_blank" rel="noreferrer">{t('systemMonitoring.openFirebaseUsage')}</Button>
   </div>;

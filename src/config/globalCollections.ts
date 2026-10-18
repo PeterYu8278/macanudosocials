@@ -46,6 +46,13 @@ export const GLOBAL_COLLECTIONS = {
   POINTS_RECORDS: 'pointsRecords',
   /** 驻店记录集合 */
   VISIT_SESSIONS: 'visitSessions',
+  DASHBOARD_VISIT_STATS: '_dashboardVisitStats',
+  DASHBOARD_VISIT_STATS_META: '_dashboardVisitStatsMeta',
+  DASHBOARD_REDEMPTION_STATS: '_dashboardRedemptionStats',
+  DASHBOARD_REDEMPTION_STATS_META: '_dashboardRedemptionStatsMeta',
+  VISIT_MEMBER_STATS: '_visitMemberStats',
+  VISIT_MEMBER_STATS_META: '_visitMemberStatsMeta',
+  ADMIN_VISIT_PAGINATION_META: '_adminVisitPaginationMeta',
   /** 会员年费记录集合 */
   MEMBERSHIP_FEE_RECORDS: 'membershipFeeRecords',
   /** 充值记录集合 */

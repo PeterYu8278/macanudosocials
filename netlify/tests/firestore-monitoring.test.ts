@@ -41,6 +41,22 @@ describe('Monitoring access boundary', () => {
     expect((await handler(request('POST', { rows: [row] }))).status).toBe(200);
     expect(m.persist).toHaveBeenCalledWith([row], 'frontend');
   });
+  it('accepts optional request metrics and fixed labels while dropping unknown fields', async () => {
+    const row = { collection: 'users', feature: 'home', reads: 0, writes: 0, deletes: 0, failures: 1, cacheReads: 0,
+      operation: 'home.activeVisit', requests: 1, readRequests: 1, latencyMs: 250, latencySamples: 1,
+      listenerInitialSnapshots: 1, listenerChangeSnapshots: 2, listenerInitialReads: 0, listenerChangeReads: 4 };
+    expect((await handler(request('POST', { rows: [{ ...row, privateField: 'secret' }] }))).status).toBe(200);
+    expect(m.persist).toHaveBeenCalledWith([row], 'frontend');
+  });
+  it.each([
+    { operation: 'private@example.com' }, { operation: 'home.activeVisit?token=secret' },
+    { requests: -1 }, { readRequests: 0.5 }, { latencyMs: 100_000_001 }, { latencySamples: null },
+    { listenerInitialReads: 100_001 },
+  ])('rejects invalid optional metadata %j', async extra => {
+    const row = { collection: 'users', feature: 'home', reads: 0, writes: 0, deletes: 0, failures: 0, cacheReads: 0, ...extra };
+    expect((await handler(request('POST', { rows: [row] }))).status).toBe(400);
+    expect(m.persist).not.toHaveBeenCalled();
+  });
   it('rejects reports during the shared ingestion cooldown', async () => {
     m.receivedAt = Date.now();
     const row = { collection: 'orders', feature: 'shop', reads: 3, writes: 1, deletes: 0, failures: 0, cacheReads: 0 };

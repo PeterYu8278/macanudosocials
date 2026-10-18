@@ -4,6 +4,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { createHash } from 'node:crypto';
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections';
 import { persistMetrics, type MetricRow } from './_shared/firestoreMonitoring';
+import { isMonitoringOperation, metricCounterLimit, OPTIONAL_METRIC_COUNTERS } from '../../src/services/firebase/monitoringMetrics';
 
 const json = (status: number, body: unknown, extraHeaders: Record<string, string> = {}) => new Response(JSON.stringify(body), {
   status, headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', ...extraHeaders },
@@ -27,12 +28,15 @@ async function handler(request: Request) {
       if (text.length > 32_000) return json(413, { error: 'TOO_LARGE' });
       let body;
       try { body = JSON.parse(text); } catch { return json(400, { error: 'INVALID_JSON' }); }
-      const rows: MetricRow[] = body.rows;
+      const rows: MetricRow[] = body?.rows;
       const keys = ['reads', 'writes', 'deletes', 'failures', 'cacheReads'] as const;
       if (!Array.isArray(rows) || rows.length > 100 || !rows.every(row => row &&
         typeof row.collection === 'string' && /^[\w/-]{1,100}$/.test(row.collection) && !row.collection.startsWith('_firestoreMetric') &&
         typeof row.feature === 'string' && /^[\w/-]{1,100}$/.test(row.feature) &&
-        keys.every(key => Number.isSafeInteger(row[key]) && row[key] >= 0 && row[key] <= 100_000))) {
+        keys.every(key => Number.isSafeInteger(row[key]) && row[key] >= 0 && row[key] <= 100_000) &&
+        (row.operation === undefined || isMonitoringOperation(row.operation)) &&
+        OPTIONAL_METRIC_COUNTERS.every(key => row[key] === undefined ||
+          (Number.isSafeInteger(row[key]) && row[key]! >= 0 && row[key]! <= metricCounterLimit(key))))) {
         return json(400, { error: 'INVALID_METRICS' });
       }
       // Shared lease across serverless instances: local memory is not a rate limiter.
@@ -45,7 +49,9 @@ async function handler(request: Request) {
         return true;
       });
       if (!accepted) return json(429, { error: 'RATE_LIMITED' }, { 'Retry-After': '30' });
-      await persistMetrics(rows.map(row => Object.fromEntries(['collection', 'feature', ...keys].map(key => [key, row[key as keyof MetricRow]])) as unknown as MetricRow), 'frontend');
+      await persistMetrics(rows.map(row => Object.fromEntries(['collection', 'feature', ...keys, 'operation', ...OPTIONAL_METRIC_COUNTERS]
+        .filter(key => row[key as keyof MetricRow] !== undefined)
+        .map(key => [key, row[key as keyof MetricRow]])) as unknown as MetricRow), 'frontend');
       return json(200, { ok: true });
     }
     const user = await db.collection(GLOBAL_COLLECTIONS.USERS).doc(uid).get();

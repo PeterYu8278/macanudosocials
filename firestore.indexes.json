@@ -2,6 +2,22 @@
   "indexes": [
     {
       "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "checkInAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "checkInAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "redemptionRecords", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "adminStatuses", "arrayConfig": "CONTAINS" }]
+    },
+    {
+      "collectionGroup": "_dashboardVisitStatsSources", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "end", "order": "ASCENDING" }, { "fieldPath": "start", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
       "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
     },
     {

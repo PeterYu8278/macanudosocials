@@ -1,5 +1,6 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { createHash } from 'node:crypto';
 const m = vi.hoisted(() => ({ set: vi.fn(), persist: vi.fn(), hourlyPersist: vi.fn(), commit: vi.fn(), get: vi.fn(), queryGet: vi.fn(), getAll: vi.fn(), batchSet: vi.fn(), batchCommit: vi.fn() }));
 vi.mock('firebase-admin/firestore', () => {
   const ref = (path: string): any => ({ path, get: m.get, set: m.set, parent: collection(path.split('/').slice(0, -1).join('/')), collection: (id: string) => collection(`${path}/${id}`) });
@@ -34,6 +35,29 @@ describe('Server monitoring isolation', () => {
     vi.stubEnv('NODE_ENV', 'production'); m.get.mockResolvedValue({ exists: true });
     await withFirestoreMonitoring('lookup', async () => { await getFirestore().collection('_firestoreMetricsHourly').doc('hour').get(); });
     expect(m.persist).not.toHaveBeenCalled(); expect(m.hourlyPersist).not.toHaveBeenCalled();
+  });
+  it('preserves legacy IDs and persists operation rows once with optional counters', async () => {
+    vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-18T08:30:00Z'));
+    const legacy = { collection: 'users', feature: 'home', reads: 5, writes: 0, deletes: 0, failures: 0, cacheReads: 0 };
+    await persistMetrics([legacy], 'frontend');
+    const expected = createHash('sha256').update('2026-10-18:frontend:users:home').digest('hex');
+    expect(m.persist.mock.calls[0][0].path).toBe(`_firestoreMetrics/${expected}`);
+    expect(m.persist.mock.calls[0][1]).not.toHaveProperty('requests');
+    await persistMetrics([{ ...legacy, operation: 'home.memberStats', requests: 1, readRequests: 1, latencyMs: 12, latencySamples: 1 }], 'frontend');
+    expect(m.persist).toHaveBeenCalledTimes(2);
+    expect(m.hourlyPersist).toHaveBeenCalledTimes(2);
+    expect(m.persist.mock.calls[1][0].path).not.toBe(m.persist.mock.calls[0][0].path);
+    expect(m.persist.mock.calls[1][1]).toMatchObject({ reads: 5, operation: 'home.memberStats', requests: 1, latencyMs: 12 });
+  });
+  it('counts empty and failed backend reads as requests without inventing document reads', async () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    m.queryGet.mockResolvedValueOnce({ size: 0 });
+    m.get.mockRejectedValueOnce(new Error('quota'));
+    await withFirestoreMonitoring('lookup', async () => {
+      await getFirestore().collection('users').get();
+      await expect(getFirestore().collection('users').doc('secret').get()).rejects.toThrow('quota');
+    });
+    expect(m.persist.mock.calls[0][1]).toMatchObject({ reads: 0, failures: 1, requests: 2, readRequests: 2, latencySamples: 2 });
   });
   it('preserves transaction retries, records writes once, and excludes IDs', async () => {
     vi.stubEnv('NODE_ENV', 'production');
