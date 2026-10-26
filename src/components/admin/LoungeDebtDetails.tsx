@@ -58,6 +58,7 @@ export default function LoungeDebtDetails({ storeId, reportId, reportKind = 'for
         {snapshot.schemaVersion !== 2 && <Alert type="warning" message={label('oldClassification')} />}
         {snapshot.legacyCorrection && <Alert type="info" message={label('legacyCorrected')} />}
         {snapshot.balanceOrigin === 'zero' && <Alert type="info" message={label('zeroOrigin')} />}
+        {snapshot.historyRefresh && <Alert type="info" message={t('loungeOperations.debt.historyRefreshed', { skipped: snapshot.historyRefresh.skippedCustomers })} />}
       </Space>}
       <Tabs activeKey={group} onChange={setGroup} items={Object.entries(groups).map(([key, rows]) => ({ key, label: `${label(`group.${key}`)} (${rows.length})` }))} />
       <Table<LoungeDebtCustomer> size="small" loading={busy} rowKey="userId" dataSource={activeGroup}

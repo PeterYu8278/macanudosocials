@@ -2,6 +2,7 @@
   "loungeOperations": {
     "reportPreviewTitle": "日报预览",
     "debt": {
+      "historyRefreshed": "已按原快照截止时间及原钱包余额重算历史明细。原报表摘要与已发送消息保留不变。因无法核实历史凭据而保留原样的户口：{{skipped}}。",
       "shortParticipation": {"included": "已计入", "historical-included": "历史交易 · 已计入", "summary": "汇总 · 不重复计入", "duplicate": "重复凭据 · 不计入", "before-baseline": "已由期初基准涵盖", "invalid": "无效 · 待核查", "historical": "仅历史展示"},
       "calculated": "计算值",
       "zeroOrigin": "户口初始余额统一为 0 分（已确认的业务规则）。历史凭据及后续流水仅计入对账一次，不会再次修改钱包。",

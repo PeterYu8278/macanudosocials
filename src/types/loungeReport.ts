@@ -32,4 +32,5 @@ export interface LoungeDebtDetails {
   consistency?: 'transaction';
   legacyCorrection?: 'saved-evidence-only';
   balanceOrigin?: 'zero';
+  historyRefresh?: { version: number; mode: 'original-cutoff'; refreshedAt: string; skippedCustomers: number };
 }

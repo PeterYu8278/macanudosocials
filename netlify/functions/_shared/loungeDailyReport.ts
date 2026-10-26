@@ -89,7 +89,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   const debt = { opening: 0, added: 0, repaid: 0, closing: 0, unallocated: 0, review: invalid };
   const debtDetails: LoungeDebtDetails = { businessDate: date, from: new Date(start).toISOString(), to: new Date(asOf).toISOString(),
     historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false, schemaVersion: 2, consistency: 'transaction', balanceOrigin: 'zero' };
-  let evidenceBudget = 500, localReviewCount = 0;
+  let evidenceBudget = 1000, localReviewCount = 0;
   for (const user of users) {
     const current = user.data().membership?.points;
     const baseline = baselines.get(user.id);
@@ -104,7 +104,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
           const calculated = result.calculatedBalances[entry.id];
           return calculated ? { ...entry, calculatedBefore: calculated.before, calculatedAfter: calculated.after } : entry;
         }).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
-        const evidence = allEvidence.slice(0, Math.min(20, evidenceBudget)); evidenceBudget -= evidence.length;
+        const evidence = allEvidence.slice(0, Math.min(500, evidenceBudget)); evidenceBudget -= evidence.length;
         if (evidence.length < allEvidence.length) debtDetails.truncated = true;
         debtDetails.customers.push({ userId: user.id, name: String(user.data().displayName || user.id).slice(0, 160), memberId: String(user.data().memberId || '').slice(0, 80),
           expectedBalance: result.expectedBalance, difference: result.difference, baseline: baseline || null,
