@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Input, Modal, Space, Switch, Table, Tabs, Typography, message } from 'antd';
+import { Alert, Button, Checkbox, Input, Modal, Select, Space, Switch, Table, Tabs, Typography, message } from 'antd';
 import { ClockCircleOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { Store } from '../../types';
 import { emptyLoungeOperations, validateLoungeOperations, type LoungeOperations as Operations } from '../../utils/loungeOperations';
 import { loungeRequest } from '../../services/loungeOperations';
 import LoungeTestReport from './LoungeTestReport';
+import LoungeDebtDetails from './LoungeDebtDetails';
 
 export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: () => void }) {
   const { t } = useTranslation();
@@ -54,10 +55,22 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
             <Button icon={<DeleteOutlined />} title={t('common.delete')} onClick={() => setValue({ ...value, exceptions: value.exceptions.filter((_, n) => n !== i) })} />
           </Space>)}
           <Button icon={<PlusOutlined />} disabled={value.exceptions.length >= 100} onClick={() => setValue({ ...value, exceptions: [...value.exceptions, { date: '', open: false, startsAt: '' }] })}>{t('loungeOperations.exceptions')}</Button>
-          <Space wrap><Checkbox checked={value.dailyReportEnabled} onChange={e => setValue({ ...value, dailyReportEnabled: e.target.checked })}>{t('loungeOperations.reportEnabled')}</Checkbox>
-            <Input value={value.whapiChannelId} placeholder={t('loungeOperations.channel')} aria-label={t('loungeOperations.channel')}
-              onChange={e => setValue({ ...value, whapiChannelId: e.target.value.trim() })} /></Space>
-          <Typography.Text type="secondary">{t('loungeOperations.recipient')}</Typography.Text>
+          <Checkbox checked={value.dailyReportEnabled} onChange={e => setValue({ ...value, dailyReportEnabled: e.target.checked })}>{t('loungeOperations.reportEnabled')}</Checkbox>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12 }}>
+            <div><Typography.Text>{t('loungeOperations.reportProvider')}</Typography.Text>
+              <Select style={{ width: '100%' }} aria-label={t('loungeOperations.reportProvider')} value={value.reportDelivery?.provider || 'whapi'}
+                options={[{ value: 'whapi', label: 'Whapi' }, { value: 'whatsmeow', label: 'Whatsmeow' }]}
+                onChange={provider => setValue({ ...value, dailyReportEnabled: false, reportDelivery: { provider, channelId: '', recipient: '' } })} /></div>
+            <div><Typography.Text>{t('loungeOperations.channel')}</Typography.Text>
+              <Input value={value.reportDelivery?.channelId ?? value.whapiChannelId} maxLength={200} aria-label={t('loungeOperations.channel')}
+                onChange={e => setValue(value.reportDelivery ? { ...value, reportDelivery: { ...value.reportDelivery, channelId: e.target.value.trim() } }
+                  : { ...value, whapiChannelId: e.target.value.trim() })} /></div>
+            <div><Typography.Text>{t('loungeOperations.reportRecipient')}</Typography.Text>
+              <Input value={value.reportDelivery?.recipient || ''} maxLength={16} aria-label={t('loungeOperations.reportRecipient')}
+                placeholder={value.reportDelivery ? '+60123456789' : t('loungeOperations.legacyRecipient')}
+                onChange={e => setValue({ ...value, reportDelivery: { provider: value.reportDelivery?.provider || 'whapi',
+                  channelId: value.reportDelivery?.channelId ?? value.whapiChannelId, recipient: e.target.value.trim() } })} /></div>
+          </div>
           <Button type="primary" loading={busy} onClick={save}>{t('common.save')}</Button>
         </Space> },
         { key: 'batches', label: t('loungeOperations.closing'), children: <>
@@ -72,6 +85,8 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
               {row.lastError && <div><Typography.Text type="danger">{t('loungeOperations.processingError')}</Typography.Text></div>}
             </> },
             { title: t('loungeOperations.remaining'), dataIndex: 'remaining' },
+            { title: t('loungeOperations.debt.details'), render: (_, row: any) => <LoungeDebtDetails storeId={store.id}
+              reportId={`${store.id}_${row.businessDate}_v${row.revision || 1}`} /> },
             { title: t('loungeOperations.delivery'), dataIndex: 'reportStatus', render: s => String(t(`loungeOperations.status.${s || 'not-sent'}`, String(s || '-'))) },
             { title: t('loungeOperations.preview'), render: (_, row: any) => <Button size="small" disabled={!row.reportText} icon={<EyeOutlined />} onClick={() => Modal.info({
               title: t('loungeOperations.reportEnabled'), zIndex: 2200, width: 640, content: <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '65vh', overflowY: 'auto' }}>{row.reportText}</pre>,

@@ -1,7 +1,10 @@
 // @vitest-environment node
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
-const mocks = vi.hoisted(() => ({ auth: vi.fn(), snapshot: vi.fn(), load: vi.fn(), health: vi.fn(), assert: vi.fn(), send: vi.fn(), attach: vi.fn() }));
+const mocks = vi.hoisted(() => ({ auth: vi.fn(), snapshot: vi.fn(), load: vi.fn(), health: vi.fn(), assert: vi.fn(), send: vi.fn(), attach: vi.fn(),
+  meow: vi.fn(), gateway: vi.fn(), meowAssert: vi.fn(), meowSend: vi.fn() }));
+vi.mock('../functions/_shared/whatsmeow', async importOriginal => ({ ...await importOriginal<typeof import('../functions/_shared/whatsmeow')>(),
+  loadMeow: mocks.meow, gatewayRequest: mocks.gateway, assertMeowBinding: mocks.meowAssert, submitMeow: mocks.meowSend }));
 vi.mock('../functions/_shared/loungeVisits', () => ({ authorizeLounge: mocks.auth, loungeError: (code: string) => new Error(code) }));
 vi.mock('../functions/_shared/loungeDailyReport', () => ({ buildLoungeReportSnapshot: mocks.snapshot }));
 vi.mock('../functions/_shared/whatsapp', () => ({ loadWhatsApp: mocks.load, assertWhatsAppBinding: mocks.assert, submitWhapi: mocks.send }));
@@ -43,7 +46,7 @@ describe('independent read-only daily report testing', () => {
   it('previews with automatic closing disabled, writes only an isolated test draft and sends nothing', async () => {
     const draft = await preview();
     expect(draft).toMatchObject({ text: expect.stringContaining('[TEST]'), recipient: '***6789' });
-    expect(mocks.snapshot).toHaveBeenCalledWith(db, 'lounge', '2026-10-15', {}, 0, true);
+    expect(mocks.snapshot).toHaveBeenCalledWith(db, 'lounge', '2026-10-15', {}, 0, true, draft.draftId);
     expect(writes).toEqual([`_loungeTestReports/${draft.draftId}`]);
     expect(mocks.send).not.toHaveBeenCalled();
   });
@@ -87,6 +90,42 @@ describe('independent read-only daily report testing', () => {
     await expect(send(second.draftId!)).rejects.toThrow('test-report-rate-limit');
     expect(records[`_loungeTestReports/${second.draftId}`].status).toBe('not-sent');
     expect(mocks.send).toHaveBeenCalledOnce();
+  });
+  const enableMeow = () => {
+    records['_whatsappConfig/settings'].config.defaultProvider = 'whatsmeow';
+    records['stores/lounge'].operations = { reportDelivery: { provider: 'whatsmeow', channelId: 'whatsmeow:pilot:session', recipient: '+60199887766' } };
+    mocks.meow.mockResolvedValue({ gatewayId: 'pilot', sessionId: 'session', account: '+60123456789', version: 'v1', baseUrl: 'https://gateway.example.com', token: 'private' });
+    mocks.gateway.mockResolvedValue({ status: 'connected', sessionId: 'session', account: '+60123456789' });
+    mocks.meowSend.mockResolvedValue({ status: 'accepted', messageId: 'meow-message' });
+  };
+  it('freezes Whatsmeow provider, route and recipient in the test draft and sends once', async () => {
+    enableMeow(); const draft = await preview();
+    expect(draft).toMatchObject({ provider: 'whatsmeow', channelId: 'whatsmeow:pilot:session', recipient: '***7766' });
+    expect(await send(draft.draftId!, { provider: 'whapi', recipient: '+60111112222' })).toMatchObject({ status: 'accepted' });
+    await send(draft.draftId!);
+    expect(mocks.meowSend).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ version: 'v1' }), `lounge-test-${draft.draftId}`,
+      '+60199887766', expect.stringContaining('[TEST]'), expect.any(Number));
+    expect(mocks.send).not.toHaveBeenCalled();
+    expect(writes.every(path => path.startsWith('_loungeTestReports/') || path.startsWith('_whatsappTasks/'))).toBe(true);
+  });
+  it('rejects recipient changes after preview', async () => {
+    enableMeow(); const draft = await preview();
+    records['stores/lounge'].operations.reportDelivery.recipient = '+60111112222';
+    await expect(send(draft.draftId!)).rejects.toThrow('channel-unverified');
+    expect(mocks.meowSend).not.toHaveBeenCalled();
+  });
+  it('rejects provider or binding changes after preview without fallback', async () => {
+    enableMeow(); const draft = await preview();
+    mocks.meow.mockResolvedValueOnce({ gatewayId: 'pilot', sessionId: 'session', account: '+60123456789', version: 'v2', baseUrl: 'https://gateway.example.com', token: 'replacement' });
+    await expect(send(draft.draftId!)).rejects.toThrow('channel-unverified');
+    records['_whatsappConfig/settings'].config.defaultProvider = 'whapi';
+    await expect(send(draft.draftId!)).rejects.toThrow('channel-unverified');
+    expect(mocks.meowSend).not.toHaveBeenCalled(); expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it('keeps ambiguous Whatsmeow submissions unknown and does not resubmit', async () => {
+    enableMeow(); const draft = await preview(); mocks.meowSend.mockRejectedValue(new Error('timeout'));
+    expect(await send(draft.draftId!)).toMatchObject({ status: 'unknown' });
+    await send(draft.draftId!); expect(mocks.meowSend).toHaveBeenCalledOnce();
   });
   it.each(['2026-02-30', '2099-01-01', '', 'invalid'])('rejects invalid/future dates: %s', async date => {
     await expect(preview(date)).rejects.toThrow('invalid-report-date');

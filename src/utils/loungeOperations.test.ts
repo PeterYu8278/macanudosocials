@@ -52,6 +52,26 @@ describe('lounge weekly hours and 23:00 cutoff', () => {
   });
 });
 
+describe('daily report delivery configuration', () => {
+  it('keeps legacy Whapi configuration valid and supports explicit provider/recipient bindings', () => {
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true, whapiChannelId: 'channel' })).not.toThrow();
+    for (const provider of ['whapi', 'whatsmeow'] as const) {
+      expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+        reportDelivery: { provider, channelId: provider === 'whapi' ? 'channel' : 'whatsmeow:pilot:session', recipient: '+60123456789' } })).not.toThrow();
+    }
+  });
+  it('requires a channel and E.164 recipient for enabled explicit reports', () => {
+    for (const recipient of ['', '60123456789', '+0123456789', '+60 123456789']) {
+      expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+        reportDelivery: { provider: 'whatsmeow', channelId: 'whatsmeow:pilot:session', recipient } })).toThrow('invalid-hours');
+    }
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+      reportDelivery: { provider: 'whatsmeow', channelId: '', recipient: '+60123456789' } })).toThrow('invalid-hours');
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: false,
+      reportDelivery: { provider: 'whatsmeow', channelId: '', recipient: '' } })).not.toThrow();
+  });
+});
+
 describe('closing fee quotes', () => {
   const base = { checkInAt: at('20:00'), hourlyRate: 20, realtimeDeductionsEnabled: true, realtimePointsDeducted: 20, deductionCount: 1 };
   it('charges only unpaid intervals, not the initial hour again', () => {

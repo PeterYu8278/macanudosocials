@@ -4,8 +4,10 @@ import { EyeOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { localBusinessDate } from '../../utils/loungeOperations';
 import { loungeRequest } from '../../services/loungeOperations';
+import LoungeDebtDetails from './LoungeDebtDetails';
+import type { LoungeDebtDetails as DebtDetails } from '../../types/loungeReport';
 
-interface Draft { draftId: string; text: string; recipient: string; channelId: string; expiresAt: string }
+interface Draft { draftId: string; text: string; recipient: string; channelId: string; expiresAt: string; provider?: 'whapi' | 'whatsmeow'; debtDetails?: DebtDetails }
 export default function LoungeTestReport({ storeId }: { storeId: string }) {
   const { t } = useTranslation();
   const [date, setDate] = useState(() => localBusinessDate(new Date()));
@@ -29,7 +31,8 @@ export default function LoungeTestReport({ storeId }: { storeId: string }) {
     const snapshot = draft;
     Modal.confirm({
       title: t('loungeOperations.test.confirmTitle'), zIndex: 2200,
-      content: t('loungeOperations.test.confirmBody', { recipient: snapshot.recipient, channel: snapshot.channelId }),
+      content: t('loungeOperations.test.confirmBody', { recipient: snapshot.recipient, channel: snapshot.channelId,
+        provider: snapshot.provider === 'whatsmeow' ? 'Whatsmeow' : 'Whapi' }),
       okText: t('loungeOperations.test.send'),
       onOk: () => run(async () => {
         // A request may have reached the server even if its response is lost.
@@ -49,10 +52,12 @@ export default function LoungeTestReport({ storeId }: { storeId: string }) {
       <Button icon={<EyeOutlined />} loading={busy} disabled={!date} onClick={preview}>{t('loungeOperations.test.preview')}</Button>
     </Space>
     {draft && <>
-      <Typography.Text>{t('loungeOperations.test.target', { recipient: draft.recipient, channel: draft.channelId })}</Typography.Text>
+      <Typography.Text>{t('loungeOperations.test.target', { recipient: draft.recipient, channel: draft.channelId,
+        provider: draft.provider === 'whatsmeow' ? 'Whatsmeow' : 'Whapi' })}</Typography.Text>
       <pre style={{ margin: 0, padding: 12, border: '1px solid var(--cigar-border-primary)', borderRadius: 6,
         whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflowY: 'auto', fontSize: 13 }}>{draft.text}</pre>
       <Space wrap>
+        <LoungeDebtDetails storeId={storeId} reportId={draft.draftId} reportKind="test" details={draft.debtDetails} />
         <Button type="primary" icon={<SendOutlined />} loading={busy} disabled={result !== null && result !== 'not-sent'} onClick={confirmSend}>{t('loungeOperations.test.send')}</Button>
         <Button icon={<ReloadOutlined />} disabled={busy} onClick={refresh}>{t('loungeOperations.test.checkStatus')}</Button>
       </Space>

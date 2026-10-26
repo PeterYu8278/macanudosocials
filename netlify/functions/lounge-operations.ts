@@ -9,7 +9,7 @@ import { authorizeLounge, checkInLounge, deductLoungeRealtime, loungeError, sett
 import { previewLoungeClosing } from './_shared/loungeClosing';
 import { dispatchLoungeClosing } from './_shared/loungeDispatch';
 import { localBusinessDate, businessCutoff } from '../../src/utils/loungeOperations';
-import { loadWhatsApp } from './_shared/whatsapp';
+import { loadLoungeReportTransport } from './_shared/loungeReportTransport';
 import { executeLoungeTestReport } from './_shared/loungeTestReport';
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,160}$/.test(value);
@@ -33,16 +33,22 @@ export const eventHandler: EventHandler = async event => {
     if (['test-report-preview', 'test-report-send', 'test-report-status'].includes(input.action)) {
       return reply(200, { success: true, ...await executeLoungeTestReport(db, uid, input) });
     }
-    if (['save-hours', 'status', 'preview', 'retry'].includes(input.action)) {
+    if (['save-hours', 'status', 'preview', 'retry', 'report-details'].includes(input.action)) {
       // Administrators configure operations; ordinary staff only check in/out at their lounge.
       await db.runTransaction(async tx => { await authorizeLounge(tx, db, uid, uid, input.storeId, true); });
+      if (input.action === 'report-details') {
+        if (!validId(input.reportId) || !['test', 'formal'].includes(input.reportKind)) throw loungeError('invalid-request');
+        const report = (await db.collection(input.reportKind === 'test' ? C.LOUNGE_TEST_REPORTS : C.LOUNGE_REPORTS).doc(input.reportId).get()).data();
+        if (!report || report.storeId !== input.storeId) throw loungeError('report-not-found');
+        return reply(200, { success: true, debtDetails: report.debtDetails || null });
+      }
       if (input.action === 'status') {
         const batches = await db.collection(C.LOUNGE_BATCHES).where('storeId', '==', input.storeId).get();
         const rows: any[] = batches.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.businessDate.localeCompare(a.businessDate)).slice(0, 14);
         for (const row of rows) {
           const report = (await db.collection(C.LOUNGE_REPORTS).doc(`${input.storeId}_${row.businessDate}_v${row.revision || 1}`).get()).data();
           row.reportStatus = report?.delivery?.status || 'not-sent'; row.reportText = report?.text || '';
-          const task = (await db.collection(C.WHATSAPP_TASKS).doc(`lounge-${input.storeId}_${row.businessDate}_v${row.revision || 1}`).get()).data();
+          const task = (await db.collection(C.WHATSAPP_TASKS).doc(report?.delivery?.taskId || `lounge-${input.storeId}_${row.businessDate}_v${row.revision || 1}`).get()).data();
           if (task) row.reportStatus = task.status;
         }
         return reply(200, { success: true, enabled: process.env.LOUNGE_OPERATIONS_ENABLED === 'true',
@@ -52,16 +58,14 @@ export const eventHandler: EventHandler = async event => {
         validateLoungeOperations(input.operations);
         if (input.operations.enabled && (process.env.LOUNGE_OPERATIONS_ENABLED !== 'true'
           || (process.env.LOUNGE_JOB_SECRET || '').length < 32 || !process.env.URL)) throw loungeError('not-ready');
-        if (input.operations.dailyReportEnabled) {
-          const loaded = await loadWhatsApp(db);
-          if (!loaded.verified || input.operations.whapiChannelId !== loaded.config.whapi.channelId) throw loungeError('channel-unverified');
-        }
+        const reportTransport = input.operations.dailyReportEnabled ? await loadLoungeReportTransport(db, input.operations) : null;
         await db.runTransaction(async tx => {
           await authorizeLounge(tx, db, uid, uid, input.storeId, true);
           const ref = db.collection(C.STORES).doc(input.storeId), old = await tx.get(ref);
           if (!old.exists) throw loungeError('lounge-unavailable');
           const active = await tx.get(db.collection(C.VISIT_SESSIONS).where('storeId', '==', input.storeId).where('status', '==', 'pending').limit(1));
           if (active.size && !!old.data()?.operations?.enabled !== input.operations.enabled) throw loungeError('active-visits');
+          if (reportTransport) await reportTransport.assert(tx, input.operations);
           tx.update(ref, { operations: input.operations, updatedAt: Timestamp.now() });
           tx.create(db.collection(C.AUDIT_LOGS).doc(), { action: 'lounge-hours', storeId: input.storeId, operatorId: uid,
             before: old.data()?.operations || null, after: input.operations, createdAt: Timestamp.now() });
@@ -96,7 +100,7 @@ export const eventHandler: EventHandler = async event => {
     if (String(error?.code).startsWith('auth/')) return reply(401, { success: false, code: 'auth-required' });
     const known = ['invalid-hours', 'invalid-request', 'forbidden', 'not-ready', 'not-enabled', 'outside-hours', 'already-checked-in',
       'membership-inactive', 'insufficient-checkin', 'lounge-unavailable', 'session-not-found', 'member-not-found', 'active-visits', 'channel-unverified', 'busy', 'before-closing',
-      'invalid-report-date', 'test-report-not-found', 'test-confirm-required', 'test-report-expired', 'test-report-rate-limit'];
+      'invalid-report-date', 'report-not-found', 'test-report-not-found', 'test-confirm-required', 'test-report-expired', 'test-report-rate-limit'];
     return reply(code === 'forbidden' ? 403 : known.includes(code) ? 409 : 503, {
       success: false, code: known.includes(code) ? code : 'service-unavailable', details: error?.details || {},
     });

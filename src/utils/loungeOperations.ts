@@ -1,4 +1,9 @@
 export interface LoungeDay { open: boolean; startsAt: string }
+export interface LoungeReportDelivery {
+  provider: 'whapi' | 'whatsmeow';
+  channelId: string;
+  recipient: string;
+}
 export interface LoungeOperations {
   enabled: boolean;
   timezone: 'Asia/Kuala_Lumpur';
@@ -6,6 +11,7 @@ export interface LoungeOperations {
   exceptions: Array<{ date: string; open: boolean; startsAt: string }>;
   dailyReportEnabled: boolean;
   whapiChannelId: string;
+  reportDelivery?: LoungeReportDelivery;
 }
 
 export const emptyLoungeOperations = (): LoungeOperations => ({
@@ -27,12 +33,18 @@ export function validateLoungeOperations(value: LoungeOperations): void {
   if (!value || value.timezone !== 'Asia/Kuala_Lumpur' || typeof value.enabled !== 'boolean'
     || typeof value.dailyReportEnabled !== 'boolean' || typeof value.whapiChannelId !== 'string' || value.whapiChannelId.length > 200
     || !Array.isArray(value.week) || value.week.length !== 7 || !Array.isArray(value.exceptions) || value.exceptions.length > 100) throw new Error('invalid-hours');
+  const route = value.reportDelivery;
+  if (route && (!['whapi', 'whatsmeow'].includes(route.provider)
+    || typeof route.channelId !== 'string' || route.channelId.length > 200
+    || typeof route.recipient !== 'string'
+    || (route.recipient !== '' && !/^\+[1-9]\d{6,14}$/.test(route.recipient))
+    || (value.dailyReportEnabled && (!route.channelId.trim() || !route.recipient)))) throw new Error('invalid-hours');
   const validDay = (d: LoungeDay) => d && typeof d.open === 'boolean' && typeof d.startsAt === 'string'
     && (!d.open || /^([01]\d|2[0-2]):[0-5]\d$/.test(d.startsAt));
   if (!value.week.every(validDay) || !value.exceptions.every(d => validDay(d) && /^\d{4}-\d{2}-\d{2}$/.test(d.date)
     && Number.isFinite(businessDayStart(d.date).getTime()) && localBusinessDate(businessDayStart(d.date)) === d.date)
     || new Set(value.exceptions.map(d => d.date)).size !== value.exceptions.length
-    || (value.enabled && !value.week.some(d => d.open)) || (value.dailyReportEnabled && !value.whapiChannelId.trim())) throw new Error('invalid-hours');
+    || (value.enabled && !value.week.some(d => d.open)) || (value.dailyReportEnabled && !route && !value.whapiChannelId.trim())) throw new Error('invalid-hours');
 }
 
 export function loungeAvailability(operations: LoungeOperations | undefined, now = new Date()): { allowed: boolean; nextOpen: string | null } {

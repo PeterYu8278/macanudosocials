@@ -34,6 +34,31 @@ Messages already claimed retain their original provider. Stopping new business s
 does not recall messages already accepted into a gateway queue (maximum five minutes;
 password reset and form confirmation queues expire after one minute).
 
+## Lounge Daily Reports
+
+In each lounge's Operations settings, save an explicit report provider, channel
+ID, and E.164 recipient (for example `+60123456789`). Whatsmeow channel IDs are
+`whatsmeow:<GATEWAY_ID>:<GATEWAY_SESSION_ID>` and must match the activated
+gateway. The global WhatsApp provider must match the lounge's report provider;
+there is no automatic cross-provider fallback. The recipient is independent of
+the sending account. Legacy lounges without an explicit route retain Whapi
+self-delivery and do not automatically switch to Whatsmeow.
+
+Save settings before generating an independent test report. Previews bind to the
+provider, channel, credentials and recipient; changing any of these requires a
+new preview. Previewing does not send, and sending a test still requires explicit
+confirmation. Formal reports require both the lounge report switch and the
+server-side `LOUNGE_DAILY_REPORTS_ENABLED=true` switch. Test reports remain
+available independently of scheduled closing. Both report texts remain English.
+
+Report tasks claim once before submission. Unknown submissions require manual
+investigation, not automatic resending. Whatsmeow queues expire within five
+minutes (or the test preview's remaining validity, if shorter). Already accepted
+tasks retain their original channel after a provider change. Receipt progress is
+read from the original task; a delayed receipt is never reassigned to a new
+provider or session. Deploy the updated Netlify Functions and web UI together;
+these changes do not activate a production gateway or send a test automatically.
+
 ## Switching Numbers
 
 Each gateway deployment owns one device database. Stage a second gateway with its

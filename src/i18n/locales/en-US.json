@@ -1,11 +1,26 @@
 {
   "loungeOperations": {
+    "debt": {
+      "unknownCustomer": "Customer record unavailable",
+      "openReport": "Open a debt details link from a daily report, or use Lounge Operations to view a saved report.",
+      "details": "Debt details", "period": "Snapshot period", "customer": "Customer", "status": "Reconciliation",
+      "opening": "Opening debt", "added": "New debt", "repaid": "Debt repaid", "outstanding": "Lounge debt", "walletBalance": "Shared wallet balance",
+      "reconciled": "Reconciled", "review": "Needs review", "ledger": "Saved ledger entries", "time": "Time (MYT)",
+      "entry": "Ledger / related record", "reference": "Related record", "amount": "Change (pts)", "before": "Balance before", "after": "Balance after",
+      "historical": "This snapshot includes activity after the business date. It is not the original day-end debt snapshot.",
+      "notice": "Amounts are points. Repaid debt is allocated to the oldest debt first. Unreconciled wallets show no calculated debt. Shared-wallet entries may include other lounges. This saved snapshot does not change when the wallet changes.",
+      "sharedWallet": "Shared-wallet activity (other lounge or unassigned)",
+      "otherReview": "Other network review items, excluded from this lounge",
+      "truncated": "The saved evidence is limited to recent entries. Copy the customer, ledger or related record ID to locate older records in Finance or Visit Sessions. This evidence is not a complete ledger.",
+      "legacy": "This older report has no saved debt details. Generate a new test preview to inspect current records; it cannot reconstruct the original snapshot.",
+      "reasons": { "wallet-missing": "Wallet balance is missing or invalid", "missing-user": "Customer document is missing", "invalid-entry": "Invalid transaction amount, type or date", "missing-checkpoint": "Missing starting balance or ledger history", "balance-gap": "Balance gap between transactions", "entry-mismatch": "Transaction change does not match recorded balance", "wallet-mismatch": "Ledger balance does not match wallet" }
+    },
     "test": {
       "title": "Test Daily Report", "preview": "Preview test report", "send": "Send test report", "checkStatus": "Check delivery status",
       "notice": "Test only: no checkout, point deduction, stock movement or official closing batch changes. The English message is marked [TEST].",
       "confirmTitle": "Send this test daily report?",
-      "confirmBody": "Send the preview to verified Whapi user.id {{recipient}} on channel {{channel}}. This sends a real WhatsApp message but does not execute settlement.",
-      "target": "Verified recipient: {{recipient}} · Channel: {{channel}}"
+      "confirmBody": "Send the preview via {{provider}} to configured recipient {{recipient}} on channel {{channel}}. This sends a real WhatsApp message but does not execute settlement.",
+      "target": "{{provider}} · Recipient: {{recipient}} · Channel: {{channel}}"
     },
     "processingError": "Processing or report error: review and retry.",
     "closingInProgress": "This visit ended at 23:00. Final settlement is being processed. Pending cigar selections are retained.",
@@ -13,15 +28,17 @@
     "disabled": "Automatic lounge closing is not enabled on this server. Manual report tests are available when WhatsApp is configured.",
     "negativeWarning": "At 23:00, visits end even if the wallet becomes negative. Reloads repay the existing balance; fees are not charged twice.",
     "opensAt": "Opening time", "exceptions": "Special Dates", "date": "Business date", "open": "Open",
-    "reportEnabled": "English daily report via Whapi", "channel": "Verified Whapi channel ID",
+    "reportEnabled": "Send English daily report", "channel": "Report channel ID",
+    "reportProvider": "Report provider", "reportRecipient": "Report recipient (E.164)", "legacyRecipient": "Connected Whapi account (legacy)",
     "recipient": "Recipient: the verified Whapi channel's own user.id. Sending also requires the server-side daily report switch.",
     "closing": "Closing Batches", "preview": "Preview settlement", "remaining": "Unresolved visits", "delivery": "Report submission",
     "retry": "Retry batch", "retryConfirm": "Retry unresolved settlement and generate a new report revision? Completed visits will not be charged again.",
     "queued": "Background job queued. Refresh to check the result.", "previewTotal": "{{total}} due visits. Preview shows up to 50 visits; no data has been changed.",
     "session": "Visit session", "fee": "Total fee (points)", "balance": "Estimated balance", "error": "Lounge operations unavailable. Check the backend connection.",
     "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
-    "status": { "running": "Running", "waiting": "Waiting for next round", "completed": "Complete", "incomplete": "Incomplete: action required", "not-sent": "Not sent", "accepted": "Submitted (delivery not yet confirmed)", "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed", "unknown": "Unknown: verify before resending" },
+    "status": { "running": "Running", "waiting": "Waiting for next round", "completed": "Complete", "incomplete": "Incomplete: action required", "not-sent": "Not sent", "accepted": "Submitted (delivery not yet confirmed)", "submitting": "Sending (result not yet confirmed)", "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed", "unknown": "Unknown: verify before resending" },
     "errors": {
+      "report-not-found": "Report not found for this lounge.",
       "backend-unavailable": "Cannot connect to the lounge operations backend. For localhost, start the local Netlify Functions server on port 8888, then retry.",
       "auth-required": "Your session has expired. Sign in again before retrying.",
       "service-unavailable": "The lounge service is temporarily unavailable. Please retry or contact an administrator.",
@@ -30,12 +47,12 @@
       "test-confirm-required": "Confirm before sending the test WhatsApp message.",
       "test-report-expired": "This test preview has expired. Generate a new preview.",
       "test-report-rate-limit": "Wait one minute before sending another test for this lounge.",
-      "invalid-hours": "Check all opening times, special dates and the report channel.", "invalid-request": "Invalid lounge operation.",
+      "invalid-hours": "Check all opening times, special dates, report channel and recipient.", "invalid-request": "Invalid lounge operation.",
       "forbidden": "You do not have permission for this lounge.", "not-ready": "Configure and verify the server-side closing job before enabling this lounge.",
       "not-enabled": "Scheduled closing is not enabled for this lounge.", "outside-hours": "This lounge is closed. Check the configured business hours.",
       "already-checked-in": "The member already has an ongoing visit.", "membership-inactive": "An active membership is required.",
       "insufficient-checkin": "Insufficient points for the first-hour charge.", "lounge-unavailable": "The lounge is unavailable.",
-      "active-visits": "Finish all ongoing visits before changing the scheduled closing switch.", "channel-unverified": "Verify the configured Whapi channel first.",
+      "active-visits": "Finish all ongoing visits before changing the scheduled closing switch.", "channel-unverified": "Verify the report provider, channel and recipient. If the connection changed, generate a new preview.",
       "before-closing": "Closing retries are available only after the business date's 23:00 cutoff.", "busy": "The closing batch is already running."
     }
   },
