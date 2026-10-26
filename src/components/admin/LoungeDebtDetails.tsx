@@ -47,6 +47,7 @@ export default function LoungeDebtDetails({ storeId, reportId, reportKind = 'for
         {snapshot.otherReviewCount > 0 && <Typography.Text>{label('otherReview')}: {snapshot.otherReviewCount}</Typography.Text>}
         {snapshot.truncated && <Alert type="warning" showIcon message={label('truncated')} />}
         {snapshot.schemaVersion !== 2 && <Alert type="warning" message={label('oldClassification')} />}
+        {snapshot.legacyCorrection && <Alert type="info" message={label('legacyCorrected')} />}
       </Space>}
       <Tabs activeKey={group} onChange={setGroup} items={Object.entries(groups).map(([key, rows]) => ({ key, label: `${label(`group.${key}`)} (${rows.length})` }))} />
       <Table<LoungeDebtCustomer> size="small" loading={busy} rowKey="userId" dataSource={activeGroup}

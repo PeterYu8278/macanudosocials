@@ -7,12 +7,14 @@ import { emptyLoungeOperations, validateLoungeOperations, type LoungeOperations 
 import { loungeRequest } from '../../services/loungeOperations';
 import LoungeTestReport from './LoungeTestReport';
 import LoungeDebtDetails from './LoungeDebtDetails';
+import LoungeReportPreview from './LoungeReportPreview';
 
 export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: () => void }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
   const [value, setValue] = useState<Operations>(store.operations || emptyLoungeOperations());
   const [status, setStatus] = useState<any>(null), [error, setError] = useState(''), [preview, setPreview] = useState<any>(null);
+  const [reportText, setReportText] = useState<string | null>(null);
   useEffect(() => { if (!open) setValue(store.operations || emptyLoungeOperations()); }, [store.operations, open]);
   const load = async () => {
     try { setStatus(await loungeRequest('status', { storeId: store.id })); setError(''); }
@@ -88,9 +90,8 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
             { title: t('loungeOperations.debt.details'), render: (_, row: any) => <LoungeDebtDetails storeId={store.id}
               reportId={`${store.id}_${row.businessDate}_v${row.revision || 1}`} /> },
             { title: t('loungeOperations.delivery'), dataIndex: 'reportStatus', render: s => String(t(`loungeOperations.status.${s || 'not-sent'}`, String(s || '-'))) },
-            { title: t('loungeOperations.preview'), render: (_, row: any) => <Button size="small" disabled={!row.reportText} icon={<EyeOutlined />} onClick={() => Modal.info({
-              title: t('loungeOperations.reportEnabled'), zIndex: 2200, width: 640, content: <pre style={{ whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '65vh', overflowY: 'auto' }}>{row.reportText}</pre>,
-            })} /> },
+            { title: t('loungeOperations.preview'), render: (_, row: any) => <Button size="small" disabled={!row.reportText} icon={<EyeOutlined />}
+              aria-label={t('loungeOperations.reportPreviewTitle')} onClick={() => setReportText(row.reportText)} /> },
             { title: t('common.actions'), render: (_, row: any) => <Button size="small" loading={busy} onClick={() => Modal.confirm({
               title: t('loungeOperations.retryConfirm'), zIndex: 2200, onOk: () => run(async () => {
                 await loungeRequest('retry', { storeId: store.id, businessDate: row.businessDate }); message.success(t('loungeOperations.queued')); await load();
@@ -107,6 +108,11 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
         </> },
         { key: 'test-report', label: t('loungeOperations.test.title'), children: <LoungeTestReport key={store.id} storeId={store.id} /> },
       ]} />
+    </Modal>
+    <Modal title={t('loungeOperations.reportPreviewTitle')} open={reportText !== null} onCancel={() => setReportText(null)}
+      width={880} zIndex={2200} className="lounge-report-modal"
+      footer={<Button type="primary" onClick={() => setReportText(null)}>{t('common.close')}</Button>}>
+      {reportText !== null && <LoungeReportPreview text={reportText} />}
     </Modal>
   </>;
 }

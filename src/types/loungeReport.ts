@@ -29,4 +29,5 @@ export interface LoungeDebtDetails {
   truncated: boolean;
   schemaVersion?: number;
   consistency?: 'transaction';
+  legacyCorrection?: 'saved-evidence-only';
 }

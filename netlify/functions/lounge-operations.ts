@@ -12,6 +12,7 @@ import { localBusinessDate, businessCutoff } from '../../src/utils/loungeOperati
 import { loadLoungeReportTransport } from './_shared/loungeReportTransport';
 import { executeLoungeTestReport } from './_shared/loungeTestReport';
 import { saveWalletDebtBaseline } from './_shared/walletDebtBaseline';
+import { correctLegacyLoungeDebtDetails } from '../../src/utils/legacyLoungeReportSnapshot';
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,160}$/.test(value);
 const reply = (statusCode: number, data: object) => ({ statusCode,
@@ -50,7 +51,8 @@ export const eventHandler: EventHandler = async event => {
         if (!validId(input.reportId) || !['test', 'formal'].includes(input.reportKind)) throw loungeError('invalid-request');
         const report = (await db.collection(input.reportKind === 'test' ? C.LOUNGE_TEST_REPORTS : C.LOUNGE_REPORTS).doc(input.reportId).get()).data();
         if (!report || report.storeId !== input.storeId) throw loungeError('report-not-found');
-        return reply(200, { success: true, debtDetails: report.debtDetails || null });
+        return reply(200, { success: true, debtDetails: report.debtDetails
+          ? correctLegacyLoungeDebtDetails(report.debtDetails) : null });
       }
       if (input.action === 'status') {
         const batches = await db.collection(C.LOUNGE_BATCHES).where('storeId', '==', input.storeId).get();

@@ -1,6 +1,8 @@
 {
   "loungeOperations": {
+    "reportPreviewTitle": "Daily report preview",
     "debt": {
+      "legacyCorrected": "Legacy warning corrected using saved evidence only. Missing history has not been restored; balances, debt totals and the original sent message have not been recalculated.",
       "unconfirmed": "Unconfirmed",
       "group": { "debt": "Confirmed lounge debt", "review": "Balance checks needed", "settled": "Reconciled / repaid" },
       "participation": "Calculation treatment",

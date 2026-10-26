@@ -4,6 +4,7 @@ import type { Store } from '../../types';
 import { emptyLoungeOperations } from '../../utils/loungeOperations';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../../services/loungeOperations', () => ({ loungeRequest: mocks.request }));
+vi.mock('../../store/modules/auth', () => ({ useAuthStore: () => ({ user: { role: 'admin' } }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 import { LoungeOperations } from './LoungeOperations';
 const store = { id: 'lounge', name: 'Test Lounge', status: 'active' } as Store;

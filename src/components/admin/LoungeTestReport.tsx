@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { localBusinessDate } from '../../utils/loungeOperations';
 import { loungeRequest } from '../../services/loungeOperations';
 import LoungeDebtDetails from './LoungeDebtDetails';
+import LoungeReportPreview from './LoungeReportPreview';
 import type { LoungeDebtDetails as DebtDetails } from '../../types/loungeReport';
 
 interface Draft { draftId: string; text: string; recipient: string; channelId: string; expiresAt: string; provider?: 'whapi' | 'whatsmeow'; debtDetails?: DebtDetails }
@@ -54,8 +55,7 @@ export default function LoungeTestReport({ storeId }: { storeId: string }) {
     {draft && <>
       <Typography.Text>{t('loungeOperations.test.target', { recipient: draft.recipient, channel: draft.channelId,
         provider: draft.provider === 'whatsmeow' ? 'Whatsmeow' : 'Whapi' })}</Typography.Text>
-      <pre style={{ margin: 0, padding: 12, border: '1px solid var(--cigar-border-primary)', borderRadius: 6,
-        whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', maxHeight: '40vh', overflowY: 'auto', fontSize: 13 }}>{draft.text}</pre>
+      <div style={{ maxHeight: '50dvh', overflowY: 'auto', paddingRight: 4 }}><LoungeReportPreview text={draft.text} /></div>
       <Space wrap>
         <LoungeDebtDetails storeId={storeId} reportId={draft.draftId} reportKind="test" details={draft.debtDetails} />
         <Button type="primary" icon={<SendOutlined />} loading={busy} disabled={result !== null && result !== 'not-sent'} onClick={confirmSend}>{t('loungeOperations.test.send')}</Button>

@@ -3,6 +3,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { Modal } from 'antd';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../../services/loungeOperations', () => ({ loungeRequest: mocks.request }));
+vi.mock('../../store/modules/auth', () => ({ useAuthStore: () => ({ user: { role: 'admin' } }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 import LoungeTestReport from './LoungeTestReport';
 afterEach(() => { cleanup(); vi.restoreAllMocks(); mocks.request.mockReset(); });

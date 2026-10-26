@@ -1,6 +1,8 @@
 {
   "loungeOperations": {
+    "reportPreviewTitle": "日报预览",
     "debt": {
+      "legacyCorrected": "已依据原快照证据修正旧版误报。尚未恢复缺失历史，也未重算钱包余额、欠款总额或原已发送消息。",
       "unconfirmed": "未确认",
       "group": { "debt": "已确认本店欠款", "review": "余额待核对", "settled": "已对账／已还清" },
       "participation": "计算方式",
