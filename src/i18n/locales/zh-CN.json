@@ -103,6 +103,7 @@
     "viewManualRequest": "查看待审核申请",
     "submitManualRequest": "提交申请：RM {{amount}}",
     "initialPackageLabel": "首次 Annual Pass 套餐",
+    "initialMembershipRequired": "请先完成首次 Annual Pass 套餐开通，再进行普通充值。请返回首页开通会员。",
     "renewalReloadLabel": "续费充值（仅充值额）",
     "reviewBreakdown": "充值 RM {{reload}} / 年费 RM {{fee}}",
     "actualAmount": "实际收款金额",

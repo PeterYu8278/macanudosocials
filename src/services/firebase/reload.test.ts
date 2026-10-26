@@ -5,6 +5,7 @@ const mocks = vi.hoisted(() => ({
   fetch: vi.fn(), addDoc: vi.fn(),
 }));
 vi.mock('../../config/firebase', () => ({ auth: mocks.auth, db: {} }));
+vi.mock('i18next', () => ({ default: { t: (key: string) => key } }));
 vi.mock('@/services/firebase/monitoredFirestore', () => ({
   collection: vi.fn(), doc: vi.fn(), getDoc: vi.fn(), getDocs: vi.fn(),
   addDoc: mocks.addDoc, query: vi.fn(), where: vi.fn(), orderBy: vi.fn(), limit: vi.fn(), startAfter: vi.fn(),
@@ -55,5 +56,16 @@ describe('authenticated reload review', () => {
     expect((await createReloadRecord('member', 100)).success).toBe(false);
     expect((await verifyReloadRecord('reload', 'operator')).success).toBe(false);
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it('rejects legacy client-created online reloads', async () => {
+    expect((await createReloadRecord('member', 200, 'Member', 'store', 'bill')).success).toBe(false);
+    expect(mocks.addDoc).not.toHaveBeenCalled();
+    expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+  it.each(['create', 'approve'])('shows the first membership requirement for %s', async action => {
+    mocks.fetch.mockResolvedValue({ json: async () => ({ success: false, code: 'INITIAL_MEMBERSHIP_REQUIRED' }) });
+    const result = action === 'create' ? await createReloadRecord('member', 200, 'Member', 'store')
+      : await verifyReloadRecord('reload', 'operator');
+    expect(result).toEqual({ success: false, error: 'annualPassPayment.initialMembershipRequired' });
   });
 });

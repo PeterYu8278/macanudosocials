@@ -185,6 +185,7 @@ describe('Annual Pass payment', () => {
     expect((await review(body)).status).toBe(409);
     expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENTS}/${body.orderId}`).status).toBe('cancelled');
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/${body.recordId}`)).toMatchObject({ status: 'rejected', reviewAction: 'cancel' });
     expect(m.docs.get(`${C.MEMBERSHIP_PAYMENT_STATUSES}/${body.orderId}`).status).toBe('cancelled');
     expect(m.docs.has(`${C.MEMBERSHIP_PAYMENT_LOCKS}/user`)).toBe(false);
   });
@@ -220,11 +221,25 @@ describe('Annual Pass payment', () => {
     expect(m.docs.get(`${C.RELOAD_RECORDS}/ordinary`)).toMatchObject({ pointsEquivalent: points === 80 ? -50 : 100,
       pointsEquivalentBasis: 'net', annualFeeAmount: points === 80 ? 150 : 0 });
   });
-  it('never activates a first pass from an ordinary RM299 reload', async () => {
-    m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: 299, pointsEquivalent: 299, status: 'pending' });
+  it.each([100, 200, 299])('blocks approval of an ordinary RM%s reload before first activation without changing balances', async amount => {
+    m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: amount, pointsEquivalent: amount, status: 'pending' });
     m.docs.set(`${C.USERS}/operator`, { role: 'admin' }); m.auth.mockResolvedValue({ uid: 'operator' });
-    expect((await review({ action: 'approve', recordId: 'ordinary' })).status).toBe(200);
-    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ role: 'member', status: 'inactive', membership: { points: 379 } });
+    const response = await review({ action: 'approve', recordId: 'ordinary' });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INITIAL_MEMBERSHIP_REQUIRED' });
+    expect(m.docs.get(`${C.USERS}/user`)).toMatchObject({ status: 'inactive', membership: { points: 80 } });
+    expect(m.docs.get(`${C.RELOAD_RECORDS}/ordinary`).status).toBe('pending');
+  });
+  it.each([false, true])('blocks ordinary reload creation before first activation (operator: %s)', async operatorManual => {
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+    if (operatorManual) {
+      m.docs.set(`${C.USERS}/operator`, { role: 'admin' });
+      m.auth.mockResolvedValue({ uid: 'operator' });
+    }
+    const response = await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200, operatorManual });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ code: 'INITIAL_MEMBERSHIP_REQUIRED' });
+    expect([...m.docs.keys()].filter(key => key.startsWith(`${C.RELOAD_RECORDS}/`))).toHaveLength(0);
   });
   it('awards configured first reload referral bonuses once alongside package settlement', async () => {
     m.docs.get(`${C.USERS}/user`).referral = { referredByUserId: 'referrer' };
@@ -242,6 +257,7 @@ describe('Annual Pass payment', () => {
     expect((await review({ action: 'approve', recordId: 'online' }, '')).status).toBe(401);
   });
   it('validates self reload options and refuses a duplicate pending request', async () => {
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/paid`, { userId: 'user', status: 'paid', amount: 150 });
     m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
     expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 300 })).status).toBe(403);
     expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 100 })).status).toBe(200);
@@ -296,6 +312,7 @@ describe('Annual Pass payment', () => {
     expect(m.post).not.toHaveBeenCalled();
   });
   it('allows ordinary manual reloads with an unset Billplz toggle but blocks them when explicitly enabled', async () => {
+    m.docs.set(`${C.MEMBERSHIP_FEE_RECORDS}/paid`, { userId: 'user', status: 'paid', amount: 150 });
     delete m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled;
     expect((await review({ action: 'create', userId: 'user', storeId: 'store', amount: 100 })).status).toBe(200);
     m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = true;

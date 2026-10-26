@@ -84,8 +84,8 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
   it('denies forged manual packages and completed reload records', async () => {
     const db = client('member')
     const pending = { userId: 'member', requestedAmount: 100, pointsEquivalent: 100, status: 'pending', billplzId: 'bill' }
-    await expect(setDoc(doc(db, 'reloadRecords/online'), pending)).resolves.toBeUndefined()
-    await expect(setDoc(doc(db, 'reloadRecords/online-net'), { ...pending, pointsEquivalentBasis: 'net', annualFeeAmount: 0 })).resolves.toBeUndefined()
+    await expect(setDoc(doc(db, 'reloadRecords/online'), pending)).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/online-net'), { ...pending, pointsEquivalentBasis: 'net', annualFeeAmount: 0 })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(setDoc(doc(db, 'reloadRecords/forged-fee'), { ...pending, annualFeeAmount: 199 }))
       .rejects.toMatchObject({ code: 'permission-denied' })
     await expect(setDoc(doc(db, 'reloadRecords/forged-package'), { ...pending, membershipOrderId: 'forged' }))
@@ -97,7 +97,10 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
   })
   it('requires server review and preserves pending reload audit records', async () => {
     const db = client('member')
-    await setDoc(doc(db, 'reloadRecords/pending'), { userId: 'member', requestedAmount: 100, pointsEquivalent: 100, status: 'pending', billplzId: 'bill' })
+    const response = await fetch(`${base}/reloadRecords/pending`, { method: 'PATCH',
+      headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { userId: text('member'), status: text('pending'), billplzId: text('bill') } }) })
+    expect(response.ok).toBe(true)
     await expect(updateDoc(doc(client('operator'), 'reloadRecords/pending'), { status: 'completed' }))
       .rejects.toMatchObject({ code: 'permission-denied' })
     await expect(deleteDoc(doc(db, 'reloadRecords/pending'))).rejects.toMatchObject({ code: 'permission-denied' })

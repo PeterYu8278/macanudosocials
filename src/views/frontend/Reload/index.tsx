@@ -5,7 +5,7 @@ import { WalletOutlined, ReloadOutlined, ClockCircleOutlined, CloseCircleOutline
 import { useAuthStore } from '../../../store/modules/auth';
 import { createReloadRecord, cancelReloadRecord } from '../../../services/firebase/reload';
 import { getAppConfig } from '../../../services/firebase/appConfig';
-import { createBill, getBillStatus } from '../../../services/billplz';
+import { getBillStatus } from '../../../services/billplz';
 import { useNavigate } from 'react-router-dom';
 import type { ReloadRecord, AppConfig } from '../../../types';
 import dayjs from 'dayjs';
@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import StoreSelect from '../../../components/common/StoreSelect';
 import { MINIMUM_WALLET_RELOAD_RM as MINIMUM_RELOAD_AMOUNT_RM, WALLET_RELOAD_OPTIONS } from '../../../utils/reloadAmount';
 import { usePendingPayments } from '../../../hooks/usePendingPayments';
-import { getMembershipPaymentStatus } from '../../../services/membershipActivation';
+import { getMembershipPaymentStatus, getMembershipPaymentQuote, createMembershipPayment } from '../../../services/membershipActivation';
 import { toDateOrNull } from '../../../services/firebase/core/sanitize';
 import { getUserData } from '../../../services/firebase/auth';
 import { netReloadPoints } from '../../../utils/reloadPoints';
@@ -96,36 +96,20 @@ const ReloadPage: React.FC = () => {
     setLoading(true);
     try {
       // 检查是否开启了 Billplz 支付
+      const quote = await getMembershipPaymentQuote();
+      if (!quote.renewal) {
+        modal.warning({ title: t('annualPassPayment.initialPackageLabel'),
+          content: t('annualPassPayment.initialMembershipRequired'),
+          onOk: () => navigate('/') });
+        return;
+      }
       if (paymentConfig?.billplz?.enabled) {
-        const billResponse = await createBill(
-          amount,
-          `Reload ${amount} RM for ${user.displayName || 'Member'}`,
-          user.displayName || 'Member',
-          user.email || '',
-          user.phone || ''
-        );
-
-        if (billResponse.success && billResponse.data?.url) {
-          // 先创建一个 pending 记录，备注 Billplz ID
-          const record = await createReloadRecord(
-            user.id, 
-            amount, 
-            user.displayName, 
-            selectedStoreId, 
-            billResponse.data.id
-          );
-          
-          if (!record.success) throw new Error(record.error || 'PAYMENT_UNAVAILABLE');
-          message.loading(t('common.redirectingToPayment'), 2);
-          setTimeout(() => {
-            window.location.href = billResponse.data!.url;
-          }, 1000);
-          return;
-        } else {
-          message.error(billResponse.error || t('common.paymentInitFailed'));
-          setLoading(false);
-          return;
-        }
+        // The server rechecks annual history and reserves the payment atomically.
+        const payment = await createMembershipPayment(amount, selectedStoreId);
+        refreshPendingRecord();
+        if (payment.paymentUrl) window.location.assign(payment.paymentUrl);
+        else message.success(t('reload.reloadRequestSubmitted', { amount }));
+        return;
       }
 
       // 传统模式：提交请求等待管理员验证

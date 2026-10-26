@@ -104,6 +104,7 @@
     "viewManualRequest": "View Pending Request",
     "submitManualRequest": "Submit Request: RM {{amount}}",
     "initialPackageLabel": "First Annual Pass Package",
+    "initialMembershipRequired": "Complete your first Annual Pass package before reloading. Return to Home to activate your membership.",
     "renewalReloadLabel": "Renewal Reload Only",
     "reviewBreakdown": "Reload RM {{reload}} / Annual fee RM {{fee}}",
     "actualAmount": "Actual amount received",

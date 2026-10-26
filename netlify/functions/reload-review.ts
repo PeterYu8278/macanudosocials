@@ -50,6 +50,9 @@ export const eventHandler: EventHandler = async event => {
           const order = await tx.get(db.collection(C.MEMBERSHIP_PAYMENTS).doc(lock.data()!.orderId));
           if (['creating', 'pending'].includes(order.data()?.status)) throw new Error('MEMBERSHIP_PAYMENT_PENDING');
         }
+        const fees = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
+          .where('userId', '==', body.userId).where('status', '==', 'paid'));
+        if (!fees.docs.some(doc => Number(doc.data().amount) > 0)) throw new Error('INITIAL_MEMBERSHIP_REQUIRED');
         const timestamp = Timestamp.now();
         // Serializes simultaneous requests for the same user even if the query was initially empty.
         tx.update(target.ref, { updatedAt: timestamp });
@@ -73,7 +76,7 @@ export const eventHandler: EventHandler = async event => {
   } catch (error: any) {
     const code = error?.message;
     const known = ['FORBIDDEN', 'RECORD_NOT_FOUND', 'RECORD_ALREADY_PROCESSED', 'INVALID_MANUAL_ORDER',
-      'PAYMENT_PROOF_REQUIRED', 'PAYMENT_AMOUNT_MISMATCH', 'MEMBERSHIP_REVIEW_REQUIRED',
+      'PAYMENT_PROOF_REQUIRED', 'PAYMENT_AMOUNT_MISMATCH', 'MEMBERSHIP_REVIEW_REQUIRED', 'INITIAL_MEMBERSHIP_REQUIRED',
       'ONLINE_PAYMENT_REQUIRES_CALLBACK', 'MEMBERSHIP_PAYMENT_PENDING', 'INVALID_AMOUNT', 'USER_NOT_FOUND', 'INVALID_REQUEST'];
     return reply(code === 'FORBIDDEN' ? 403 : known.includes(code) ? 409 : 503,
       { success: false, code: known.includes(code) ? code : 'SERVICE_UNAVAILABLE' });

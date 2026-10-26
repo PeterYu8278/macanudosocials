@@ -443,15 +443,9 @@ service cloud.firestore {
       // 读取：用户可以查看自己的充值记录，任意管理员可以查看所有
       allow read: if isPaymentOwner(resource.data.userId) || isPointsOperator();
 
-      // Only legacy online pending records may be created by the client. Manual requests use Admin transactions.
-      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid
-        && request.resource.data.status == 'pending'
-        && request.resource.data.requestedAmount in [100, 200, 500]
-        && request.resource.data.pointsEquivalent == request.resource.data.requestedAmount
-        && request.resource.data.get('pointsEquivalentBasis', 'net') == 'net'
-        && request.resource.data.get('annualFeeAmount', 0) == 0
-        && request.resource.data.billplzId is string
-        && !request.resource.data.keys().hasAny(['membershipOrderId', 'verifiedBy', 'verifiedAt', 'pointsRecordId']);
+      // All new payments use authenticated server transactions, including annual-history checks.
+      // Existing paid online invoices remain eligible for callback reconciliation.
+      allow create: if false;
 
       // Approval/rejection/cancellation must go through the authenticated server transaction.
       allow update: if false;

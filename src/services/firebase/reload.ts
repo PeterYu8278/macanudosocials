@@ -1,28 +1,21 @@
 // 充值记录服务
 import { 
   collection, 
-  doc, 
-  getDoc, 
   getDocs, 
-  addDoc, 
   query, 
   where, 
   orderBy, 
   limit,
   startAfter,
-  Timestamp,
   type QuerySnapshot,
   type DocumentData,
   type QueryDocumentSnapshot
 } from '@/services/firebase/monitoredFirestore';
 import { auth, db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
-import type { ReloadRecord, User } from '../../types';
-import { WALLET_RELOAD_OPTIONS } from '../../utils/reloadAmount';
+import type { ReloadRecord } from '../../types';
 import i18n from 'i18next';
 
-// 充值汇率（1 RM = 多少积分）
-const RELOAD_EXCHANGE_RATE = 1; // 1 RM = 1 积分（可根据配置调整）
 
 /**
  * 创建充值记录
@@ -48,43 +41,10 @@ export const createReloadRecord = async (
       });
       const result = await response.json();
       return result.success ? { success: true, recordId: result.recordId }
-        : { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
+        : { success: false, error: i18n.t(result.code === 'INITIAL_MEMBERSHIP_REQUIRED' ? 'annualPassPayment.initialMembershipRequired' : 'annualPassPayment.reviewFailed') };
     }
-    if (!WALLET_RELOAD_OPTIONS.includes(requestedAmount) || !storeId) {
-      return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
-    }
-
-    const userDoc = await getDoc(doc(db, GLOBAL_COLLECTIONS.USERS, userId));
-    if (!userDoc.exists()) {
-      return { success: false, error: '用户不存在' };
-    }
-
-    const userData = userDoc.data() as User;
-    const pointsEquivalent = Math.round(requestedAmount * RELOAD_EXCHANGE_RATE);
-
-    const recordData: Omit<ReloadRecord, 'id'> = {
-      userId,
-      userName: userName || userData.displayName,
-      requestedAmount,
-      pointsEquivalent,
-      pointsEquivalentBasis: 'net',
-      annualFeeAmount: 0,
-      status: 'pending',
-      ...(storeId !== undefined && { storeId }),
-      ...(billplzId !== undefined && { billplzId }),
-      ...(billplzId && { adminNotes: `Billplz Online Reload (ID: ${billplzId})` }),
-      createdAt: new Date(),
-      updatedAt: new Date()
-    };
-
-    const now = new Date();
-    const docRef = await addDoc(collection(db, GLOBAL_COLLECTIONS.RELOAD_RECORDS), {
-      ...recordData,
-      createdAt: Timestamp.fromDate(now),
-      updatedAt: Timestamp.fromDate(now)
-    });
-
-    return { success: true, recordId: docRef.id };
+    // New online payments must be reserved by membership-payment, never written by the client.
+    return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
   } catch (error: any) {
     return { success: false, error: error.message || '创建充值记录失败' };
   }
@@ -102,7 +62,7 @@ async function reviewReload(recordId: string, action: 'approve' | 'reject' | 'ca
       body: JSON.stringify({ recordId, action, proof, notes, actualAmount, creditOnly }),
     });
     const result = await response.json();
-    return result.success ? { success: true } : { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
+    return result.success ? { success: true } : { success: false, error: i18n.t(result.code === 'INITIAL_MEMBERSHIP_REQUIRED' ? 'annualPassPayment.initialMembershipRequired' : 'annualPassPayment.reviewFailed') };
   } catch {
     return { success: false, error: i18n.t('annualPassPayment.reviewFailed') };
   }

@@ -79,6 +79,7 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
     if (!Number.isFinite(points)) throw new Error('INVALID_POINTS_BALANCE');
     const fees = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS).where('userId', '==', record.userId));
     const renewal = fees.docs.some(doc => doc.data().status === 'paid' && Number(doc.data().amount) > 0);
+    if (!order && !renewal) throw new Error('INITIAL_MEMBERSHIP_REQUIRED');
     const feeConfig = await tx.get(db.collection(C.CONFIG).doc('membershipFee'));
     const fee = order ? Number(order.annualFee) : annualFee(feeConfig.data());
     if (!Number.isFinite(fee) || fee <= 0) throw new Error('INVALID_MEMBERSHIP_FEE');
