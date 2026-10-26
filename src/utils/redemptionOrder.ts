@@ -1,4 +1,8 @@
-import type { RedemptionRecordItem } from '../types'
+import type { Order, RedemptionRecordItem } from '../types'
+
+/** Inventory-linked redemption orders duplicate the canonical member redemption history. */
+export const isVisitRedemptionOrder = (order: Pick<Order, 'source'>): boolean =>
+  /^(?:驻店兑换订单|Visit redemption)\s*\(Session:\s*[^)]+\)/.test(order.source?.note?.trim() || '')
 
 export interface AggregatedRedemption {
   cigarId: string

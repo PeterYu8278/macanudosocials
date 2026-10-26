@@ -2331,6 +2331,11 @@
     "notFoundDesc": "Sorry, the brand you are looking for does not exist."
   },
   "profile": {
+    "visitSessionPoints": "Lounge visit",
+    "visitPointsIncomplete": "Incomplete",
+    "visitPointsIncompleteNotice": "Some session records could not be loaded. The final net amount is hidden to avoid showing a partial total. Refresh to retry.",
+    "lastProcessedBy": "Last processed by",
+    "visitPointStages": { "initial": "First-hour charge", "interval": "Additional time charge", "settlement": "Final settlement adjustment", "rebate": "Visit rebate" },
     "emailSync": {
       "verifyTitle": "Confirm email change request",
       "correctTitle": "Confirm administrator email correction",

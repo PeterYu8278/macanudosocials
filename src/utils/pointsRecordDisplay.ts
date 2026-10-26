@@ -1,16 +1,16 @@
 import type { PointsRecord } from '../types'
 import type { TFunction } from 'i18next'
+import { classifyPointsRecord } from './pointsRecordClassification'
 
-export const isHistoricalPointsRecord = (record: PointsRecord): boolean => (
-  record.createdBy === 'legacy_migration'
-  || record.description === 'Historical reload import'
-  || record.description === 'Historical visit fee import'
-  || /\(H\)\s*$/.test(record.description || '')
-)
+export const isHistoricalPointsRecord = (record: PointsRecord): boolean => classifyPointsRecord(record) === 'historical'
 
 export const formatPointsRecordDescription = (record: PointsRecord, t: TFunction): string => {
+  if (record.visitDisplaySummary) return t('profile.visitSessionPoints', { defaultValue: 'Lounge visit' })
   const description = record.description || ''
   const historical = isHistoricalPointsRecord(record)
+  const stage = ({ 'Visit first-hour charge': 'initial', 'Visit interval charge': 'interval',
+    'Visit final settlement': 'settlement', 'Visit rebate': 'rebate' } as Record<string, string>)[description]
+  if (record.source === 'visit' && stage) return t(`profile.visitPointStages.${stage}`, { defaultValue: description })
   if (record.source === 'reload' && description === 'Historical reload import') {
     const amount = Number(record.amount || 0)
     return `${t('pointsConfig.records.reloadDescription', {
@@ -65,7 +65,8 @@ const isDayPassPurchaseRecord = (record: PointsRecord): boolean => (
 export const isVisitDurationRecord = (record: PointsRecord): boolean => {
   if (record.source !== 'visit') return false
 
-  return record.isVisitSessionSummary === true
+  return record.visitDisplaySummary === true || record.isVisitSessionSummary === true
+    || ['Visit first-hour charge', 'Visit interval charge', 'Visit final settlement'].includes(record.description)
     || record.description.startsWith('驻店开始扣费')
     || record.description.startsWith('驻店计时扣费')
     || record.description.startsWith('驻店时长费用')
@@ -74,6 +75,11 @@ export const isVisitDurationRecord = (record: PointsRecord): boolean => {
     || isDayPassPurchaseRecord(record)
 }
 
+const isVisitRebate = (record: PointsRecord): boolean => record.source === 'visit'
+  && (record.description === 'Visit rebate' || record.description.startsWith('驻店消费返点'))
+
+export const isVisitSessionPointsRecord = (record: PointsRecord): boolean => isVisitDurationRecord(record) || isVisitRebate(record)
+
 const isCumulativeVisitSummary = (record: PointsRecord): boolean => (
   record.isVisitSessionSummary === true
   || (record.description.startsWith('驻店计时扣费') && record.description.includes('共'))
@@ -81,42 +87,49 @@ const isCumulativeVisitSummary = (record: PointsRecord): boolean => (
 
 export const consolidateVisitPointsRecords = (
   records: PointsRecord[],
-  _pendingSessionIds: ReadonlySet<string>
+  _pendingSessionIds: ReadonlySet<string>,
+  complete: boolean | ReadonlySet<string> = true
 ): PointsRecord[] => {
   const durationRecordsBySession = new Map<string, PointsRecord[]>()
 
   for (const record of records) {
-    if (record.relatedId && isVisitDurationRecord(record)) {
-      const sessionRecords = durationRecordsBySession.get(record.relatedId) || []
+    if (record.relatedId && isVisitSessionPointsRecord(record)) {
+      const key = `${record.userId}:${record.relatedId}`
+      const sessionRecords = durationRecordsBySession.get(key) || []
       sessionRecords.push(record)
-      durationRecordsBySession.set(record.relatedId, sessionRecords)
+      durationRecordsBySession.set(key, sessionRecords)
     }
   }
 
   const canonicalRecordBySession = new Map<string, PointsRecord>()
   for (const [sessionId, sessionRecords] of durationRecordsBySession) {
-    const summary = sessionRecords.find(isCumulativeVisitSummary)
-    const dayPassPurchaseTotal = sessionRecords
-      .filter(isDayPassPurchaseRecord)
-      .reduce((total, record) => total + record.amount, 0)
-    if (summary) {
-      canonicalRecordBySession.set(sessionId, dayPassPurchaseTotal > 0 ? {
-        ...summary,
-        amount: summary.amount + dayPassPurchaseTotal,
-        description: DAY_PASS_SUMMARY_DESCRIPTION
-      } : summary)
-      continue
-    }
-
-    const [latest, ...older] = sessionRecords
+    const unique = [...new Map(sessionRecords.map(record => [record.id, record])).values()]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const actual = unique.filter(record => classifyPointsRecord(record) !== 'historical')
+    const population = actual.length ? actual : unique
+    const summary = population.find(isCumulativeVisitSummary)
+    // A checkout summary already includes duration adjustments/refunds; rebates are additional credits.
+    const included = summary ? population.filter(record => record.id === summary.id || isDayPassPurchaseRecord(record) || isVisitRebate(record)) : population
+    const includedIds = new Set(included.map(record => record.id))
+    const cents = (record: PointsRecord) => Number.isFinite(record.amount) && record.amount >= 0 ? Math.round(record.amount * 100) : 0
+    const spend = included.filter(record => record.type === 'spend').reduce((sum, record) => sum + cents(record), 0)
+    const credit = included.filter(record => record.type === 'earn').reduce((sum, record) => sum + cents(record), 0)
+    const latest = summary || unique[0]
+    const lastTime = new Date(unique[0].createdAt).getTime()
+    const lastRows = unique.filter(record => new Date(record.createdAt).getTime() === lastTime)
+    const balanceTails = lastRows.filter(record => record.balance !== undefined
+      && !lastRows.some(other => other !== record && other.balanceBefore === record.balance))
+    const latestBalance = balanceTails.length === 1 ? balanceTails[0].balance : summary?.balance
     canonicalRecordBySession.set(sessionId, {
-      ...latest,
-      amount: older.reduce((total, record) => total + record.amount, latest.amount),
-      description: dayPassPurchaseTotal > 0 && sessionRecords.length > 1
-        ? DAY_PASS_SUMMARY_DESCRIPTION
-        : sessionRecords.length > 1
-          ? VISIT_SUMMARY_DESCRIPTION
-          : latest.description
+      ...latest, type: spend >= credit ? 'spend' : 'earn', amount: Math.abs(spend - credit) / 100,
+      createdAt: unique[0].createdAt, createdBy: unique[0].createdBy, balance: latestBalance,
+      description: population.some(isDayPassPurchaseRecord) ? DAY_PASS_SUMMARY_DESCRIPTION
+        : summary?.description || (unique.length > 1 ? VISIT_SUMMARY_DESCRIPTION : latest.description),
+      visitDisplaySummary: true, visitGrossSpend: spend / 100, visitCredits: credit / 100,
+      visitRecordsComplete: (typeof complete === 'boolean' ? complete : complete.has(sessionId)) && included.every(record => Number.isFinite(record.amount) && record.amount >= 0),
+      visitBreakdown: unique.map(record => ({ id: record.id, type: record.type, amount: record.amount,
+        description: record.description, createdAt: record.createdAt, includedInTotal: includedIds.has(record.id),
+        historical: classifyPointsRecord(record) === 'historical', summary: isCumulativeVisitSummary(record) })),
     })
   }
 
@@ -124,7 +137,7 @@ export const consolidateVisitPointsRecords = (
   const emittedSessionIds = new Set<string>()
 
   for (const record of records) {
-    const sessionId = isVisitDurationRecord(record) ? record.relatedId : undefined
+    const sessionId = isVisitSessionPointsRecord(record) && record.relatedId ? `${record.userId}:${record.relatedId}` : undefined
 
     if (!sessionId) {
       visibleRecords.push(record)

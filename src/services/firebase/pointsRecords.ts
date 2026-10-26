@@ -4,7 +4,37 @@ import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { PointsRecord } from '../../types';
 import { saveAuditLog } from './auditLog';
-import { consolidateVisitPointsRecords } from '../../utils/pointsRecordDisplay';
+import { consolidateVisitPointsRecords, isVisitSessionPointsRecord } from '../../utils/pointsRecordDisplay';
+
+// The latest-N list can cut through a session. Complete each visible session before showing its net amount.
+async function completeVisibleVisitGroups(records: PointsRecord[]) {
+  const groups = new Map(records.filter(record => record.relatedId && isVisitSessionPointsRecord(record))
+    .map(record => [`${record.userId}:${record.relatedId}`, record]));
+  const merged = new Map(records.map(record => [record.id, record]));
+  const complete = new Set<string>();
+  const groupsToRead = [...groups.entries()];
+  for (let offset = 0; offset < groupsToRead.length; offset += 4) {
+    await Promise.all(groupsToRead.slice(offset, offset + 4).map(async ([key, record]) => {
+      try {
+        // Equality filters avoid imposing a new ordered composite-index requirement.
+        const result = await getDocs(query(collection(db, GLOBAL_COLLECTIONS.POINTS_RECORDS),
+          where('userId', '==', record.userId), where('relatedId', '==', record.relatedId), limit(1001)));
+        if (result.size > 1000) return;
+        const returnedIds = new Set(result.docs.map(item => item.id));
+        if (records.some(item => item.userId === record.userId && item.relatedId === record.relatedId
+          && isVisitSessionPointsRecord(item) && !returnedIds.has(item.id))) return;
+        for (const item of result.docs) {
+          const value = item.data();
+          if (!isVisitSessionPointsRecord(value as PointsRecord)) continue;
+          merged.set(item.id, { id: item.id, ...value, createdAt: value.createdAt?.toDate?.() || new Date(value.createdAt) } as PointsRecord);
+        }
+        complete.add(key);
+      } catch { /* Show partial evidence explicitly; never present a partial sum as final. */ }
+    }));
+  }
+  const ordered = [...merged.values()].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  return { records: ordered, complete };
+}
 
 const getPendingVisitSessionIds = async (userId?: string): Promise<Set<string>> => {
   try {
@@ -95,7 +125,8 @@ export const getAllPointsRecords = async (limitCount: number = 100): Promise<Poi
     });
 
     const pendingSessionIds = await getPendingVisitSessionIds();
-    return consolidateVisitPointsRecords(records, pendingSessionIds);
+    const hydrated = await completeVisibleVisitGroups(records);
+    return consolidateVisitPointsRecords(hydrated.records, pendingSessionIds, hydrated.complete).slice(0, limitCount);
   } catch (error) {
     return [];
   }
@@ -125,8 +156,9 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
     });
     
     const pendingSessionIds = await getPendingVisitSessionIds(userId);
-    const consolidatedRecords = consolidateVisitPointsRecords(records, pendingSessionIds);
-    return addPendingVisitSummaries(userId, consolidatedRecords);
+    const hydrated = await completeVisibleVisitGroups(records);
+    const consolidatedRecords = consolidateVisitPointsRecords(hydrated.records, pendingSessionIds, hydrated.complete);
+    return (await addPendingVisitSummaries(userId, consolidatedRecords)).slice(0, limitCount);
   } catch (error: any) {
     
     // 如果是索引错误，尝试降级查询（不使用 orderBy）
@@ -159,7 +191,8 @@ export const getUserPointsRecords = async (userId: string, limitCount: number = 
         
         // 限制返回数量
         const pendingSessionIds = await getPendingVisitSessionIds(userId);
-        const consolidatedRecords = consolidateVisitPointsRecords(records, pendingSessionIds);
+        const hydrated = await completeVisibleVisitGroups(records);
+        const consolidatedRecords = consolidateVisitPointsRecords(hydrated.records, pendingSessionIds, hydrated.complete);
         const limitedRecords = (await addPendingVisitSummaries(userId, consolidatedRecords)).slice(0, limitCount);
         return limitedRecords;
       } catch (fallbackError) {

@@ -668,6 +668,14 @@ export interface PointsRecord {
   balance?: number;         // 操作后余额
   createdAt: Date;
   createdBy?: string;       // 创建人（管理员手动调整时）
+  balanceBefore?: number;
+  // Read-only presentation fields; never persist a consolidated card as a ledger entry.
+  visitDisplaySummary?: boolean;
+  visitGrossSpend?: number;
+  visitCredits?: number;
+  visitRecordsComplete?: boolean;
+  visitBreakdown?: Array<{ id: string; type: 'earn' | 'spend'; amount: number; description: string;
+    createdAt: Date; includedInTotal: boolean; historical: boolean; summary: boolean }>;
 }
 
 // 驻店记录类型（Check-in/Check-out）

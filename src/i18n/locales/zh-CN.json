@@ -2330,6 +2330,11 @@
     "notFoundDesc": "抱歉，您查找的品牌不存在。"
   },
   "profile": {
+    "visitSessionPoints": "本次驻店",
+    "visitPointsIncomplete": "未完整加载",
+    "visitPointsIncompleteNotice": "部分驻店流水未能加载。为避免显示不完整合计，暂不显示最终净变动，请刷新重试。",
+    "lastProcessedBy": "最后操作人",
+    "visitPointStages": { "initial": "首小时扣费", "interval": "后续时段扣费", "settlement": "离店尾款调整", "rebate": "驻店返点" },
     "emailSync": {
       "verifyTitle": "确认申请修改电邮",
       "correctTitle": "确认管理员更正电邮",
