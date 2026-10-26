@@ -122,6 +122,38 @@ describe('daily report verified Whapi self-delivery', () => {
 });
 
 describe('read-only report snapshot rendering', () => {
+  it.each([false, true])('retains imported point records while using only verified baseline and live transactions (baseline: %s)', async approved => {
+    const at = Date.parse('2026-10-20T15:00:00Z');
+    const fixture: Record<string, any[]> = {
+      visitSessions: [{ id: 'visit', userId: 'member', status: 'completed', checkInAt: new Date('2026-10-25T12:00:00+08:00') }],
+      pointsRecords: [{ id: 'history', userId: 'member', type: 'earn', amount: 200, createdAt: new Date(at - 1000),
+        description: 'Historical reload import', createdBy: 'legacy_migration', migration: { source: 'legacy_workbook', balanceNotApplied: true } }],
+      users: [{ id: 'member', displayName: 'Historical member', membership: { points: 156 } }],
+      _walletDebtBaselines: approved ? [{ id: 'member', version: 1, at, balance: 156, boundary: 'through_timestamp',
+        evidenceReference: 'independently-verified-source', note: 'Verified archive and cutoff', reviewedBy: 'reviewer', approvedAt: at + 1000 }] : [],
+    };
+    const collection = (name: string): any => {
+      const q = { doc: () => ({ get: async () => ({ data: () => ({ name: 'Lounge' }), readTime: { toMillis: () => Date.parse('2026-10-26T15:00:00Z') } }) }),
+        where: () => q, orderBy: () => q, limit: () => q, get: async () => ({ size: (fixture[name] || []).length,
+          docs: (fixture[name] || []).map(row => ({ id: row.id, data: () => row })) }) };
+      return q;
+    };
+    const transaction = vi.fn(async (work: any) => work({ get: (target: any) => target.get() }));
+    const report = await buildLoungeReportSnapshot({ collection, runTransaction: transaction } as unknown as Firestore, 'lounge', '2026-10-25', {}, 0, true);
+    expect(transaction).toHaveBeenCalledWith(expect.any(Function), { readOnly: true });
+    expect(report.debtDetails.to).toBe('2026-10-26T15:00:00.000Z');
+    const row = report.debtDetails.customers[0];
+    expect(row.entryCount).toBe(1);
+    expect(row.entries[0]).toMatchObject({ id: 'history', participation: 'historical', amount: 200 });
+    expect(row.entryCounts).toMatchObject({ historical: 1, included: 0 });
+    expect(row.walletBalance).toBe(156);
+    expect(row.reliable).toBe(approved);
+    expect(row.reasons).toEqual(approved ? [] : ['missing-checkpoint']);
+    expect(row.expectedBalance).toBe(approved ? 156 : null);
+    expect(row.outstanding).toBe(approved ? 0 : null);
+    expect(report.debt.closing).toBe(0);
+    expect(report.debtDetails.consistency).toBe('transaction');
+  });
   it('marks tests explicitly and never writes reports, balances, sessions or inventory', async () => {
     const at = new Date('2026-10-15T12:00:00+08:00');
     const fixture: Record<string, any[]> = {
@@ -141,7 +173,7 @@ describe('read-only report snapshot rendering', () => {
       };
       return query;
     };
-    const readOnlyDb = { collection } as unknown as Firestore;
+    const readOnlyDb = { collection, runTransaction: async (work: any) => work({ get: (target: any) => target.get() }) } as unknown as Firestore;
     const report = await buildLoungeReportSnapshot(readOnlyDb, 'lounge', '2026-10-15', {}, 0, true);
     expect(report.text).toContain('[TEST] Daily Lounge Report');
     expect(report.text).toContain('Settlement: NOT EXECUTED - TEST ONLY');
@@ -186,7 +218,7 @@ describe('read-only report snapshot rendering', () => {
       return q;
     };
     try {
-      const report = await buildLoungeReportSnapshot({ collection } as unknown as Firestore, 'lounge', '2026-10-15', {}, 0, true, 'saved-report');
+      const report = await buildLoungeReportSnapshot({ collection, runTransaction: async (work: any) => work({ get: (target: any) => target.get() }) } as unknown as Firestore, 'lounge', '2026-10-15', {}, 0, true, 'saved-report');
       expect(report.text).toContain('Outstanding lounge debt (verified): 15.00 pts');
       expect(report.text).toContain('Data status: INCOMPLETE');
       expect(report.text).toContain('Customers requiring review at this lounge: 1');

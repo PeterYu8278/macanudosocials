@@ -1,16 +1,17 @@
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { businessDayStart } from '../../../src/utils/loungeOperations';
-import { reconcileLoungeDebt, type DebtEntry } from '../../../src/utils/loungeDebt';
+import { reconcileLoungeDebt, validDebtBaseline, type DebtEntry, type DebtBaseline } from '../../../src/utils/loungeDebt';
+import { classifyPointsRecord } from '../../../src/utils/pointsRecordClassification';
 import { asDate, loungeError } from './loungeVisits';
 import { attachSubmission } from './whapiReceipts';
 import { loadLoungeReportTransport, loungeReportTaskId } from './loungeReportTransport';
 import type { LoungeDebtDetails, LoungeDebtCustomer } from '../../../src/types/loungeReport';
 
-export async function readPaged(query: any, max = 10000) {
+export async function readPaged(query: any, max = 10000, get: (target: any) => Promise<any> = target => target.get()) {
   const docs: any[] = []; let cursor: any;
   while (true) {
-    const page = await (cursor ? query.startAfter(cursor) : query).limit(250).get();
+    const page = await get((cursor ? query.startAfter(cursor) : query).limit(250));
     docs.push(...page.docs);
     if (docs.length > max) throw loungeError('scan-limit');
     if (page.size < 250) return docs;
@@ -19,11 +20,23 @@ export async function readPaged(query: any, max = 10000) {
 }
 
 export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, date: string, batch: any, revision: number, test = false, reportId?: string) {
-  const store = (await db.collection(C.STORES).doc(storeId).get()).data();
-  const sessions = await readPaged(db.collection(C.VISIT_SESSIONS).where('storeId', '==', storeId).orderBy('__name__'));
-  const start = businessDayStart(date).getTime(), end = start + 86400000, asOf = Date.now();
+  // Every wallet, baseline and ledger page shares one Firestore read timestamp.
+  const source = await db.runTransaction(async tx => {
+    const store = await tx.get(db.collection(C.STORES).doc(storeId));
+    const read = (query: any) => readPaged(query, 10000, target => tx.get(target));
+    const [sessions, redemptions, entries, users, baselines] = await Promise.all([
+      read(db.collection(C.VISIT_SESSIONS).where('storeId', '==', storeId).orderBy('__name__')),
+      read(db.collection(C.REDEMPTION_RECORDS).orderBy('__name__')),
+      read(db.collection(C.POINTS_RECORDS).orderBy('__name__')),
+      read(db.collection(C.USERS).orderBy('__name__')),
+      read(db.collection(C.WALLET_DEBT_BASELINES).orderBy('__name__')),
+    ]);
+    return { store: store.data(), sessions, redemptions, entries, users, baselines, asOf: store.readTime?.toMillis() || Date.now() };
+  }, { readOnly: true });
+  const { store, sessions, redemptions, entries, users, asOf } = source;
+  const baselines = new Map<string, DebtBaseline>(source.baselines.map(doc => [doc.id, doc.data() as DebtBaseline]));
+  const start = businessDayStart(date).getTime(), end = start + 86400000;
   const daily = sessions.filter(d => { const at = asDate(d.data().checkInAt).getTime(); return at >= start && at < end; });
-  const redemptions = await readPaged(db.collection(C.REDEMPTION_RECORDS).orderBy('__name__'));
   const sessionIds = new Set(daily.map(d => d.id));
   let pendingCigars = 0, confirmedCigars = 0;
   for (const doc of redemptions) {
@@ -34,7 +47,6 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
       if (item.status === 'completed') confirmedCigars += Number(item.quantity) || 0;
     }
   }
-  const entries = await readPaged(db.collection(C.POINTS_RECORDS).orderBy('__name__'));
   const grouped = new Map<string, DebtEntry[]>(); let invalid = 0;
   const localUsers = new Set(sessions.map(d => d.data().userId).filter(Boolean));
   const ledgerRows = new Map<string, LoungeDebtCustomer['entries']>();
@@ -42,40 +54,50 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
   for (const doc of entries) {
     const record = doc.data();
-    if (record.isVisitSessionSummary || record.migration?.balanceNotApplied || record.migration?.source === 'legacy_workbook') continue;
     const at = asDate(record.createdAt).getTime();
+    if (Number.isFinite(at) && at > asOf) continue;
+    const kind = classifyPointsRecord(record), baseline = baselines.get(record.userId);
+    const covered = kind === 'transaction' && baseline && validDebtBaseline(baseline) && baseline.approvedAt <= asOf && at <= baseline.at;
+    const valid = Number.isFinite(at) && typeof record.amount === 'number' && Number.isFinite(record.amount)
+      && record.amount >= 0 && ['earn', 'spend'].includes(record.type);
+    const participation = kind !== 'transaction' ? kind : covered ? 'before-baseline' : valid ? 'included' : 'invalid';
     if (record.storeId === storeId && record.userId) localUsers.add(record.userId);
     const evidence = ledgerRows.get(record.userId) || [];
     if (!Number.isFinite(at) || at <= asOf) evidence.push({ id: doc.id, at: Number.isFinite(at) ? new Date(at).toISOString() : null,
       amount: finite(['earn', 'spend'].includes(record.type) ? (record.type === 'earn' ? 1 : -1) * record.amount : NaN),
       before: finite(record.balanceBefore), after: finite(record.balance), source: String(record.source || '').slice(0, 80),
       relatedId: record.storeId === storeId ? String(record.relatedId || '').slice(0, 160) : '',
-      description: record.storeId === storeId ? String(record.description || '').slice(0, 160) : '', local: record.storeId === storeId });
+      description: !record.storeId || record.storeId === storeId ? String(record.description || '').slice(0, 160) : '', local: record.storeId === storeId, participation });
     ledgerRows.set(record.userId, evidence);
-    if (!Number.isFinite(at) || !Number.isFinite(record.amount) || !['earn', 'spend'].includes(record.type)) { invalid++; invalidUsers.add(record.userId); continue; }
+    if (kind !== 'transaction' || covered) continue;
+    if (!valid) { invalid++; invalidUsers.add(record.userId); continue; }
     const rows = grouped.get(record.userId) || [];
     rows.push({ id: doc.id, at, amount: (record.type === 'earn' ? 1 : -1) * record.amount,
       before: record.balanceBefore, after: record.balance, storeId: record.storeId });
     grouped.set(record.userId, rows);
   }
-  const users = await readPaged(db.collection(C.USERS).orderBy('__name__'));
   const debt = { opening: 0, added: 0, repaid: 0, closing: 0, unallocated: 0, review: invalid };
   const debtDetails: LoungeDebtDetails = { businessDate: date, from: new Date(start).toISOString(), to: new Date(asOf).toISOString(),
-    historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false };
+    historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false, schemaVersion: 2, consistency: 'transaction' };
   let evidenceBudget = 500, localReviewCount = 0;
   for (const user of users) {
     const current = user.data().membership?.points;
-    const result = reconcileLoungeDebt(grouped.get(user.id) || [], start, asOf, current);
+    const baseline = baselines.get(user.id);
+    const result = reconcileLoungeDebt(grouped.get(user.id) || [], start, asOf, current, baseline);
     const needsReview = !result.reliable || invalidUsers.has(user.id) || finite(current) === null;
     const relevant = localUsers.has(user.id) || [result.opening, result.added, result.repaid, result.closing].some(v => v[storeId] > 0);
     if (relevant && needsReview) localReviewCount++;
-    if (relevant && (needsReview || [result.opening, result.added, result.repaid, result.closing].some(v => v[storeId] > 0))) {
+    if (relevant && (needsReview || !!baseline || [result.opening, result.added, result.repaid, result.closing].some(v => v[storeId] > 0))) {
       if (debtDetails.customers.length >= 200) debtDetails.truncated = true;
       else {
         const allEvidence = (ledgerRows.get(user.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
         const evidence = allEvidence.slice(0, Math.min(20, evidenceBudget)); evidenceBudget -= evidence.length;
         if (evidence.length < allEvidence.length) debtDetails.truncated = true;
         debtDetails.customers.push({ userId: user.id, name: String(user.data().displayName || user.id).slice(0, 160), memberId: String(user.data().memberId || '').slice(0, 80),
+          expectedBalance: result.expectedBalance, difference: result.difference, baseline: baseline || null,
+          entryCounts: { historical: allEvidence.filter(e => e.participation === 'historical').length, summary: allEvidence.filter(e => e.participation === 'summary').length,
+            included: allEvidence.filter(e => e.participation === 'included').length, beforeBaseline: allEvidence.filter(e => e.participation === 'before-baseline').length,
+            invalid: allEvidence.filter(e => e.participation === 'invalid').length },
           reliable: !needsReview, reasons: [...new Set([...result.reasons, ...(invalidUsers.has(user.id) ? ['invalid-entry'] : []), ...(finite(current) === null ? ['wallet-missing'] : [])])], walletBalance: finite(current),
           opening: needsReview ? null : result.opening[storeId] || 0, added: needsReview ? null : result.added[storeId] || 0,
           repaid: needsReview ? null : result.repaid[storeId] || 0, outstanding: needsReview ? null : result.closing[storeId] || 0,
@@ -89,7 +111,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
     debt.unallocated += result.closing.unallocated || 0;
   }
   const knownUsers = new Set(users.map(user => user.id));
-  for (const userId of new Set([...grouped.keys(), ...invalidUsers])) {
+  for (const userId of new Set([...ledgerRows.keys(), ...invalidUsers])) {
     if (knownUsers.has(userId)) continue;
     debt.review++;
     if (!localUsers.has(userId)) { debtDetails.otherReviewCount++; continue; }
@@ -103,6 +125,8 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
       entries: saved, entryCount: evidence.length });
   }
   const completed = daily.filter(d => d.data().status === 'completed');
+  // Leave headroom for report text and delivery metadata under Firestore's document limit.
+  if (Buffer.byteLength(JSON.stringify(debtDetails), 'utf8') > 700000) throw loungeError('scan-limit');
   const fees = completed.reduce((sum, d) => sum + (d.data().pointsDeducted || 0), 0);
   const customers = new Set(daily.map(d => d.data().userId).filter(Boolean)).size;
   // Match the settled fee population and stored billing hours, excluding ongoing visits.

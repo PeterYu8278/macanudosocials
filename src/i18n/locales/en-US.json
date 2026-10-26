@@ -1,6 +1,19 @@
 {
   "loungeOperations": {
     "debt": {
+      "unconfirmed": "Unconfirmed",
+      "group": { "debt": "Confirmed lounge debt", "review": "Balance checks needed", "settled": "Reconciled / repaid" },
+      "participation": "Calculation treatment",
+      "participations": { "historical": "Historical display only — not applied again", "summary": "Summary only — avoids double counting", "before-baseline": "Already covered by approved baseline", "included": "Actual wallet transaction — included", "invalid": "Invalid data — review required" },
+      "oldClassification": "Older snapshot: historical records and calculation treatment were not saved. Generate a new preview; this snapshot cannot be reconstructed.",
+      "noBaseline": "History may exist, but no verifiable opening balance was found. No wallet discrepancy or debt has been confirmed.",
+      "baseline": "Approved balance baseline", "baselineAt": "Baseline cutoff (MYT, includes every transaction through this time)",
+      "baselineBalance": "Verified balance at cutoff (pts)", "registerBaseline": "Register verified baseline", "evidenceReference": "Independent source / archive reference",
+      "reviewNote": "Evidence and boundary review notes", "reviewedBy": "Reviewed by", "expectedBalance": "Calculated wallet balance", "difference": "Wallet minus calculated balance",
+      "historicalCount": "Historical records", "includedCount": "Included transactions", "summaryCount": "Summary records", "coveredCount": "Covered by baseline",
+      "baselineWarning": "Use independently verified historical evidence, not today's wallet or a guessed total. This records a reconciliation baseline only; it never changes points. Negative historical balances remain unallocated to any lounge.",
+      "baselineConfirm": "I verified the source, balance and cutoff, including all transactions at that time. I am not using the current wallet as proof.",
+      "baselineSaved": "Baseline version saved with audit history. Existing snapshots are unchanged; generate a new report preview to reconcile it.",
       "unknownCustomer": "Customer record unavailable",
       "openReport": "Open a debt details link from a daily report, or use Lounge Operations to view a saved report.",
       "details": "Debt details", "period": "Snapshot period", "customer": "Customer", "status": "Reconciliation",
@@ -13,7 +26,7 @@
       "otherReview": "Other network review items, excluded from this lounge",
       "truncated": "The saved evidence is limited to recent entries. Copy the customer, ledger or related record ID to locate older records in Finance or Visit Sessions. This evidence is not a complete ledger.",
       "legacy": "This older report has no saved debt details. Generate a new test preview to inspect current records; it cannot reconstruct the original snapshot.",
-      "reasons": { "wallet-missing": "Wallet balance is missing or invalid", "missing-user": "Customer document is missing", "invalid-entry": "Invalid transaction amount, type or date", "missing-checkpoint": "Missing starting balance or ledger history", "balance-gap": "Balance gap between transactions", "entry-mismatch": "Transaction change does not match recorded balance", "wallet-mismatch": "Ledger balance does not match wallet" }
+      "reasons": { "invalid-baseline": "Baseline evidence is invalid or outside this snapshot", "baseline-after-opening": "Baseline starts after this report period; earlier debt is unconfirmed", "ambiguous-order": "Same-time transactions cannot be ordered from balance evidence", "wallet-missing": "Wallet balance is missing or invalid", "missing-user": "Customer document is missing", "invalid-entry": "Invalid transaction amount, type or date", "missing-checkpoint": "Missing verifiable balance baseline; historical records may still exist", "balance-gap": "Balance gap between transactions", "entry-mismatch": "Transaction change does not match recorded balance", "wallet-mismatch": "Calculated balance differs from wallet; see amounts below" }
     },
     "test": {
       "title": "Test Daily Report", "preview": "Preview test report", "send": "Send test report", "checkStatus": "Check delivery status",
@@ -38,6 +51,10 @@
     "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     "status": { "running": "Running", "waiting": "Waiting for next round", "completed": "Complete", "incomplete": "Incomplete: action required", "not-sent": "Not sent", "accepted": "Submitted (delivery not yet confirmed)", "submitting": "Sending (result not yet confirmed)", "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed", "unknown": "Unknown: verify before resending" },
     "errors": {
+      "invalid-baseline": "Check the verified cutoff, balance, evidence and confirmation.",
+      "baseline-conflict": "The baseline version changed. Reload and review again.",
+      "baseline-does-not-reconcile": "This baseline and later transactions do not reconcile to the wallet. Check the evidence and missing transactions; no changes were saved.",
+      "scan-limit": "There are too many records to safely generate this snapshot. Narrow the data with an audited migration first.",
       "report-not-found": "Report not found for this lounge.",
       "backend-unavailable": "Cannot connect to the lounge operations backend. For localhost, start the local Netlify Functions server on port 8888, then retry.",
       "auth-required": "Your session has expired. Sign in again before retrying.",

@@ -11,6 +11,7 @@ import { dispatchLoungeClosing } from './_shared/loungeDispatch';
 import { localBusinessDate, businessCutoff } from '../../src/utils/loungeOperations';
 import { loadLoungeReportTransport } from './_shared/loungeReportTransport';
 import { executeLoungeTestReport } from './_shared/loungeTestReport';
+import { saveWalletDebtBaseline } from './_shared/walletDebtBaseline';
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,160}$/.test(value);
 const reply = (statusCode: number, data: object) => ({ statusCode,
@@ -30,6 +31,15 @@ export const eventHandler: EventHandler = async event => {
       initializeApp({ credential: cert(JSON.parse(credentials)) });
     }
     const { uid } = await getAuth().verifyIdToken(token, true), db = getFirestore(), now = new Date();
+    if (input.action === 'save-debt-baseline') return reply(200, { success: true, ...await saveWalletDebtBaseline(db, uid, input) });
+    if (input.action === 'debt-baseline') {
+      if (!validId(input.userId)) throw loungeError('invalid-request');
+      // Editing a global wallet baseline is restricted independently of lounge report access.
+      const actor = await db.runTransaction(async tx => authorizeLounge(tx, db, uid, uid, input.storeId, true));
+      if (!['superAdmin', 'developer'].includes(actor.role) || actor.status === 'suspended') throw loungeError('forbidden');
+      const baseline = (await db.collection(C.WALLET_DEBT_BASELINES).doc(input.userId).get()).data();
+      return reply(200, { success: true, baseline: baseline || null });
+    }
     if (['test-report-preview', 'test-report-send', 'test-report-status'].includes(input.action)) {
       return reply(200, { success: true, ...await executeLoungeTestReport(db, uid, input) });
     }
@@ -100,7 +110,8 @@ export const eventHandler: EventHandler = async event => {
     if (String(error?.code).startsWith('auth/')) return reply(401, { success: false, code: 'auth-required' });
     const known = ['invalid-hours', 'invalid-request', 'forbidden', 'not-ready', 'not-enabled', 'outside-hours', 'already-checked-in',
       'membership-inactive', 'insufficient-checkin', 'lounge-unavailable', 'session-not-found', 'member-not-found', 'active-visits', 'channel-unverified', 'busy', 'before-closing',
-      'invalid-report-date', 'report-not-found', 'test-report-not-found', 'test-confirm-required', 'test-report-expired', 'test-report-rate-limit'];
+      'invalid-report-date', 'report-not-found', 'test-report-not-found', 'test-confirm-required', 'test-report-expired', 'test-report-rate-limit',
+      'invalid-baseline', 'baseline-conflict', 'baseline-does-not-reconcile', 'scan-limit'];
     return reply(code === 'forbidden' ? 403 : known.includes(code) ? 409 : 503, {
       success: false, code: known.includes(code) ? code : 'service-unavailable', details: error?.details || {},
     });

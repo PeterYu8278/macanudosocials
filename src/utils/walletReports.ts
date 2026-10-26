@@ -2,6 +2,7 @@ import dayjs from 'dayjs'
 import type { MembershipFeeRecord, PointsRecord, ReloadRecord, User, VisitSession } from '../types'
 import { toDateOrNull } from '../services/firebase/core/sanitize'
 import { netReloadPoints } from './reloadPoints'
+import { classifyPointsRecord } from './pointsRecordClassification'
 
 export type ReportRecord<T> = T & { migration?: { source?: string; batchId?: string; balanceNotApplied?: boolean } }
 type Reload = ReportRecord<ReloadRecord> & { annualFeeAmount?: number; walletAmount?: number }
@@ -13,7 +14,7 @@ const numeric = (value: unknown): value is number => typeof value === 'number' &
 const money = (value: number) => Math.round(value * 100) / 100
 const newestFirst = <T>(records: T[], date: (record: T) => unknown) => [...records].sort((a, b) =>
   (toDateOrNull(date(b))?.getTime() || 0) - (toDateOrNull(date(a))?.getTime() || 0))
-const history = (record: ReportRecord<unknown>) => record.migration?.balanceNotApplied === true || record.migration?.source === 'legacy_workbook'
+const history = (record: ReportRecord<unknown>) => classifyPointsRecord(record) === 'historical'
 const identity = (id: string, users: Map<string, User>, fallback?: string) => {
   const user = users.get(id)
   return { 'User ID': id, 'Member ID': user?.memberId || '-', Name: user?.displayName || fallback || '-',

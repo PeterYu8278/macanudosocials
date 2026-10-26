@@ -4,6 +4,7 @@ import LoungeDebtDetails from './LoungeDebtDetails';
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en-US' } }) }));
 const m = vi.hoisted(() => ({ request: vi.fn() }));
 vi.mock('../../services/loungeOperations', () => ({ loungeRequest: m.request }));
+vi.mock('../../store/modules/auth', () => ({ useAuthStore: () => ({ user: { role: 'admin' } }) }));
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe('lounge debt evidence view', () => {
   it('shows missing evidence for a legacy report', async () => {
@@ -19,6 +20,7 @@ describe('lounge debt evidence view', () => {
         walletBalance: -50, opening: null, added: null, repaid: null, outstanding: null, entryCount: 1,
         entries: [{ id: 'ledger123', at: '2026-10-25T12:00:00Z', amount: -20, before: 0, after: -20,
           source: 'visit', relatedId: 'visit123', description: 'Visit fee', local: true }] }] }} />);
+    fireEvent.click(screen.getByRole('tab', { name: /loungeOperations.debt.group.review/ }));
     expect(await screen.findByText('Test customer')).toBeTruthy();
     expect(screen.getByText('loungeOperations.debt.reasons.wallet-mismatch')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Expand row/ }));

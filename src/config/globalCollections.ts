@@ -17,6 +17,8 @@ export const GLOBAL_COLLECTIONS = {
   LOUNGE_BATCHES: '_loungeClosingBatches',
   LOUNGE_REPORTS: '_loungeDailyReports',
   LOUNGE_TEST_REPORTS: '_loungeTestReports',
+  WALLET_DEBT_BASELINES: '_walletDebtBaselines',
+  WALLET_DEBT_BASELINE_VERSIONS: '_walletDebtBaselineVersions',
   MEMBER_IDENTITY_LOCKS: '_memberIdentityLocks',
   REGISTRATION_ATTEMPTS: '_registrationAttempts',
   /** 品牌集合 */

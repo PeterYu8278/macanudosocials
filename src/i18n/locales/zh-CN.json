@@ -1,6 +1,19 @@
 {
   "loungeOperations": {
     "debt": {
+      "unconfirmed": "未确认",
+      "group": { "debt": "已确认本店欠款", "review": "余额待核对", "settled": "已对账／已还清" },
+      "participation": "计算方式",
+      "participations": { "historical": "历史展示记录，不重复入账", "summary": "汇总展示，避免重复计算", "before-baseline": "已包含在审核后的余额基准", "included": "实际钱包流水，参与计算", "invalid": "资料无效，需要核对" },
+      "oldClassification": "这是旧快照，未保存历史记录及计算分类。请生成新预览；无法重建旧快照。",
+      "noBaseline": "可能已有历史记录，但缺少可核验的期初余额。目前不能确认余额差异或欠款。",
+      "baseline": "已审核余额基准", "baselineAt": "基准截止时间（马来西亚时间，包含该时刻及之前的全部流水）",
+      "baselineBalance": "截止时已核实的余额（积分）", "registerBaseline": "登记已核实基准", "evidenceReference": "独立来源／原始档案编号",
+      "reviewNote": "证据与截止边界核验说明", "reviewedBy": "审核人", "expectedBalance": "流水推算余额", "difference": "钱包余额减推算余额",
+      "historicalCount": "历史记录", "includedCount": "参与计算流水", "summaryCount": "汇总记录", "coveredCount": "基准已覆盖流水",
+      "baselineWarning": "必须核验独立历史资料，不能用当前钱包余额或猜测的合计作为依据。此操作只登记对账基准，不改变积分；历史负余额不会自动归属任何会所。",
+      "baselineConfirm": "我已核实来源、余额及截止边界，包含该时刻的全部流水；未以当前钱包余额作为历史证据。",
+      "baselineSaved": "已保存基准版本及审计记录。旧快照不变，请生成新的报表预览重新核对。",
       "unknownCustomer": "顾客资料不存在",
       "openReport": "请打开日报中的欠款明细链接，或在会所营运中查看已保存报表。",
       "details": "欠款明细", "period": "快照统计期间", "customer": "顾客", "status": "对账状态",
@@ -13,7 +26,7 @@
       "otherReview": "其他全系统待核对项，不计入本店",
       "truncated": "已保存的证据仅包含部分近期流水。可复制顾客、积分流水或关联记录编号，到财务或驻店记录查找更早资料；这里不是完整账本。",
       "legacy": "旧报表没有保存欠款明细。请生成新的测试预览查看当前资料；新预览无法还原旧快照。",
-      "reasons": { "wallet-missing": "钱包余额缺失或无效", "missing-user": "找不到顾客文档", "invalid-entry": "流水金额、类型或日期无效", "missing-checkpoint": "缺少起始余额或历史流水", "balance-gap": "相邻流水的余额不连续", "entry-mismatch": "积分变动与记录余额不一致", "wallet-mismatch": "流水余额与钱包余额不一致" }
+      "reasons": { "invalid-baseline": "基准证据无效或晚于本快照", "baseline-after-opening": "基准晚于统计起点，更早的欠款仍未确认", "ambiguous-order": "相同时刻的流水缺少可确定先后顺序的余额证据", "wallet-missing": "钱包余额缺失或无效", "missing-user": "找不到顾客文档", "invalid-entry": "流水金额、类型或日期无效", "missing-checkpoint": "缺少可核验余额基准，可能已有历史记录", "balance-gap": "相邻流水的余额不连续", "entry-mismatch": "积分变动与记录余额不一致", "wallet-mismatch": "推算余额与钱包存在差异，详见下方数值" }
     },
     "test": {
       "title": "测试日报", "preview": "预览测试日报", "send": "发送测试日报", "checkStatus": "检查送达状态",
@@ -38,6 +51,10 @@
     "days": ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
     "status": { "running": "执行中", "waiting": "等待下一轮", "completed": "完成", "incomplete": "未完成：需要处理", "not-sent": "未发送", "accepted": "已提交（尚未确认送达）", "submitting": "发送中（结果尚未确认）", "sent": "已发出", "delivered": "已送达", "read": "已读", "failed": "发送失败", "unknown": "结果未知：重新发送前请核实" },
     "errors": {
+      "invalid-baseline": "请核对基准截止时间、余额、证据和确认勾选。",
+      "baseline-conflict": "基准版本已变化，请重新加载后核对。",
+      "baseline-does-not-reconcile": "此基准加后续流水仍无法与钱包对平，请检查证据及遗漏流水；未保存任何改动。",
+      "scan-limit": "记录过多，无法安全生成快照。请先通过可审计的迁移整理数据。",
       "report-not-found": "找不到此会所的报表。",
       "backend-unavailable": "无法连接会所营运后台。本地使用时，请启动 8888 端口的 Netlify Functions 服务，再点击重试。",
       "auth-required": "登录状态已过期，请重新登录后重试。",
