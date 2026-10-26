@@ -1,6 +1,6 @@
 import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
-import { classifyPointsRecord } from '../../../src/utils/pointsRecordClassification';
+import { walletLedgerTreatments } from '../../../src/utils/walletLedgerEvidence';
 import { reconcileLoungeDebt, type DebtBaseline } from '../../../src/utils/loungeDebt';
 import { asDate, authorizeLounge, loungeError } from './loungeVisits';
 
@@ -25,7 +25,8 @@ export async function saveWalletDebtBaseline(db: Firestore, uid: string, input: 
     if (records.size > 10000) throw loungeError('scan-limit');
     const baseline: DebtBaseline = { version: input.expectedVersion + 1, at: input.at, balance: input.balance,
       boundary: 'through_timestamp', evidenceReference: input.evidenceReference.trim(), note: input.note.trim(), reviewedBy: uid, approvedAt: now };
-    const entries = records.docs.filter(d => classifyPointsRecord(d.data()) === 'transaction').map(d => {
+    const treatments = walletLedgerTreatments(records.docs.map(d => ({ ...d.data(), id: d.id })));
+    const entries = records.docs.filter(d => ['included', 'historical-included'].includes(treatments.get(d.id)!)).map(d => {
       const row = d.data();
       return { id: d.id, at: asDate(row.createdAt).getTime(),
         amount: typeof row.amount === 'number' && row.amount >= 0 && ['earn', 'spend'].includes(row.type)

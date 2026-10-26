@@ -48,6 +48,7 @@ export default function LoungeDebtDetails({ storeId, reportId, reportKind = 'for
         {snapshot.truncated && <Alert type="warning" showIcon message={label('truncated')} />}
         {snapshot.schemaVersion !== 2 && <Alert type="warning" message={label('oldClassification')} />}
         {snapshot.legacyCorrection && <Alert type="info" message={label('legacyCorrected')} />}
+        {snapshot.balanceOrigin === 'zero' && <Alert type="info" message={label('zeroOrigin')} />}
       </Space>}
       <Tabs activeKey={group} onChange={setGroup} items={Object.entries(groups).map(([key, rows]) => ({ key, label: `${label(`group.${key}`)} (${rows.length})` }))} />
       <Table<LoungeDebtCustomer> size="small" loading={busy} rowKey="userId" dataSource={activeGroup}
@@ -70,13 +71,18 @@ export default function LoungeDebtDetails({ storeId, reportId, reportKind = 'for
           <Typography.Paragraph>{label('ledger')}: {row.entries.length} / {row.entryCount}</Typography.Paragraph>
           <Table size="small" rowKey="id" dataSource={row.entries} pagination={{ pageSize: 5 }} scroll={{ x: 850 }} columns={[
             { title: label('time'), dataIndex: 'at', render: time },
-            { title: label('participation'), dataIndex: 'participation', render: value => value ? <Tag color={value === 'included' ? 'success' : 'default'}>{label(`participations.${value}`)}</Tag> : label('oldClassification') },
+            { title: label('participation'), dataIndex: 'participation', render: value => value ? <Tag color={['included', 'historical-included'].includes(value) ? 'success' : 'default'}>{label(`participations.${value}`)}</Tag> : label('oldClassification') },
             { title: label('entry'), dataIndex: 'id', render: (id, entry) => <>
               <div>{entry.description || (entry.local ? entry.source : label('sharedWallet'))}</div>
               <Typography.Text copyable>{id}</Typography.Text>
               {entry.relatedId && <div>{label('reference')}: <Typography.Text copyable>{entry.relatedId}</Typography.Text></div>}
             </> },
-            ...['amount', 'before', 'after'].map(key => ({ title: label(key), dataIndex: key, render: number })),
+            ...['amount', 'before', 'after'].map(key => ({ title: label(key), dataIndex: key,
+              render: (value: number | null, entry: LoungeDebtCustomer['entries'][number]) => {
+                if (value != null || key === 'amount') return number(value);
+                const calculated = key === 'before' ? entry.calculatedBefore : entry.calculatedAfter;
+                return calculated == null ? '—' : <>{number(calculated)}<div><Typography.Text type="secondary">{label('calculated')}</Typography.Text></div></>;
+              } })),
           ]} />
         </> }} />
     </Modal>

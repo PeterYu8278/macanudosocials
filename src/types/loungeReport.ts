@@ -16,8 +16,9 @@ export interface LoungeDebtCustomer {
   baseline?: DebtBaseline | null;
   entryCounts?: { historical: number; summary: number; included: number; beforeBaseline: number; invalid: number };
   entries: Array<{ id: string; at: string | null; amount: number | null; before: number | null;
-    after: number | null; source: string; relatedId: string; description: string; local: boolean;
-    participation?: 'historical' | 'summary' | 'before-baseline' | 'included' | 'invalid' }>;
+    after: number | null; source: string; relatedId: string; description: string; local: boolean; historical?: boolean;
+    calculatedBefore?: number; calculatedAfter?: number;
+    participation?: 'historical' | 'historical-included' | 'duplicate' | 'summary' | 'before-baseline' | 'included' | 'invalid' }>;
 }
 export interface LoungeDebtDetails {
   businessDate: string;
@@ -30,4 +31,5 @@ export interface LoungeDebtDetails {
   schemaVersion?: number;
   consistency?: 'transaction';
   legacyCorrection?: 'saved-evidence-only';
+  balanceOrigin?: 'zero';
 }

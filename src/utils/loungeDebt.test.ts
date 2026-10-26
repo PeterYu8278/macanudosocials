@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { reconcileLoungeDebt, type DebtBaseline } from './loungeDebt';
 describe('shared-wallet debt attribution', () => {
+  it('reconciles imported history from the owner-confirmed zero opening balance without writing balances', () => {
+    const history = [{ id: 'reload', at: 1, amount: 100 }, { id: 'v1', at: 2, amount: -18 },
+      { id: 'v2', at: 3, amount: -27 }, { id: 'v3', at: 4, amount: -36 }];
+    expect(reconcileLoungeDebt(history, 5, 6, 19, undefined, 'zero'))
+      .toMatchObject({ reliable: true, expectedBalance: 19, difference: 0, reasons: [] });
+    expect(reconcileLoungeDebt(history, 5, 6, 19, undefined, 'zero').calculatedBalances)
+      .toEqual({ reload: { before: 0, after: 100 }, v1: { before: 100, after: 82 },
+        v2: { before: 82, after: 55 }, v3: { before: 55, after: 19 } });
+    expect(reconcileLoungeDebt(history, 5, 6, 20, undefined, 'zero'))
+      .toMatchObject({ reliable: false, expectedBalance: 19, difference: 1, reasons: ['wallet-mismatch'] });
+  });
+  it('checks first recorded checkpoints against zero rather than inferring an arbitrary starting balance', () => {
+    const result = reconcileLoungeDebt([{ id: 'fee', at: 3, amount: -18, before: 100, after: 82 }], 2, 5, 82, undefined, 'zero');
+    expect(result.reliable).toBe(false); expect(result.reasons).toContain('balance-gap');
+    expect(result.expectedBalance).toBe(-18); expect(result.difference).toBe(100);
+  });
+  it('preserves a computable net total even when same-time debt attribution is ambiguous', () => {
+    const result = reconcileLoungeDebt([{ id: 'a', at: 3, amount: 100 }, { id: 'b', at: 3, amount: -18 }], 2, 5, 82, undefined, 'zero');
+    expect(result).toMatchObject({ reliable: false, expectedBalance: 82, difference: 0 });
+    expect(result.reasons).toContain('ambiguous-order');
+  });
+  it('reconciles an empty zero wallet but flags unexplained positive or negative balances', () => {
+    expect(reconcileLoungeDebt([], 2, 5, 0, undefined, 'zero')).toMatchObject({ reliable: true, expectedBalance: 0 });
+    expect(reconcileLoungeDebt([], 2, 5, 19, undefined, 'zero')).toMatchObject({ reliable: false, expectedBalance: 0, difference: 19 });
+  });
   const baseline = (balance = 156): DebtBaseline => ({ version: 1, at: 1, balance, boundary: 'through_timestamp',
     evidenceReference: 'verified-archive', note: 'Reviewed independent historical source', reviewedBy: 'reviewer', approvedAt: 2 });
   it('does not label absence of usable history as an established wallet discrepancy', () => {

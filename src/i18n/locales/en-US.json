@@ -2,11 +2,13 @@
   "loungeOperations": {
     "reportPreviewTitle": "Daily report preview",
     "debt": {
+      "calculated": "Calculated",
+      "zeroOrigin": "Account opening balance: 0 pts (confirmed business rule). Historical evidence and later transactions are counted once for reconciliation; wallets are not changed.",
       "legacyCorrected": "Legacy warning corrected using saved evidence only. Missing history has not been restored; balances, debt totals and the original sent message have not been recalculated.",
       "unconfirmed": "Unconfirmed",
       "group": { "debt": "Confirmed lounge debt", "review": "Balance checks needed", "settled": "Reconciled / repaid" },
       "participation": "Calculation treatment",
-      "participations": { "historical": "Historical display only — not applied again", "summary": "Summary only — avoids double counting", "before-baseline": "Already covered by approved baseline", "included": "Actual wallet transaction — included", "invalid": "Invalid data — review required" },
+      "participations": { "historical-included": "Historical transaction — counted once for reconciliation; no wallet write", "duplicate": "Duplicate historical evidence — linked transaction used instead", "historical": "Historical display only — not applied again", "summary": "Summary only — avoids double counting", "before-baseline": "Already covered by approved baseline", "included": "Actual wallet transaction — included", "invalid": "Invalid data — review required" },
       "oldClassification": "Older snapshot: historical records and calculation treatment were not saved. Generate a new preview; this snapshot cannot be reconstructed.",
       "noBaseline": "History may exist, but no verifiable opening balance was found. No wallet discrepancy or debt has been confirmed.",
       "baseline": "Approved balance baseline", "baselineAt": "Baseline cutoff (MYT, includes every transaction through this time)",

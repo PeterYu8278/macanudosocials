@@ -18,7 +18,7 @@ describe('lounge debt evidence view', () => {
       from: '2026-10-24T16:00:00Z', to: '2026-10-26T14:00:00Z', historical: true, truncated: false, otherReviewCount: 0,
       customers: [{ userId: 'user', name: 'Test customer', memberId: 'MEM001', reliable: false, reasons: ['wallet-mismatch'],
         walletBalance: -50, opening: null, added: null, repaid: null, outstanding: null, entryCount: 1,
-        entries: [{ id: 'ledger123', at: '2026-10-25T12:00:00Z', amount: -20, before: 0, after: -20,
+        entries: [{ id: 'ledger123', at: '2026-10-25T12:00:00Z', amount: -20, before: null, after: null, calculatedBefore: 20, calculatedAfter: 0,
           source: 'visit', relatedId: 'visit123', description: 'Visit fee', local: true }] }] }} />);
     fireEvent.click(screen.getByRole('tab', { name: /loungeOperations.debt.group.review/ }));
     expect(await screen.findByText('Test customer')).toBeTruthy();
@@ -26,6 +26,7 @@ describe('lounge debt evidence view', () => {
     fireEvent.click(screen.getByRole('button', { name: /Expand row/ }));
     expect(await screen.findByText('ledger123')).toBeTruthy();
     expect(screen.getByText('visit123')).toBeTruthy();
+    expect(screen.getAllByText('loungeOperations.debt.calculated')).toHaveLength(2);
     expect(m.request).not.toHaveBeenCalled();
   });
 });

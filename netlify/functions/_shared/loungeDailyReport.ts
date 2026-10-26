@@ -3,6 +3,7 @@ import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { businessDayStart } from '../../../src/utils/loungeOperations';
 import { reconcileLoungeDebt, validDebtBaseline, type DebtEntry, type DebtBaseline } from '../../../src/utils/loungeDebt';
 import { classifyPointsRecord } from '../../../src/utils/pointsRecordClassification';
+import { walletLedgerTreatments } from '../../../src/utils/walletLedgerEvidence';
 import { asDate, loungeError } from './loungeVisits';
 import { attachSubmission } from './whapiReceipts';
 import { loadLoungeReportTransport, loungeReportTaskId } from './loungeReportTransport';
@@ -54,24 +55,31 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   const ledgerRows = new Map<string, LoungeDebtCustomer['entries']>();
   const invalidUsers = new Set<string>();
   const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
+  const treatments = walletLedgerTreatments(entries.filter(doc => {
+    const at = asDate(doc.data().createdAt).getTime();
+    return !Number.isFinite(at) || at <= asOf;
+  }).map(doc => ({ ...doc.data(), id: doc.id })));
   for (const doc of entries) {
     const record = doc.data();
     const at = asDate(record.createdAt).getTime();
     if (Number.isFinite(at) && at > asOf) continue;
     const kind = classifyPointsRecord(record), baseline = baselines.get(record.userId);
-    const covered = kind === 'transaction' && baseline && validDebtBaseline(baseline) && baseline.approvedAt <= asOf && at <= baseline.at;
+    const treatment = treatments.get(doc.id)!;
+    const included = treatment === 'included' || treatment === 'historical-included';
+    const covered = included && baseline && validDebtBaseline(baseline) && baseline.approvedAt <= asOf && at <= baseline.at;
     const valid = Number.isFinite(at) && typeof record.amount === 'number' && Number.isFinite(record.amount)
       && record.amount >= 0 && ['earn', 'spend'].includes(record.type);
-    const participation = kind !== 'transaction' ? kind : covered ? 'before-baseline' : valid ? 'included' : 'invalid';
+    const participation = !included ? treatment : covered ? 'before-baseline' : valid ? treatment : 'invalid';
     if (record.storeId === storeId && record.userId) localUsers.add(record.userId);
     const evidence = ledgerRows.get(record.userId) || [];
     if (!Number.isFinite(at) || at <= asOf) evidence.push({ id: doc.id, at: Number.isFinite(at) ? new Date(at).toISOString() : null,
       amount: finite(['earn', 'spend'].includes(record.type) ? (record.type === 'earn' ? 1 : -1) * record.amount : NaN),
       before: finite(record.balanceBefore), after: finite(record.balance), source: String(record.source || '').slice(0, 80),
       relatedId: record.storeId === storeId ? String(record.relatedId || '').slice(0, 160) : '',
-      description: !record.storeId || record.storeId === storeId ? String(record.description || '').slice(0, 160) : '', local: record.storeId === storeId, participation });
+      description: !record.storeId || record.storeId === storeId ? String(record.description || '').slice(0, 160) : '', local: record.storeId === storeId,
+      historical: kind === 'historical', participation });
     ledgerRows.set(record.userId, evidence);
-    if (kind !== 'transaction' || covered) continue;
+    if (!included || covered) continue;
     if (!valid) { invalid++; invalidUsers.add(record.userId); continue; }
     const rows = grouped.get(record.userId) || [];
     rows.push({ id: doc.id, at, amount: (record.type === 'earn' ? 1 : -1) * record.amount,
@@ -80,25 +88,28 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   }
   const debt = { opening: 0, added: 0, repaid: 0, closing: 0, unallocated: 0, review: invalid };
   const debtDetails: LoungeDebtDetails = { businessDate: date, from: new Date(start).toISOString(), to: new Date(asOf).toISOString(),
-    historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false, schemaVersion: 2, consistency: 'transaction' };
+    historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false, schemaVersion: 2, consistency: 'transaction', balanceOrigin: 'zero' };
   let evidenceBudget = 500, localReviewCount = 0;
   for (const user of users) {
     const current = user.data().membership?.points;
     const baseline = baselines.get(user.id);
-    const result = reconcileLoungeDebt(grouped.get(user.id) || [], start, asOf, current, baseline);
+    const result = reconcileLoungeDebt(grouped.get(user.id) || [], start, asOf, current, baseline, 'zero');
     const needsReview = !result.reliable || invalidUsers.has(user.id) || finite(current) === null;
     const relevant = localUsers.has(user.id) || [result.opening, result.added, result.repaid, result.closing].some(v => v[storeId] > 0);
     if (relevant && needsReview) localReviewCount++;
-    if (relevant && (needsReview || !!baseline || [result.opening, result.added, result.repaid, result.closing].some(v => v[storeId] > 0))) {
+    if (relevant) {
       if (debtDetails.customers.length >= 200) debtDetails.truncated = true;
       else {
-        const allEvidence = (ledgerRows.get(user.id) || []).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
+        const allEvidence = (ledgerRows.get(user.id) || []).map(entry => {
+          const calculated = result.calculatedBalances[entry.id];
+          return calculated ? { ...entry, calculatedBefore: calculated.before, calculatedAfter: calculated.after } : entry;
+        }).sort((a, b) => (b.at || '').localeCompare(a.at || ''));
         const evidence = allEvidence.slice(0, Math.min(20, evidenceBudget)); evidenceBudget -= evidence.length;
         if (evidence.length < allEvidence.length) debtDetails.truncated = true;
         debtDetails.customers.push({ userId: user.id, name: String(user.data().displayName || user.id).slice(0, 160), memberId: String(user.data().memberId || '').slice(0, 80),
           expectedBalance: result.expectedBalance, difference: result.difference, baseline: baseline || null,
-          entryCounts: { historical: allEvidence.filter(e => e.participation === 'historical').length, summary: allEvidence.filter(e => e.participation === 'summary').length,
-            included: allEvidence.filter(e => e.participation === 'included').length, beforeBaseline: allEvidence.filter(e => e.participation === 'before-baseline').length,
+          entryCounts: { historical: allEvidence.filter(e => e.historical).length, summary: allEvidence.filter(e => e.participation === 'summary').length,
+            included: allEvidence.filter(e => ['included', 'historical-included'].includes(e.participation || '')).length, beforeBaseline: allEvidence.filter(e => e.participation === 'before-baseline').length,
             invalid: allEvidence.filter(e => e.participation === 'invalid').length },
           reliable: !needsReview, reasons: [...new Set([...result.reasons, ...(invalidUsers.has(user.id) ? ['invalid-entry'] : []), ...(finite(current) === null ? ['wallet-missing'] : [])])], walletBalance: finite(current),
           opening: needsReview ? null : result.opening[storeId] || 0, added: needsReview ? null : result.added[storeId] || 0,

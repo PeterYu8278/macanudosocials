@@ -122,6 +122,35 @@ describe('daily report verified Whapi self-delivery', () => {
 });
 
 describe('read-only report snapshot rendering', () => {
+  it('reconstructs historical before/after balances from zero and retains a real mismatch for review', async () => {
+    const at = Date.parse('2026-10-01T00:00:00Z');
+    const fixture: Record<string, any[]> = {
+      visitSessions: ['matched', 'mismatch'].map(userId => ({ id: userId, userId, status: 'completed', checkInAt: new Date(at) })),
+      users: [{ id: 'matched', membership: { points: 19 } }, { id: 'mismatch', membership: { points: 20 } }],
+      pointsRecords: ['matched', 'mismatch'].flatMap(userId => [100, -18, -27, -36].map((amount, index) => ({
+        id: `${userId}-${index}`, userId, type: amount > 0 ? 'earn' : 'spend', amount: Math.abs(amount),
+        createdAt: new Date(at + index * 1000), storeId: 'lounge', createdBy: 'legacy_migration',
+        migration: { source: 'legacy_workbook', balanceNotApplied: true },
+      }))),
+    };
+    const before = JSON.stringify(fixture);
+    const collection = (name: string): any => {
+      const q = { doc: () => ({ get: async () => ({ data: () => ({ name: 'Lounge' }), readTime: { toMillis: () => at + 10000 } }) }),
+        where: () => q, orderBy: () => q, limit: () => q, get: async () => ({ size: (fixture[name] || []).length,
+          docs: (fixture[name] || []).map(row => ({ id: row.id, data: () => row })) }) };
+      return q;
+    };
+    const report = await buildLoungeReportSnapshot({ collection, runTransaction: async (work: any) => work({ get: (target: any) => target.get() }) } as unknown as Firestore,
+      'lounge', '2026-10-01', {}, 0, true);
+    expect(report.debtDetails.balanceOrigin).toBe('zero');
+    const matched = report.debtDetails.customers.find(row => row.userId === 'matched')!;
+    expect(matched).toMatchObject({ reliable: true, expectedBalance: 19, difference: 0, entryCounts: { historical: 4, included: 4 } });
+    expect(matched.entries.find(entry => entry.id === 'matched-3')).toMatchObject({ before: null, after: null,
+      calculatedBefore: 55, calculatedAfter: 19, participation: 'historical-included' });
+    expect(report.debtDetails.customers.find(row => row.userId === 'mismatch'))
+      .toMatchObject({ reliable: false, expectedBalance: 19, difference: 1, reasons: ['wallet-mismatch'], outstanding: null });
+    expect(JSON.stringify(fixture)).toBe(before);
+  });
   it.each([false, true])('retains imported point records while using only verified baseline and live transactions (baseline: %s)', async approved => {
     const at = Date.parse('2026-10-20T15:00:00Z');
     const fixture: Record<string, any[]> = {
@@ -144,12 +173,12 @@ describe('read-only report snapshot rendering', () => {
     expect(report.debtDetails.to).toBe('2026-10-26T15:00:00.000Z');
     const row = report.debtDetails.customers[0];
     expect(row.entryCount).toBe(1);
-    expect(row.entries[0]).toMatchObject({ id: 'history', participation: 'historical', amount: 200 });
-    expect(row.entryCounts).toMatchObject({ historical: 1, included: 0 });
+    expect(row.entries[0]).toMatchObject({ id: 'history', participation: approved ? 'before-baseline' : 'historical-included', amount: 200 });
+    expect(row.entryCounts).toMatchObject({ historical: 1, included: approved ? 0 : 1 });
     expect(row.walletBalance).toBe(156);
     expect(row.reliable).toBe(approved);
-    expect(row.reasons).toEqual(approved ? [] : ['missing-checkpoint']);
-    expect(row.expectedBalance).toBe(approved ? 156 : null);
+    expect(row.reasons).toEqual(approved ? [] : ['wallet-mismatch']);
+    expect(row.expectedBalance).toBe(approved ? 156 : 200);
     expect(row.outstanding).toBe(approved ? 0 : null);
     expect(report.debt.closing).toBe(0);
     expect(report.debtDetails.consistency).toBe('transaction');
@@ -163,7 +192,8 @@ describe('read-only report snapshot rendering', () => {
         { id: 'pending', userId: 'other', status: 'pending', checkInAt: at, durationHours: 9 },
         { id: 'carryover', userId: 'older', status: 'pending', checkInAt: new Date('2026-10-14T12:00:00+08:00') }],
       redemptionRecords: [{ id: 'pending', redemptions: [{ status: 'pending', quantity: 2 }] }],
-      pointsRecords: [{ id: 'ledger', userId: 'user', type: 'spend', amount: 20, balanceBefore: 30, balance: 10, createdAt: at, storeId: 'lounge' }],
+      pointsRecords: [{ id: 'opening-credit', userId: 'user', type: 'earn', amount: 30, balanceBefore: 0, balance: 30, createdAt: new Date(at.getTime() - 1000), storeId: 'lounge' },
+        { id: 'ledger', userId: 'user', type: 'spend', amount: 20, balanceBefore: 30, balance: 10, createdAt: at, storeId: 'lounge' }],
       users: [{ id: 'user', membership: { points: 10 } }],
     };
     const before = JSON.stringify(fixture);
@@ -198,7 +228,7 @@ describe('read-only report snapshot rendering', () => {
     expect(report.text).not.toContain('Historical opening debt:');
     expect(report.text).toContain('Snapshot (MYT):');
     expect(report.debtDetails.historical).toBe(true);
-    expect(report.debtDetails.customers).toEqual([]);
+    expect(report.debtDetails.customers).toEqual([expect.objectContaining({ userId: 'user', reliable: true, expectedBalance: 10, difference: 0 })]);
     expect(JSON.stringify(fixture)).toBe(before);
     const formal = await buildLoungeReportSnapshot(readOnlyDb, 'lounge', '2026-10-15', { status: 'completed', remaining: 0 }, 1);
     expect(formal.text).toContain('Settlement: COMPLETE'); expect(formal.text).not.toContain('[TEST]');

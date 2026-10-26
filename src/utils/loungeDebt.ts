@@ -13,11 +13,12 @@ export const validDebtBaseline = (value: DebtBaseline): boolean => !!value && Nu
   && numeric(value.approvedAt) && value.approvedAt >= value.at;
 
 // The current wallet is a comparison, never an opening-balance anchor.
-export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closing: number, currentBalance?: number, baseline?: DebtBaseline) {
+export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closing: number, currentBalance?: number, baseline?: DebtBaseline, origin?: 'zero') {
   const lots: DebtLot[] = [];
   const openingByStore: Record<string, number> = {}, added: Record<string, number> = {}, repaid: Record<string, number> = {};
   let balance: number | undefined, reliable = true, anchored = false, opened = false;
   const reasons = new Set<string>();
+  const calculatedBalances: Record<string, { before: number; after: number }> = {};
   const totals = () => lots.reduce((out, lot) => {
     const key = lot.storeId || 'unallocated'; out[key] = round((out[key] || 0) + lot.amount); return out;
   }, {} as Record<string, number>);
@@ -26,6 +27,7 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
     if (value < 0) lots.push({ storeId: null, amount: -value, openedAt: at });
   };
   const baselineValid = baseline && validDebtBaseline(baseline) && baseline.at <= closing && baseline.approvedAt <= closing;
+  if (origin === 'zero' && !baseline) reset(0, 0);
   if (baseline) {
     if (!baselineValid) { reasons.add('invalid-baseline'); reliable = false; }
     else {
@@ -60,10 +62,12 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
         if (before === undefined) { reliable = false; reasons.add('missing-checkpoint'); continue; }
         reset(before, entry.at);
       } else if (before !== undefined && Math.abs(before - balance) >= 0.005) {
-        reliable = false; reasons.add('balance-gap'); reset(before, entry.at);
+        reliable = false; reasons.add('balance-gap');
+        if (origin !== 'zero') reset(before, entry.at);
       }
       if (!opened && entry.at >= opening) { Object.assign(openingByStore, totals()); opened = true; }
       const after = round(balance! + entry.amount), change = round(Math.max(0, -after) - Math.max(0, -balance!));
+      if (origin === 'zero' && reliable) calculatedBalances[entry.id] = { before: balance!, after };
       if (change > 0) {
         const key = entry.storeId || 'unallocated';
         lots.push({ storeId: entry.storeId || null, amount: change, openedAt: entry.at });
@@ -83,11 +87,16 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
   }
   if (!opened) Object.assign(openingByStore, totals());
   if (!anchored) reasons.add('missing-checkpoint');
+  // An uncertain order or a gap must not replace the independently summed zero-origin balance.
+  if (origin === 'zero' && anchored) {
+    balance = round((baselineValid ? baseline!.balance : 0) + rows.filter(entry => numeric(entry.at) && numeric(entry.amount))
+      .reduce((sum, entry) => sum + Math.round(entry.amount * 100), 0) / 100);
+  }
   // No computed balance means no balance mismatch has been established.
   if (anchored && currentBalance !== undefined && (!numeric(currentBalance) || Math.abs(balance! - currentBalance) >= 0.005)) {
     reliable = false; reasons.add('wallet-mismatch');
   }
   return { reliable: reliable && anchored, reasons: [...reasons], expectedBalance: anchored ? balance! : null,
     difference: anchored && numeric(currentBalance) ? round(currentBalance - balance!) : null,
-    opening: openingByStore, added, repaid, closing: totals(), lots };
+    opening: openingByStore, added, repaid, closing: totals(), lots, calculatedBalances };
 }

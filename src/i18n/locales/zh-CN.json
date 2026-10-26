@@ -2,11 +2,13 @@
   "loungeOperations": {
     "reportPreviewTitle": "日报预览",
     "debt": {
+      "calculated": "计算值",
+      "zeroOrigin": "户口初始余额统一为 0 分（已确认的业务规则）。历史凭据及后续流水仅计入对账一次，不会再次修改钱包。",
       "legacyCorrected": "已依据原快照证据修正旧版误报。尚未恢复缺失历史，也未重算钱包余额、欠款总额或原已发送消息。",
       "unconfirmed": "未确认",
       "group": { "debt": "已确认本店欠款", "review": "余额待核对", "settled": "已对账／已还清" },
       "participation": "计算方式",
-      "participations": { "historical": "历史展示记录，不重复入账", "summary": "汇总展示，避免重复计算", "before-baseline": "已包含在审核后的余额基准", "included": "实际钱包流水，参与计算", "invalid": "资料无效，需要核对" },
+      "participations": { "historical-included": "历史交易——对账计入一次，不再次修改钱包", "duplicate": "重复历史凭据——已采用关联的实际流水", "historical": "历史展示记录，不重复入账", "summary": "汇总展示，避免重复计算", "before-baseline": "已包含在审核后的余额基准", "included": "实际钱包流水，参与计算", "invalid": "资料无效，需要核对" },
       "oldClassification": "这是旧快照，未保存历史记录及计算分类。请生成新预览；无法重建旧快照。",
       "noBaseline": "可能已有历史记录，但缺少可核验的期初余额。目前不能确认余额差异或欠款。",
       "baseline": "已审核余额基准", "baselineAt": "基准截止时间（马来西亚时间，包含该时刻及之前的全部流水）",
