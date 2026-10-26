@@ -2,6 +2,7 @@
   "loungeOperations": {
     "reportPreviewTitle": "Daily report preview",
     "debt": {
+      "shortParticipation": {"included": "Included", "historical-included": "Historical · included", "summary": "Summary · excluded", "duplicate": "Duplicate · excluded", "before-baseline": "Covered by baseline", "invalid": "Invalid · review", "historical": "Historical only"},
       "calculated": "Calculated",
       "zeroOrigin": "Account opening balance: 0 pts (confirmed business rule). Historical evidence and later transactions are counted once for reconciliation; wallets are not changed.",
       "legacyCorrected": "Legacy warning corrected using saved evidence only. Missing history has not been restored; balances, debt totals and the original sent message have not been recalculated.",

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Modal } from 'antd';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
@@ -6,6 +6,9 @@ vi.mock('../../services/loungeOperations', () => ({ loungeRequest: mocks.request
 vi.mock('../../store/modules/auth', () => ({ useAuthStore: () => ({ user: { role: 'admin' } }) }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 import LoungeTestReport from './LoungeTestReport';
+beforeEach(() => {
+  window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+});
 afterEach(() => { cleanup(); vi.restoreAllMocks(); mocks.request.mockReset(); });
 describe('independent test report controls', () => {
   it('previews first and requires confirmation before sending the same draft', async () => {
