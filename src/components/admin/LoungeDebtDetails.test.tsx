@@ -47,12 +47,29 @@ describe('lounge debt evidence view', () => {
     fireEvent.click(screen.getByRole('tab', { name: /loungeOperations.debt.group.review/ }));
     expect(await screen.findByText('Test customer')).toBeTruthy();
     expect(screen.getByText('loungeOperations.debt.reasons.wallet-mismatch')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: /Expand row/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'loungeOperations.debt.viewLedger' }));
     expect(await screen.findByText('ledger123')).toBeTruthy();
     expect(screen.getByText('Visit duration fee (0.55 h, 18 points) (H)')).toBeTruthy();
     expect(screen.queryByText(/驻店计时扣费/)).toBeNull();
     expect(screen.getByText('visit123')).toBeTruthy();
     expect(screen.getAllByText('loungeOperations.debt.calculated')).toHaveLength(2);
     expect(m.request).not.toHaveBeenCalled();
-  });
+  }, 15000);
+  it.each([false, true])('searches customers and opens a separate transaction drawer in desktop=%s', desktop => {
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({ matches: desktop && /min-width/.test(query),
+      addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() }));
+    render(<LoungeDebtDetails storeId="lounge" autoOpen details={{ businessDate: '2026-10-30',
+      from: '2026-10-29T16:00:00Z', to: '2026-10-30T15:00:00Z', historical: false, truncated: false, otherReviewCount: 0,
+      customers: ['Alice', 'Bob'].map(name => ({ userId: name, name, memberId: `MEM-${name}`, reliable: true, reasons: [],
+        walletBalance: -10, opening: 0, added: 10, repaid: 0, outstanding: 10, entryCount: 1,
+        entries: [{ id: `ledger-${name}`, at: '2026-10-30T12:00:00Z', amount: -10, before: 0, after: -10,
+          source: 'visit', relatedId: '', description: 'Visit charge', local: true }] })) }} />);
+    expect(screen.queryByText('ledger-Alice')).toBeNull();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'loungeOperations.debt.searchCustomer' }), { target: { value: 'MEM-Alice' } });
+    expect(screen.queryByText('Bob')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'loungeOperations.debt.viewLedger' }));
+    expect(screen.getByText('ledger-Alice')).toBeTruthy();
+    expect(screen.getAllByRole('dialog')).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Expand row/ })).toBeNull();
+  }, 15000);
 });

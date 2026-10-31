@@ -186,6 +186,10 @@ describe('read-only report snapshot rendering', () => {
   it.each([false, true])('marks tests explicitly and shows cross-lounge text only with other lounges (%s)', async (hasOtherLounges) => {
     const at = new Date('2026-10-15T12:00:00+08:00');
     const fixture: Record<string, any[]> = {
+      reloadRecords: [{ id: 'package', userId: 'user', storeId: 'lounge', status: 'completed',
+        requestedAmount: 299, annualFeeAmount: 199, verifiedAt: at }],
+      membershipFeeRecords: [{ id: 'initial', userId: 'user', storeId: 'lounge', status: 'paid',
+        renewalType: 'initial', deductedAt: at }],
       stores: [{ id: 'lounge' }, ...(hasOtherLounges ? [{ id: 'other-lounge' }] : [])],
       visitSessions: [{ id: 'visit', userId: 'user', status: 'completed', checkInAt: at, pointsDeducted: 20, durationHours: 1.25 },
         { id: 'repeat', userId: 'user', status: 'completed', checkInAt: at, pointsDeducted: 10, durationHours: 0.5 },
@@ -207,6 +211,10 @@ describe('read-only report snapshot rendering', () => {
     const readOnlyDb = { collection, runTransaction: async (work: any) => work({ get: (target: any) => target.get() }) } as unknown as Firestore;
     const report = await buildLoungeReportSnapshot(readOnlyDb, 'lounge', '2026-10-15', {}, 0, true);
     expect(report.text).toContain('[TEST] Daily Lounge Report');
+    expect(report.paymentStats).toMatchObject({ received: 299, reloadAmount: 100, annualFees: 199, newMembers: 1 });
+    expect(report.text).toContain('\n\n> *Daily Reloads*\nCompleted payments: 1');
+    expect(report.text).toContain('Reload amount (excluding annual fees): RM 100.00');
+    expect(report.text).toContain('\n\n> *New Members*\nFirst-time paid activations: 1');
     expect(report.text.includes('Other lounge review items:')).toBe(hasOtherLounges);
     expect(report.text.includes('Unallocated lounge debt:')).toBe(hasOtherLounges);
     expect(report.text).not.toContain('Other network review items:');
@@ -235,6 +243,8 @@ describe('read-only report snapshot rendering', () => {
     expect(formal.text.includes('Other lounge review items:')).toBe(hasOtherLounges);
     expect(formal.text.includes('Unallocated lounge debt:')).toBe(hasOtherLounges);
     expect(formal.text).toContain('Revision: 1\n\n> *Visitation*\n');
+    expect(formal.paymentStats).toEqual(report.paymentStats);
+    expect(formal.text).toContain('Payments received (including annual fees): RM 299.00');
     expect(formal.text).toContain('\n\n> *Cigar Redemption*\n');
     expect(formal.text).toContain('\n\n> *Outstanding*\n');
     expect(formal.text).toContain('Customers: 2');

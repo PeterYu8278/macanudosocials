@@ -1,9 +1,24 @@
 .lounge-debt-modal { max-width: calc(100vw - 24px); }
 .lounge-debt-modal .ant-modal-body { overflow-wrap: anywhere; }
-.lounge-debt-modal .ant-tag { white-space: normal; overflow-wrap: anywhere; margin-inline-end: 0; }
+.lounge-debt-modal .ant-tag, .lounge-debt-ledger-drawer .ant-tag { white-space: normal; overflow-wrap: anywhere; margin-inline-end: 0; }
+.lounge-debt-modal .ant-modal-content { padding: 16px 20px; }
+.lounge-debt-modal .ant-modal-header { margin-bottom: 10px; }
+.lounge-debt-modal .ant-table-cell { vertical-align: top; font-size: 13px; }
+.lounge-debt-modal .ant-table-tbody > tr > td { padding-block: 9px; }
+.lounge-debt-status > div { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--cigar-text-secondary); font-size: 12px; }
+.lounge-debt-status > div ~ div { display: none; }
+.lounge-debt-status .ant-tag { margin-bottom: 4px; }
+.lounge-debt-search { max-width: 420px; margin-bottom: 12px; }
+.lounge-debt-method { font-size: 12px; color: var(--cigar-text-secondary); }
+.lounge-debt-method summary { cursor: pointer; padding: 4px 0; }
+.lounge-debt-method[open] { display: grid; gap: 8px; }
+.lounge-debt-method .ant-alert { margin-block: 6px; }
+.lounge-debt-ledger-drawer .ant-drawer-header { padding: 12px 20px; }
+.lounge-debt-ledger-drawer .ant-drawer-body { padding: 16px 20px; overflow-wrap: anywhere; }
+.lounge-debt-ledger-drawer .ant-table-cell { vertical-align: top; font-size: 13px; }
 .lounge-debt-expanded { display: grid; gap: 14px; min-width: 0; }
 .lounge-debt-metrics, .lounge-debt-amounts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin: 0; }
-.lounge-debt-metrics > div { padding: 12px; border: 1px solid var(--cigar-border-primary); border-radius: 8px; background: var(--cigar-black-secondary); }
+.lounge-debt-metrics > div { padding: 8px 10px; border: 1px solid var(--cigar-border-primary); border-radius: 8px; background: var(--cigar-black-secondary); }
 .lounge-debt-metrics dt, .lounge-debt-amounts dt { color: var(--cigar-text-secondary); font-size: 12px; line-height: 1.5; }
 .lounge-debt-metrics dd, .lounge-debt-amounts dd { margin: 4px 0 0; font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
 .lounge-debt-counts { display: flex; flex-wrap: wrap; gap: 8px 16px; color: var(--cigar-text-secondary); font-size: 12px; }
@@ -13,14 +28,21 @@
 .lounge-debt-references summary { cursor: pointer; }
 .lounge-debt-references > div { margin-top: 6px; overflow-wrap: anywhere; }
 .lounge-debt-calculated { color: var(--cigar-text-tertiary); font-size: 11px; font-weight: 400; white-space: nowrap; }
-.lounge-debt-transactions { display: grid; gap: 12px; }
-.lounge-debt-transaction { padding: 12px; border: 1px solid var(--cigar-border-primary); border-radius: 10px; background: var(--cigar-black-quaternary); }
-.lounge-debt-transaction-head { margin-bottom: 10px; font-size: 12px; color: var(--cigar-text-secondary); }
-.lounge-debt-transaction .lounge-debt-amounts { margin-top: 12px; }
+.lounge-debt-transactions { display: grid; gap: 8px; }
+.lounge-debt-transaction { padding: 10px; border: 1px solid var(--cigar-border-primary); border-radius: 8px; background: var(--cigar-black-quaternary); }
+.lounge-debt-transaction-head { margin-bottom: 6px; font-size: 12px; color: var(--cigar-text-secondary); }
+.lounge-debt-transaction .lounge-debt-amounts { margin-top: 8px; }
 .lounge-debt-customer-head { display: flex; gap: 10px; justify-content: space-between; margin-bottom: 10px; }
 .lounge-debt-customer-values { grid-template-columns: repeat(2, minmax(0, 1fr)); margin-top: 12px; }
 @media (max-width: 991px) {
   .lounge-debt-modal .ant-modal-content { padding: 16px; }
+  .lounge-debt-modal .ant-tabs-tab { font-size: 12px; padding-block: 10px; }
+  .lounge-debt-modal .ant-tabs-tab + .ant-tabs-tab { margin-left: 14px; }
+  .lounge-debt-customer-values > div { padding: 5px 8px; }
+  .lounge-debt-customer-values { margin-top: 6px; }
+  .lounge-debt-customer-head { margin-bottom: 6px; align-items: center; }
+  .lounge-debt-ledger-drawer .ant-drawer-body { padding: 12px; }
+  .lounge-debt-ledger-drawer .lounge-debt-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .lounge-debt-modal .ant-table-expanded-row > td { padding: 12px !important; }
   .lounge-debt-modal .ant-tabs-tab { white-space: normal; }
   .lounge-debt-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }

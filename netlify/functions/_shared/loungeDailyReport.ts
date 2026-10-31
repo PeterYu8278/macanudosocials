@@ -4,6 +4,7 @@ import { businessDayStart } from '../../../src/utils/loungeOperations';
 import { reconcileLoungeDebt, validDebtBaseline, type DebtEntry, type DebtBaseline } from '../../../src/utils/loungeDebt';
 import { classifyPointsRecord } from '../../../src/utils/pointsRecordClassification';
 import { walletLedgerTreatments } from '../../../src/utils/walletLedgerEvidence';
+import { loungeDailyPaymentStats } from '../../../src/utils/loungeDailyPaymentStats';
 import { asDate, loungeError } from './loungeVisits';
 import { attachSubmission } from './whapiReceipts';
 import { loadLoungeReportTransport, loungeReportTaskId } from './loungeReportTransport';
@@ -21,24 +22,29 @@ export async function readPaged(query: any, max = 10000, get: (target: any) => P
 }
 
 export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, date: string, batch: any, revision: number, test = false, reportId?: string) {
+  const start = businessDayStart(date).getTime(), end = start + 86400000;
   // Every wallet, baseline and ledger page shares one Firestore read timestamp.
   const source = await db.runTransaction(async tx => {
     const store = await tx.get(db.collection(C.STORES).doc(storeId));
     const read = (query: any) => readPaged(query, 10000, target => tx.get(target));
-    const [sessions, redemptions, entries, users, baselines, lounges] = await Promise.all([
+    const [sessions, redemptions, entries, users, baselines, lounges, reloads, fees] = await Promise.all([
       read(db.collection(C.VISIT_SESSIONS).where('storeId', '==', storeId).orderBy('__name__')),
       read(db.collection(C.REDEMPTION_RECORDS).orderBy('__name__')),
       read(db.collection(C.POINTS_RECORDS).orderBy('__name__')),
       read(db.collection(C.USERS).orderBy('__name__')),
       read(db.collection(C.WALLET_DEBT_BASELINES).orderBy('__name__')),
       tx.get(db.collection(C.STORES).orderBy('__name__').limit(2)),
+      read(db.collection(C.RELOAD_RECORDS).where('verifiedAt', '>=', Timestamp.fromMillis(start))
+        .where('verifiedAt', '<', Timestamp.fromMillis(end)).orderBy('verifiedAt')),
+      read(db.collection(C.MEMBERSHIP_FEE_RECORDS).where('deductedAt', '>=', Timestamp.fromMillis(start))
+        .where('deductedAt', '<', Timestamp.fromMillis(end)).orderBy('deductedAt')),
     ]);
-    return { store: store.data(), sessions, redemptions, entries, users, baselines,
+    return { store: store.data(), sessions, redemptions, entries, users, baselines, reloads, fees,
       hasOtherLounges: lounges.docs.some(doc => doc.id !== storeId), asOf: store.readTime?.toMillis() || Date.now() };
   }, { readOnly: true });
   const { store, sessions, redemptions, entries, users, asOf } = source;
   const baselines = new Map<string, DebtBaseline>(source.baselines.map(doc => [doc.id, doc.data() as DebtBaseline]));
-  const start = businessDayStart(date).getTime(), end = start + 86400000;
+  const paymentStats = loungeDailyPaymentStats(source.reloads.map(d => d.data()), source.fees.map(d => d.data()), storeId, start, end, asOf);
   const daily = sessions.filter(d => { const at = asDate(d.data().checkInAt).getTime(); return at >= start && at < end; });
   const sessionIds = new Set(daily.map(d => d.id));
   let pendingCigars = 0, confirmedCigars = 0;
@@ -159,6 +165,8 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
     + `\n> *Visitation*\nSettlement: ${test ? 'NOT EXECUTED - TEST ONLY' : batch.status === 'completed' ? 'COMPLETE' : 'INCOMPLETE - action required'}\n`
     + `Customers: ${customers}\nCompleted visits: ${completed.length}\nIncompleted visits (including carryovers): ${test ? testPending : batch.remaining}\nVisit fees: ${n(fees)} pts / ${n(hours)} hrs\n`
     + `\n> *Cigar Redemption*\nConfirmed cigars: ${confirmedCigars}\nPending cigar selections: ${pendingCigars}\n`
+    + `\n> *Daily Reloads*\nCompleted payments: ${paymentStats.payments}\nPaying customers: ${paymentStats.customers}\nPayments received (including annual fees): RM ${n(paymentStats.received)}\nReload amount (excluding annual fees): RM ${n(paymentStats.reloadAmount)}\nAnnual fees in these payments: RM ${n(paymentStats.annualFees)}\n`
+    + `\n> *New Members*\nFirst-time paid activations: ${paymentStats.newMembers}\nExcludes registrations and renewals.\n`
     + `\n> *Outstanding*\nOutstanding lounge debt (verified): ${n(debt.closing)} pts\n`
     + `Data status: ${debt.review ? 'INCOMPLETE' : 'RECONCILED'}\nCustomers requiring review at this lounge: ${localReviewCount}\n`
     + (debt.review ? 'Verified debt excludes unreconciled wallets; the total may be incomplete.\n' : '')
@@ -167,7 +175,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
     + `\nDebt period (MYT): ${time(debtDetails.from)} to ${time(debtDetails.to)}\n`
     + (asOf >= end ? `${test ? 'HISTORICAL TEST' : 'LATE RECOVERY'}: includes activity after the business date; NOT the original day-end debt.\n` : '')
     + `Snapshot (MYT): ${time(debtDetails.to)}`;
-  return { text, debt, debtDetails, createdAt: Timestamp.fromMillis(asOf) };
+  return { text, debt, debtDetails, paymentStats, createdAt: Timestamp.fromMillis(asOf) };
 }
 
 export async function createLoungeReport(db: Firestore, storeId: string, date: string, batch: any, revision: number) {

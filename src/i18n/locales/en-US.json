@@ -2,6 +2,8 @@
   "loungeOperations": {
     "reportPreviewTitle": "Daily report preview",
     "debt": {
+      "viewLedger": "View transactions", "snapshotInfo": "Snapshot notes & calculation rules", "evidenceInfo": "Evidence & reconciliation tools",
+      "searchCustomer": "Search customer name or member ID", "unconfirmedDebt": "Debt amounts await reconciliation.",
       "historyRefreshed": "History recalculated at the original snapshot cutoff using the saved wallet balances. The original report summary and sent message are preserved. Customers left unchanged because historical evidence could not be verified: {{skipped}}.",
       "shortParticipation": {"included": "Included", "historical-included": "Historical · included", "summary": "Summary · excluded", "duplicate": "Duplicate · excluded", "before-baseline": "Covered by baseline", "invalid": "Invalid · review", "historical": "Historical only"},
       "calculated": "Calculated",

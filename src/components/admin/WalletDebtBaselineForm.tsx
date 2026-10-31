@@ -30,7 +30,7 @@ export default function WalletDebtBaselineForm({ storeId, userId }: { storeId: s
   };
   return <>
     <Button onClick={start}>{label('registerBaseline')}</Button>
-    <Modal title={label('registerBaseline')} open={open} onCancel={() => setOpen(false)} zIndex={2400}
+    <Modal title={label('registerBaseline')} open={open} onCancel={() => setOpen(false)} zIndex={2500}
       okText={t('common.save')} confirmLoading={busy} onOk={save} okButtonProps={{ disabled: busy || saved || !loaded }}>
       <Alert type="warning" showIcon message={label('baselineWarning')} />
       {error && <Alert type="error" message={error} action={<Button onClick={start}>{t('common.retry')}</Button>} />}

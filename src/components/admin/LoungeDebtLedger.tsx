@@ -35,7 +35,7 @@ export default function LoungeDebtLedger({ row, compact, time }: {
     {entry.relatedId && <div><Typography.Text copyable>{entry.relatedId}</Typography.Text></div>}
   </details>;
   if (compact) return <div className="lounge-debt-transactions">
-    {row.entries.slice((page - 1) * 5, page * 5).map(entry => <article key={entry.id} className="lounge-debt-transaction">
+    {row.entries.slice((page - 1) * 10, page * 10).map(entry => <article key={entry.id} className="lounge-debt-transaction">
       <div className="lounge-debt-transaction-head"><span>{time(entry.at)}</span>{treatment(entry)}</div>
       <div className="lounge-debt-description">{description(entry)}</div>
       <dl className="lounge-debt-amounts">
@@ -46,11 +46,11 @@ export default function LoungeDebtLedger({ row, compact, time }: {
       {references(entry)}
     </article>)}
     {row.entries.length === 0 && <Typography.Text type="secondary">{t('common.noData')}</Typography.Text>}
-    {row.entries.length > 5 && <Pagination simple current={page} pageSize={5} total={row.entries.length} onChange={setPage} />}
+    {row.entries.length > 10 && <Pagination simple current={page} pageSize={10} total={row.entries.length} onChange={setPage} />}
   </div>;
   return <Table<Entry> size="small" rowKey="id" tableLayout="fixed" dataSource={row.entries}
-    pagination={{ pageSize: 10, showSizeChanger: false }} scroll={{ x: 850 }} columns={[
-      { title: label('time'), dataIndex: 'at', width: 135, render: time },
+    pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], size: 'small' }} scroll={{ x: 850 }} columns={[
+      { title: label('time'), dataIndex: 'at', width: 155, render: time },
       { title: label('participation'), width: 150, render: (_, entry) => treatment(entry) },
       { title: label('entry'), width: 280, render: (_, entry) => <>
         <div className="lounge-debt-description">{description(entry)}</div>{references(entry)}</> },
