@@ -1,5 +1,6 @@
 {
   "loungeOperations": {
+    "loadingBatches": "正在加载日结批次…", "refreshingBatches": "正在刷新，暂时显示上次加载的记录。",
     "selectChannel": "请选择已验证的 Whapi 通道", "unavailableChannel": "{{channel}}（不可用）",
     "channelsLoadFailed": "无法检查 WhatsApp 通道，请刷新后重试。",
     "noValidChannels": "暂无有效 Whapi 通道。请在系统 WhatsApp 设置中连接并验证 Whapi、开启业务发送、将 Whapi 设为默认渠道，再在这里刷新。",
@@ -54,7 +55,7 @@
     "negativeWarning": "23:00 将结束驻店，余额不足时保留负余额。充值用于偿还现有余额，不会重复收取费用。",
     "opensAt": "开始营业时间", "exceptions": "特殊日期", "date": "营业日期", "open": "营业",
     "reportEnabled": "发送英文日报", "channel": "日报通道 ID",
-    "reportProvider": "日报发送服务", "reportRecipient": "日报接收号码（E.164）", "legacyRecipient": "已连接的 Whapi 号码（旧配置）",
+    "reportProvider": "日报发送服务", "reportRecipient": "日报接收号码（需含国家码，+ 可省略）", "legacyRecipient": "已连接的 Whapi 号码（旧配置）",
     "recipient": "接收人：已验证 Whapi 通道自身的 user.id。发送还需开启服务端日报开关。",
     "closing": "日终批次", "preview": "预览结算", "remaining": "未解决驻店", "delivery": "日报提交状态",
     "retry": "重试批次", "retryConfirm": "重试未解决的结算并生成新版日报？已完成的驻店不会重复扣款。",

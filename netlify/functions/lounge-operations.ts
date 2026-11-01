@@ -4,7 +4,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import { getFirestore } from './_shared/firestoreMonitoring';
 import { toWebFunction, type EventHandler } from './_shared/webFunction';
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
-import { validateLoungeOperations } from '../../src/utils/loungeOperations';
+import { normalizeLoungeReportRecipient, validateLoungeOperations } from '../../src/utils/loungeOperations';
 import { authorizeLounge, checkInLounge, deductLoungeRealtime, loungeError, settleLoungeVisit, syncLoungeRedemptions } from './_shared/loungeVisits';
 import { previewLoungeClosing } from './_shared/loungeClosing';
 import { dispatchLoungeClosing } from './_shared/loungeDispatch';
@@ -13,6 +13,7 @@ import { loadLoungeReportTransport, loungeWhapiChannelOptions } from './_shared/
 import { executeLoungeTestReport } from './_shared/loungeTestReport';
 import { saveWalletDebtBaseline } from './_shared/walletDebtBaseline';
 import { correctLegacyLoungeDebtDetails } from '../../src/utils/legacyLoungeReportSnapshot';
+import { readLoungeStatus } from './_shared/loungeStatus';
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,160}$/.test(value);
 const reply = (statusCode: number, data: object) => ({ statusCode,
@@ -56,19 +57,14 @@ export const eventHandler: EventHandler = async event => {
           ? correctLegacyLoungeDebtDetails(report.debtDetails) : null });
       }
       if (input.action === 'status') {
-        const batches = await db.collection(C.LOUNGE_BATCHES).where('storeId', '==', input.storeId).get();
-        const rows: any[] = batches.docs.map(d => ({ id: d.id, ...d.data() })).sort((a: any, b: any) => b.businessDate.localeCompare(a.businessDate)).slice(0, 14);
-        for (const row of rows) {
-          const report = (await db.collection(C.LOUNGE_REPORTS).doc(`${input.storeId}_${row.businessDate}_v${row.revision || 1}`).get()).data();
-          row.reportStatus = report?.delivery?.status || 'not-sent'; row.reportText = report?.text || '';
-          const task = (await db.collection(C.WHATSAPP_TASKS).doc(report?.delivery?.taskId || `lounge-${input.storeId}_${row.businessDate}_v${row.revision || 1}`).get()).data();
-          if (task) row.reportStatus = task.status;
-        }
+        const rows = await readLoungeStatus(db, input.storeId);
         return reply(200, { success: true, enabled: process.env.LOUNGE_OPERATIONS_ENABLED === 'true',
           batches: rows });
       }
       if (input.action === 'save-hours') {
         validateLoungeOperations(input.operations);
+        if (input.operations.reportDelivery?.recipient) input.operations = { ...input.operations,
+          reportDelivery: { ...input.operations.reportDelivery, recipient: normalizeLoungeReportRecipient(input.operations.reportDelivery.recipient) } };
         if (input.operations.enabled && (process.env.LOUNGE_OPERATIONS_ENABLED !== 'true'
           || (process.env.LOUNGE_JOB_SECRET || '').length < 32 || !process.env.URL)) throw loungeError('not-ready');
         const reportTransport = input.operations.dailyReportEnabled ? await loadLoungeReportTransport(db, input.operations) : null;

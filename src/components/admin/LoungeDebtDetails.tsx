@@ -94,7 +94,7 @@ export default function LoungeDebtDetails({ storeId, reportId, reportKind = 'for
             <div className="lounge-debt-customer-head"><div><strong>{row.name || label('unknownCustomer')}</strong><div>{row.memberId || row.userId}</div></div>{view(row)}</div>
             {statusFor(row)}
             {!row.reliable && <Typography.Text type="secondary">{label('unconfirmedDebt')}</Typography.Text>}
-            <dl className="lounge-debt-metrics lounge-debt-customer-values">{(row.reliable ? amountKeys : ['walletBalance'] as const).map(key => <div key={key}><dt>{label(key)}</dt>
+            <dl className="lounge-debt-metrics lounge-debt-customer-values" tabIndex={0} aria-label={label('details')}>{(row.reliable ? amountKeys : ['walletBalance'] as const).map(key => <div key={key}><dt>{label(key)}</dt>
               <dd>{key === 'walletBalance' || row.reliable ? number(row[key]) : label('unconfirmed')}</dd></div>)}</dl>
           </> },
         ] : [

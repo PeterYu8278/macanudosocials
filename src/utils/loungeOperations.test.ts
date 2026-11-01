@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { businessCutoff, emptyLoungeOperations, firstVisitCutoff, loungeAvailability, localBusinessDate, validateLoungeOperations, visitChargeQuote } from './loungeOperations';
+import { businessCutoff, emptyLoungeOperations, firstVisitCutoff, loungeAvailability, localBusinessDate, normalizeLoungeReportRecipient, validateLoungeOperations, visitChargeQuote } from './loungeOperations';
 const at = (time: string) => new Date(`2026-10-15T${time}:00+08:00`);
 const operations = () => ({ ...emptyLoungeOperations(), enabled: true, week: Array.from({ length: 7 }, () => ({ open: true, startsAt: '12:00' })) });
 
@@ -60,8 +60,14 @@ describe('daily report delivery configuration', () => {
         reportDelivery: { provider, channelId: provider === 'whapi' ? 'channel' : 'whatsmeow:pilot:session', recipient: '+60123456789' } })).not.toThrow();
     }
   });
-  it('requires a channel and E.164 recipient for enabled explicit reports', () => {
-    for (const recipient of ['', '60123456789', '+0123456789', '+60 123456789']) {
+  it.each(['+60123456789', '60123456789', ' 60123456789 '])('accepts and normalizes international recipient %s', recipient => {
+    expect(normalizeLoungeReportRecipient(recipient)).toBe('+60123456789');
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+      reportDelivery: { provider: 'whapi', channelId: 'channel', recipient } })).not.toThrow();
+  });
+  it('requires a channel and valid international recipient for enabled explicit reports', () => {
+    for (const recipient of ['', '+0123456789', '+60 123456789', '0123456789', '++60123456789', '60123456789abc', '1234567890123456']) {
+      expect(normalizeLoungeReportRecipient(recipient)).toBeNull();
       expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
         reportDelivery: { provider: 'whatsmeow', channelId: 'whatsmeow:pilot:session', recipient } })).toThrow('invalid-hours');
     }

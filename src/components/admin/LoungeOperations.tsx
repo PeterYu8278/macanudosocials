@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Input, Modal, Select, Space, Switch, Table, Tabs, Typography, message } from 'antd';
 import { ClockCircleOutlined, PlusOutlined, DeleteOutlined, ReloadOutlined, EyeOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { Store } from '../../types';
-import { emptyLoungeOperations, validateLoungeOperations, type LoungeOperations as Operations } from '../../utils/loungeOperations';
+import { emptyLoungeOperations, normalizeLoungeReportRecipient, validateLoungeOperations, type LoungeOperations as Operations } from '../../utils/loungeOperations';
 import { loungeRequest } from '../../services/loungeOperations';
 import LoungeTestReport from './LoungeTestReport';
 import LoungeDebtDetails from './LoungeDebtDetails';
@@ -13,7 +13,12 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
   const { t } = useTranslation();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
   const [value, setValue] = useState<Operations>(store.operations || emptyLoungeOperations());
-  const [status, setStatus] = useState<any>(null), [error, setError] = useState(''), [preview, setPreview] = useState<any>(null);
+  const [statusSnapshot, setStatusSnapshot] = useState<{ storeId: string; data: any } | null>(null);
+  const status = statusSnapshot?.storeId === store.id ? statusSnapshot.data : null;
+  const [statusBusy, setStatusBusy] = useState(false), [error, setError] = useState(''), [preview, setPreview] = useState<any>(null);
+  const statusRequest = useRef<{ storeId: string; promise: Promise<void> } | null>(null);
+  const statusSequence = useRef(0), currentStore = useRef(store.id);
+  currentStore.current = store.id;
   const [reportText, setReportText] = useState<string | null>(null);
   const [channels, setChannels] = useState<Array<{ channelId: string; provider: 'whapi' }>>([]);
   const [channelsBusy, setChannelsBusy] = useState(false), [channelsError, setChannelsError] = useState(false);
@@ -27,9 +32,22 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
   const selectedChannel = value.reportDelivery?.channelId ?? value.whapiChannelId;
   const channelValid = !whapi || channels.some(channel => channel.channelId === selectedChannel);
   useEffect(() => { if (!open) setValue(store.operations || emptyLoungeOperations()); }, [store.operations, open]);
-  const load = async () => {
-    try { setStatus(await loungeRequest('status', { storeId: store.id })); setError(''); }
-    catch (e: any) { setError(e.message || t('loungeOperations.error')); }
+  const load = (force = false): Promise<void> => {
+    if (!force && statusRequest.current?.storeId === store.id) return statusRequest.current.promise;
+    const storeId = store.id, sequence = ++statusSequence.current;
+    setStatusBusy(true);
+    const promise = (async () => {
+      try {
+        const data = await loungeRequest('status', { storeId });
+        if (sequence === statusSequence.current && currentStore.current === storeId) { setStatusSnapshot({ storeId, data }); setError(''); }
+      } catch (e: any) {
+        if (sequence === statusSequence.current && currentStore.current === storeId) setError(e.message || t('loungeOperations.error'));
+      } finally {
+        if (sequence === statusSequence.current) { setStatusBusy(false); statusRequest.current = null; }
+      }
+    })();
+    statusRequest.current = { storeId, promise };
+    return promise;
   };
   const run = async (action: () => Promise<void>) => {
     setBusy(true);
@@ -38,14 +56,19 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
   };
   const save = () => run(async () => {
     try { validateLoungeOperations(value); } catch { throw new Error(t('loungeOperations.errors.invalid-hours')); }
-    await loungeRequest('save-hours', { storeId: store.id, operations: value });
-    message.success(t('common.saveSuccess')); onSaved?.(); await load();
+    const operations = value.reportDelivery?.recipient ? { ...value,
+      reportDelivery: { ...value.reportDelivery, recipient: normalizeLoungeReportRecipient(value.reportDelivery.recipient)! } } : value;
+    await loungeRequest('save-hours', { storeId: store.id, operations });
+    setValue(operations);
+    message.success(t('common.saveSuccess')); onSaved?.(); await load(true);
   });
   return <>
-    <Button type="link" size="small" icon={<ClockCircleOutlined />} onClick={() => { setOpen(true); void load(); void loadChannels(); }}>{t('loungeOperations.title')}</Button>
+    <Button type="link" size="small" icon={<ClockCircleOutlined />}
+      onMouseEnter={() => { if (!status) void load(); }} onFocus={() => { if (!status) void load(); }}
+      onClick={() => { setOpen(true); void load(); void loadChannels(); }}>{t('loungeOperations.title')}</Button>
     <Modal title={`${store.name} - ${t('loungeOperations.title')}`} open={open} onCancel={() => setOpen(false)} footer={null}
       width={960} zIndex={2100} style={{ top: 24 }} styles={{ body: { maxHeight: '75vh', overflowY: 'auto' } }}>
-      {error && <Alert type="error" showIcon message={error} action={<Button onClick={load} icon={<ReloadOutlined />} />} />}
+      {error && <Alert type="error" showIcon message={error} action={<Button onClick={() => void load()} icon={<ReloadOutlined />} />} />}
       {status && !status.enabled && <Alert type="warning" showIcon message={t('loungeOperations.disabled')} />}
       <Tabs items={[
         { key: 'hours', label: t('loungeOperations.hours'), children: <Space direction="vertical" style={{ width: '100%' }} size="middle">
@@ -88,7 +111,7 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
                   : { ...value, whapiChannelId: e.target.value.trim() })} />}</div>
             <div><Typography.Text>{t('loungeOperations.reportRecipient')}</Typography.Text>
               <Input value={value.reportDelivery?.recipient || ''} maxLength={16} aria-label={t('loungeOperations.reportRecipient')}
-                placeholder={value.reportDelivery ? '+60123456789' : t('loungeOperations.legacyRecipient')}
+                placeholder={value.reportDelivery ? '+60123456789 / 60123456789' : t('loungeOperations.legacyRecipient')}
                 onChange={e => setValue({ ...value, reportDelivery: { provider: value.reportDelivery?.provider || 'whapi',
                   channelId: value.reportDelivery?.channelId ?? value.whapiChannelId, recipient: e.target.value.trim() } })} /></div>
           </div>
@@ -103,9 +126,12 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
         { key: 'batches', label: t('loungeOperations.closing'), children: <>
           <Space wrap style={{ marginBottom: 12 }}>
             <Button icon={<EyeOutlined />} loading={busy} onClick={() => run(async () => setPreview(await loungeRequest('preview', { storeId: store.id })))}>{t('loungeOperations.preview')}</Button>
-            <Button icon={<ReloadOutlined />} onClick={load}>{t('common.refresh')}</Button>
+            <Button icon={<ReloadOutlined />} loading={statusBusy} onClick={() => void load()}>{t('common.refresh')}</Button>
           </Space>
-          <Table size="small" rowKey="id" dataSource={status?.batches || []} scroll={{ x: 700 }} pagination={{ pageSize: 7 }} columns={[
+          {statusBusy && status && <Typography.Text type="secondary" role="status">{t('loungeOperations.refreshingBatches')}</Typography.Text>}
+          <Table size="small" loading={statusBusy && !status} rowKey="id" dataSource={status?.batches || []}
+            locale={!status ? { emptyText: error || t('loungeOperations.loadingBatches') } : undefined}
+            scroll={{ x: 700 }} pagination={{ pageSize: 7 }} columns={[
             { title: t('loungeOperations.date'), dataIndex: 'businessDate' },
             { title: t('common.status'), dataIndex: 'status', render: (s, row: any) => <>
               {String(t(`loungeOperations.status.${s}`, String(s)))}
@@ -119,7 +145,7 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
               aria-label={t('loungeOperations.reportPreviewTitle')} onClick={() => setReportText(row.reportText)} /> },
             { title: t('common.actions'), render: (_, row: any) => <Button size="small" loading={busy} onClick={() => Modal.confirm({
               title: t('loungeOperations.retryConfirm'), zIndex: 2200, onOk: () => run(async () => {
-                await loungeRequest('retry', { storeId: store.id, businessDate: row.businessDate }); message.success(t('loungeOperations.queued')); await load();
+                await loungeRequest('retry', { storeId: store.id, businessDate: row.businessDate }); message.success(t('loungeOperations.queued')); await load(true);
               }),
             })}>{t('loungeOperations.retry')}</Button> },
           ]} />

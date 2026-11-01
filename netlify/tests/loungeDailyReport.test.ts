@@ -98,10 +98,15 @@ describe('daily report verified Whapi self-delivery', () => {
     expect(records[`_whatsappTasks/${delivery.taskId}`].provider).toBe('whatsmeow');
     expect(mocks.send).not.toHaveBeenCalled();
   });
-  it('allows explicit Whapi recipients without confusing them with the sending account', async () => {
-    records['stores/lounge'].operations.reportDelivery = { provider: 'whapi', channelId: 'channel', recipient: '+60199887766' };
+  it.each(['+60199887766', '60199887766'])('normalizes Whapi recipient %s without confusing it with the sending account', async recipient => {
+    records['stores/lounge'].operations.reportDelivery = { provider: 'whapi', channelId: 'channel', recipient };
     await sendLoungeReport(db, report());
     expect(mocks.send).toHaveBeenCalledExactlyOnceWith('server-only-token', '+60199887766', 'English report');
+  });
+  it('normalizes Whatsmeow recipients while keeping the same destination binding', async () => {
+    enableMeow(); records['stores/lounge'].operations.reportDelivery.recipient = '60199887766';
+    await sendLoungeReport(db, report());
+    expect(mocks.meowSend).toHaveBeenCalledWith(expect.anything(), expect.any(String), '+60199887766', 'English report', expect.any(Number));
   });
   it('does not silently migrate legacy self-delivery when the global provider changes', async () => {
     records['_whatsappConfig/settings'].config.defaultProvider = 'whatsmeow';

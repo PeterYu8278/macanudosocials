@@ -29,6 +29,12 @@ export function firstVisitCutoff(checkIn: Date): Date {
   return checkIn < cutoff ? cutoff : new Date(cutoff.getTime() + DAY);
 }
 
+/** Accept international digits with or without '+', without guessing a country code. */
+export function normalizeLoungeReportRecipient(value: unknown): string | null {
+  if (typeof value !== 'string' || !/^\+?[1-9]\d{6,14}$/.test(value.trim())) return null;
+  return `+${value.trim().replace(/^\+/, '')}`;
+}
+
 export function validateLoungeOperations(value: LoungeOperations): void {
   if (!value || value.timezone !== 'Asia/Kuala_Lumpur' || typeof value.enabled !== 'boolean'
     || typeof value.dailyReportEnabled !== 'boolean' || typeof value.whapiChannelId !== 'string' || value.whapiChannelId.length > 200
@@ -37,7 +43,7 @@ export function validateLoungeOperations(value: LoungeOperations): void {
   if (route && (!['whapi', 'whatsmeow'].includes(route.provider)
     || typeof route.channelId !== 'string' || route.channelId.length > 200
     || typeof route.recipient !== 'string'
-    || (route.recipient !== '' && !/^\+[1-9]\d{6,14}$/.test(route.recipient))
+    || (route.recipient !== '' && !normalizeLoungeReportRecipient(route.recipient))
     || (value.dailyReportEnabled && (!route.channelId.trim() || !route.recipient)))) throw new Error('invalid-hours');
   const validDay = (d: LoungeDay) => d && typeof d.open === 'boolean' && typeof d.startsAt === 'string'
     && (!d.open || /^([01]\d|2[0-2]):[0-5]\d$/.test(d.startsAt));

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Firestore } from 'firebase-admin/firestore';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
-import type { LoungeOperations } from '../../../src/utils/loungeOperations';
+import { normalizeLoungeReportRecipient, type LoungeOperations } from '../../../src/utils/loungeOperations';
 import { loungeError } from './loungeVisits';
 import { assertWhatsAppBinding, loadWhatsApp, submitWhapi } from './whatsapp';
 import { readWhapiHealth } from './whatsappConnection';
@@ -20,7 +20,8 @@ export async function loungeWhapiChannelOptions(db: Firestore) {
   }
 }
 const routeKey = (operations: Operations) => JSON.stringify(operations?.reportDelivery
-  ? [operations.reportDelivery.provider, operations.reportDelivery.channelId, operations.reportDelivery.recipient]
+  ? [operations.reportDelivery.provider, operations.reportDelivery.channelId,
+    normalizeLoungeReportRecipient(operations.reportDelivery.recipient) || operations.reportDelivery.recipient]
   : ['legacy-whapi', operations?.whapiChannelId || '']);
 
 export const loungeReportTaskId = (reportId: string, provider: string) => provider === 'whatsmeow'
@@ -32,7 +33,7 @@ export async function loadLoungeReportTransport(db: Firestore, operations: Opera
   const explicit = operations?.reportDelivery;
   const provider = explicit?.provider || 'whapi';
   if (!['whapi', 'whatsmeow'].includes(provider)) throw loungeError('channel-unverified');
-  if (explicit && (!explicit.channelId || !/^\+[1-9]\d{6,14}$/.test(explicit.recipient))) throw loungeError('channel-unverified');
+  if (explicit && (!explicit.channelId || !normalizeLoungeReportRecipient(explicit.recipient))) throw loungeError('channel-unverified');
   const settings = (await db.collection(C.WHATSAPP_CONFIG).doc('settings').get()).data();
   const selected = settings?.config?.defaultProvider || 'whapi';
   if (selected !== provider || settings?.config?.enabled !== true) throw loungeError('channel-unverified');
@@ -56,7 +57,7 @@ export async function loadLoungeReportTransport(db: Firestore, operations: Opera
     account = health.account;
     binding = whapi!.binding || '';
   }
-  const recipient = explicit?.recipient || account;
+  const recipient = explicit ? normalizeLoungeReportRecipient(explicit.recipient)! : account;
   return {
     provider, channelId, recipient, binding, routeKey: key,
     async assert(tx: any, freshOperations: Operations) {

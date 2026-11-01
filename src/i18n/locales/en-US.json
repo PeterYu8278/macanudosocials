@@ -1,5 +1,6 @@
 {
   "loungeOperations": {
+    "loadingBatches": "Loading closing batches…", "refreshingBatches": "Refreshing; showing the last loaded records.",
     "selectChannel": "Select a verified Whapi channel", "unavailableChannel": "{{channel}} (unavailable)",
     "channelsLoadFailed": "Unable to check WhatsApp channels. Refresh and try again.",
     "noValidChannels": "No valid Whapi channel. Connect and verify Whapi in system WhatsApp settings, enable business sending and select Whapi as the default provider, then refresh here.",
@@ -54,7 +55,7 @@
     "negativeWarning": "At 23:00, visits end even if the wallet becomes negative. Reloads repay the existing balance; fees are not charged twice.",
     "opensAt": "Opening time", "exceptions": "Special Dates", "date": "Business date", "open": "Open",
     "reportEnabled": "Send English daily report", "channel": "Report channel ID",
-    "reportProvider": "Report provider", "reportRecipient": "Report recipient (E.164)", "legacyRecipient": "Connected Whapi account (legacy)",
+    "reportProvider": "Report provider", "reportRecipient": "Report recipient (country code required; + optional)", "legacyRecipient": "Connected Whapi account (legacy)",
     "recipient": "Recipient: the verified Whapi channel's own user.id. Sending also requires the server-side daily report switch.",
     "closing": "Closing Batches", "preview": "Preview settlement", "remaining": "Unresolved visits", "delivery": "Report submission",
     "retry": "Retry batch", "retryConfirm": "Retry unresolved settlement and generate a new report revision? Completed visits will not be charged again.",

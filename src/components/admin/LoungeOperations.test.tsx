@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { Store } from '../../types';
 import { emptyLoungeOperations } from '../../utils/loungeOperations';
 const mocks = vi.hoisted(() => ({ request: vi.fn() }));
@@ -11,6 +11,26 @@ const store = { id: 'lounge', name: 'Test Lounge', status: 'active' } as Store;
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 describe('lounge operations controls', () => {
+  it('deduplicates prefetch/open requests, shows initial loading and keeps cached rows during refresh', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    let resolveStatus!: (value: any) => void;
+    const pending = new Promise(resolve => { resolveStatus = resolve; });
+    mocks.request.mockImplementation(action => action === 'status' ? pending : Promise.resolve({ channels: [] }));
+    render(<LoungeOperations store={store} />);
+    const opener = screen.getByRole('button', { name: /loungeOperations.title/ });
+    fireEvent.mouseEnter(opener);
+    fireEvent.click(opener);
+    fireEvent.click(screen.getByRole('tab', { name: 'loungeOperations.closing' }));
+    expect(mocks.request.mock.calls.filter(([action]) => action === 'status')).toHaveLength(1);
+    expect(screen.getByText('loungeOperations.loadingBatches')).toBeTruthy();
+    await act(async () => resolveStatus({ enabled: true, batches: [{ id: 'batch', businessDate: '2026-10-31', status: 'completed' }] }));
+    expect(screen.getByText('2026-10-31')).toBeTruthy();
+    mocks.request.mockImplementation(action => action === 'status' ? new Promise(() => {}) : Promise.resolve({ channels: [] }));
+    fireEvent.click(screen.getByRole('button', { name: /common.refresh/ }));
+    expect(screen.getByText('2026-10-31')).toBeTruthy();
+    expect(screen.getByText('loungeOperations.refreshingBatches')).toBeTruthy();
+    expect(screen.queryByText('loungeOperations.loadingBatches')).toBeNull();
+  }, 30000);
   it('uses verified system channel choices, preserves unavailable saved channels, and pauses reports on selection', async () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
     mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [] });
@@ -20,8 +40,9 @@ describe('lounge operations controls', () => {
     expect(screen.queryByRole('textbox', { name: 'loungeOperations.channel' })).toBeNull();
     expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).disabled).toBe(true);
     mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [{ provider: 'whapi', channelId: 'verified-channel' }] });
-    fireEvent.click(screen.getByRole('button', { name: 'common.refresh' }));
-    await waitFor(() => expect(screen.queryByText('loungeOperations.noValidChannels')).toBeNull());
+    await waitFor(() => expect((screen.getByRole('button', { name: 'common.refresh' }) as HTMLButtonElement).disabled).toBe(false));
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'common.refresh' })); });
+    await waitFor(() => expect(screen.queryByText('loungeOperations.noValidChannels')).toBeNull(), { timeout: 5000 });
     fireEvent.mouseDown(screen.getByRole('combobox', { name: 'loungeOperations.channel' }));
     fireEvent.click(await screen.findByText('Whapi · verified-channel'));
     expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).checked).toBe(false);
@@ -49,7 +70,7 @@ describe('lounge operations controls', () => {
     fireEvent.click(screen.getByRole('button', { name: /loungeOperations.title/ }));
     await screen.findByRole('textbox', { name: 'loungeOperations.reportRecipient' });
     await waitFor(() => expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).disabled).toBe(false));
-    fireEvent.change(screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }), { target: { value: '+60199887766' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }), { target: { value: '60199887766' } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }));
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
     await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('save-hours', { storeId: 'lounge', operations: expect.objectContaining({
