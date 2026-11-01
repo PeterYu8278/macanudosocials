@@ -375,6 +375,7 @@
     "saveFailed": "无法保存电邮发送服务"
   },
   "common": {
+    "actions": "操作",
     "loading": "加载中...",
     "pageLoading": "页面加载中...",
     "save": "保存",

@@ -376,6 +376,7 @@
     "saveFailed": "Unable to save email providers"
   },
   "common": {
+    "actions": "Actions",
     "loading": "Loading...",
     "pageLoading": "Page loading...",
     "save": "Save",
