@@ -10,13 +10,17 @@ const cents = (value: unknown): number => {
 };
 
 /** Payment receipts, not points credits/rewards. The initial package's annual fee is separate. */
-export function loungeDailyPaymentStats(reloads: Row[], fees: Row[], storeId: string, start: number, end: number, asOf: number) {
+export function loungeDailyPaymentStats(reloads: Row[], fees: Row[], storeId: string, start: number, end: number, asOf: number, users: Row[] = []) {
   const within = (value: unknown) => {
     const at = timestamp(value);
     return at >= start && at < end && at <= asOf;
   };
-  let payments = 0, received = 0, reloadAmount = 0, annualFees = 0;
+  let payments = 0, received = 0, reloadAmount = 0, annualFees = 0, newMemberReload = 0;
   const customers = new Set<string>(), members = new Set<string>();
+  for (const row of fees) {
+    if (row.storeId === storeId && row.status === 'paid' && row.renewalType === 'initial'
+      && row.userId && within(row.deductedAt)) members.add(row.userId);
+  }
   for (const row of reloads) {
     if (row.storeId !== storeId || row.status !== 'completed' || !within(row.verifiedAt)) continue;
     const gross = cents(row.actualAmount ?? row.requestedAmount);
@@ -24,12 +28,10 @@ export function loungeDailyPaymentStats(reloads: Row[], fees: Row[], storeId: st
     const fee = cents(row.annualFeeAmount ?? 0);
     if (fee > gross) throw new Error('invalid-report-payment-amount');
     payments++; received += gross; annualFees += fee; reloadAmount += gross - fee;
+    if (members.has(row.userId)) newMemberReload += gross - fee;
     if (row.userId) customers.add(row.userId);
   }
-  for (const row of fees) {
-    if (row.storeId === storeId && row.status === 'paid' && row.renewalType === 'initial'
-      && row.userId && within(row.deductedAt)) members.add(row.userId);
-  }
   return { payments, customers: customers.size, received: received / 100, reloadAmount: reloadAmount / 100,
-    annualFees: annualFees / 100, newMembers: members.size };
+    annualFees: annualFees / 100, newMembers: members.size, newMemberReload: newMemberReload / 100,
+    registrations: users.filter(row => ['guest', 'member', 'vip'].includes(row.role) && within(row.createdAt)).length };
 }

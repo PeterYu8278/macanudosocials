@@ -8,6 +8,17 @@ import { readWhapiHealth } from './whatsappConnection';
 import { assertMeowBinding, gatewayRequest, loadMeow, submitMeow, validGatewayStatus } from './whatsmeow';
 
 type Operations = Partial<LoungeOperations> | undefined;
+
+/** Only the active, verified Whapi binding is eligible; candidates and credentials stay private. */
+export async function loungeWhapiChannelOptions(db: Firestore) {
+  try {
+    const transport = await loadLoungeReportTransport(db, undefined, true);
+    return [{ channelId: transport.channelId, provider: 'whapi' as const }];
+  } catch (error: any) {
+    if (error?.message === 'channel-unverified') return [];
+    throw error;
+  }
+}
 const routeKey = (operations: Operations) => JSON.stringify(operations?.reportDelivery
   ? [operations.reportDelivery.provider, operations.reportDelivery.channelId, operations.reportDelivery.recipient]
   : ['legacy-whapi', operations?.whapiChannelId || '']);

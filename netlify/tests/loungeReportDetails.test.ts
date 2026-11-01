@@ -1,6 +1,7 @@
 // @vitest-environment node
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-const m = vi.hoisted(() => ({ authorize: vi.fn(), get: vi.fn(), token: vi.fn() }));
+const m = vi.hoisted(() => ({ authorize: vi.fn(), get: vi.fn(), token: vi.fn(), channels: vi.fn() }));
+vi.mock('../functions/_shared/loungeReportTransport', () => ({ loungeWhapiChannelOptions: m.channels, loadLoungeReportTransport: vi.fn() }));
 vi.mock('firebase-admin/app', () => ({ getApps: () => [{}] }));
 vi.mock('firebase-admin/auth', () => ({ getAuth: () => ({ verifyIdToken: m.token }) }));
 vi.mock('../functions/_shared/firestoreMonitoring', () => ({ withFirestoreMonitoring: (_name: string, work: () => unknown) => work(), getFirestore: () => ({
@@ -22,6 +23,13 @@ describe('saved lounge debt detail access', () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ debtDetails: { customers: [] } });
     expect(m.authorize).toHaveBeenCalledWith({}, expect.anything(), 'staff', 'staff', 'lounge', true);
+  });
+  it('authorizes channel lookup for this lounge before exposing safe channel choices', async () => {
+    m.channels.mockResolvedValue([{ channelId: 'verified', provider: 'whapi' }]);
+    expect(await (await request({ action: 'report-channels' })).json()).toMatchObject({ channels: [{ channelId: 'verified' }] });
+    m.channels.mockClear(); m.authorize.mockRejectedValue(new Error('forbidden'));
+    expect((await request({ action: 'report-channels' })).status).toBe(403);
+    expect(m.channels).not.toHaveBeenCalled();
   });
   it('denies staff outside their authorized lounge before reading a report', async () => {
     m.authorize.mockRejectedValue(new Error('forbidden'));

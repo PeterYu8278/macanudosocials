@@ -1,5 +1,9 @@
 {
   "loungeOperations": {
+    "selectChannel": "Select a verified Whapi channel", "unavailableChannel": "{{channel}} (unavailable)",
+    "channelsLoadFailed": "Unable to check WhatsApp channels. Refresh and try again.",
+    "noValidChannels": "No valid Whapi channel. Connect and verify Whapi in system WhatsApp settings, enable business sending and select Whapi as the default provider, then refresh here.",
+    "channelSource": "Options come from the active, verified connection in system WhatsApp settings. Changing channel pauses daily reports until enabled again.",
     "reportPreviewTitle": "Daily report preview",
     "debt": {
       "viewLedger": "View transactions", "snapshotInfo": "Snapshot notes & calculation rules", "evidenceInfo": "Evidence & reconciliation tools",

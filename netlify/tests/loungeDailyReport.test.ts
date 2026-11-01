@@ -9,6 +9,7 @@ vi.mock('../functions/_shared/whatsapp', () => ({ loadWhatsApp: mocks.load, asse
 vi.mock('../functions/_shared/whatsappConnection', () => ({ readWhapiHealth: mocks.health }));
 vi.mock('../functions/_shared/whapiReceipts', () => ({ attachSubmission: mocks.attach }));
 import { buildLoungeReportSnapshot, sendLoungeReport } from '../functions/_shared/loungeDailyReport';
+import { loungeWhapiChannelOptions } from '../functions/_shared/loungeReportTransport';
 let records: Record<string, any>;
 const ref = (path: string): any => ({ id: path.split('/')[1], path, get: async () => ({ data: () => records[path] }),
   update: async (data: any) => {
@@ -37,6 +38,24 @@ describe('daily report verified Whapi self-delivery', () => {
     mocks.attach.mockImplementation(async (_db, _id, _channel, submitted) => submitted.status);
   });
   afterEach(() => vi.unstubAllEnvs());
+  it('offers only the live verified Whapi channel without exposing credentials or recipient identity', async () => {
+    expect(await loungeWhapiChannelOptions(db)).toEqual([{ channelId: 'channel', provider: 'whapi' }]);
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
+  it('offers no channels for unverified, disconnected, mismatched or inactive providers', async () => {
+    mocks.load.mockResolvedValueOnce({ token: 'secret', verified: false, config: { enabled: true, whapi: { channelId: 'channel' } } });
+    expect(await loungeWhapiChannelOptions(db)).toEqual([]);
+    mocks.health.mockResolvedValueOnce({ status: 'qr', channelId: 'channel', account: '60123456789' });
+    expect(await loungeWhapiChannelOptions(db)).toEqual([]);
+    mocks.health.mockResolvedValueOnce({ status: 'connected', channelId: 'other', account: '60123456789' });
+    expect(await loungeWhapiChannelOptions(db)).toEqual([]);
+    records['_whatsappConfig/settings'].config.defaultProvider = 'whatsmeow';
+    expect(await loungeWhapiChannelOptions(db)).toEqual([]);
+  });
+  it('reports channel lookup outages rather than returning stale options', async () => {
+    mocks.health.mockRejectedValueOnce(new Error('connection-unavailable'));
+    await expect(loungeWhapiChannelOptions(db)).rejects.toThrow('connection-unavailable');
+  });
   it('sends only to the freshly verified user.id, once', async () => {
     await sendLoungeReport(db, report()); await sendLoungeReport(db, report());
     expect(mocks.send).toHaveBeenCalledExactlyOnceWith('server-only-token', '60123456789', 'English report');
@@ -214,7 +233,7 @@ describe('read-only report snapshot rendering', () => {
     expect(report.paymentStats).toMatchObject({ received: 299, reloadAmount: 100, annualFees: 199, newMembers: 1 });
     expect(report.text).toContain('\n\n> *Daily Reloads*\nCompleted payments: 1');
     expect(report.text).toContain('Reload amount (excluding annual fees): RM 100.00');
-    expect(report.text).toContain('\n\n> *New Members*\nFirst-time paid activations: 1');
+    expect(report.text).toContain('\n\n> *New Members*\nRegistration: 0\nActivations: 1\nReload: RM 100.00\n');
     expect(report.text.includes('Other lounge review items:')).toBe(hasOtherLounges);
     expect(report.text.includes('Unallocated lounge debt:')).toBe(hasOtherLounges);
     expect(report.text).not.toContain('Other network review items:');

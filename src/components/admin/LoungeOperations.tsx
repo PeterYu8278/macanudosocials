@@ -15,6 +15,17 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
   const [value, setValue] = useState<Operations>(store.operations || emptyLoungeOperations());
   const [status, setStatus] = useState<any>(null), [error, setError] = useState(''), [preview, setPreview] = useState<any>(null);
   const [reportText, setReportText] = useState<string | null>(null);
+  const [channels, setChannels] = useState<Array<{ channelId: string; provider: 'whapi' }>>([]);
+  const [channelsBusy, setChannelsBusy] = useState(false), [channelsError, setChannelsError] = useState(false);
+  const loadChannels = async () => {
+    setChannelsBusy(true); setChannelsError(false); setChannels([]);
+    try { const result = await loungeRequest('report-channels', { storeId: store.id }); setChannels(result.channels || []); }
+    catch { setChannelsError(true); }
+    finally { setChannelsBusy(false); }
+  };
+  const whapi = !value.reportDelivery || value.reportDelivery.provider === 'whapi';
+  const selectedChannel = value.reportDelivery?.channelId ?? value.whapiChannelId;
+  const channelValid = !whapi || channels.some(channel => channel.channelId === selectedChannel);
   useEffect(() => { if (!open) setValue(store.operations || emptyLoungeOperations()); }, [store.operations, open]);
   const load = async () => {
     try { setStatus(await loungeRequest('status', { storeId: store.id })); setError(''); }
@@ -31,7 +42,7 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
     message.success(t('common.saveSuccess')); onSaved?.(); await load();
   });
   return <>
-    <Button type="link" size="small" icon={<ClockCircleOutlined />} onClick={() => { setOpen(true); void load(); }}>{t('loungeOperations.title')}</Button>
+    <Button type="link" size="small" icon={<ClockCircleOutlined />} onClick={() => { setOpen(true); void load(); void loadChannels(); }}>{t('loungeOperations.title')}</Button>
     <Modal title={`${store.name} - ${t('loungeOperations.title')}`} open={open} onCancel={() => setOpen(false)} footer={null}
       width={960} zIndex={2100} style={{ top: 24 }} styles={{ body: { maxHeight: '75vh', overflowY: 'auto' } }}>
       {error && <Alert type="error" showIcon message={error} action={<Button onClick={load} icon={<ReloadOutlined />} />} />}
@@ -57,23 +68,37 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
             <Button icon={<DeleteOutlined />} title={t('common.delete')} onClick={() => setValue({ ...value, exceptions: value.exceptions.filter((_, n) => n !== i) })} />
           </Space>)}
           <Button icon={<PlusOutlined />} disabled={value.exceptions.length >= 100} onClick={() => setValue({ ...value, exceptions: [...value.exceptions, { date: '', open: false, startsAt: '' }] })}>{t('loungeOperations.exceptions')}</Button>
-          <Checkbox checked={value.dailyReportEnabled} onChange={e => setValue({ ...value, dailyReportEnabled: e.target.checked })}>{t('loungeOperations.reportEnabled')}</Checkbox>
+          <Checkbox checked={value.dailyReportEnabled} disabled={!value.dailyReportEnabled && whapi && (!channelValid || channelsBusy || channelsError)} onChange={e => setValue({ ...value, dailyReportEnabled: e.target.checked })}>{t('loungeOperations.reportEnabled')}</Checkbox>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12 }}>
             <div><Typography.Text>{t('loungeOperations.reportProvider')}</Typography.Text>
               <Select style={{ width: '100%' }} aria-label={t('loungeOperations.reportProvider')} value={value.reportDelivery?.provider || 'whapi'}
                 options={[{ value: 'whapi', label: 'Whapi' }, { value: 'whatsmeow', label: 'Whatsmeow' }]}
                 onChange={provider => setValue({ ...value, dailyReportEnabled: false, reportDelivery: { provider, channelId: '', recipient: '' } })} /></div>
             <div><Typography.Text>{t('loungeOperations.channel')}</Typography.Text>
-              <Input value={value.reportDelivery?.channelId ?? value.whapiChannelId} maxLength={200} aria-label={t('loungeOperations.channel')}
+              {whapi ? <Select style={{ width: '100%' }} value={selectedChannel || undefined} loading={channelsBusy}
+                aria-label={t('loungeOperations.channel')} placeholder={t('loungeOperations.selectChannel')}
+                options={[
+                  ...channels.map(channel => ({ value: channel.channelId, label: `Whapi · ${channel.channelId}` })),
+                  ...(selectedChannel && !channelValid ? [{ value: selectedChannel, label: t('loungeOperations.unavailableChannel', { channel: selectedChannel }), disabled: true }] : []),
+                ]} onChange={channelId => setValue(value.reportDelivery
+                  ? { ...value, dailyReportEnabled: false, reportDelivery: { ...value.reportDelivery, channelId } }
+                  : { ...value, dailyReportEnabled: false, whapiChannelId: channelId })} />
+              : <Input value={selectedChannel} maxLength={200} aria-label={t('loungeOperations.channel')}
                 onChange={e => setValue(value.reportDelivery ? { ...value, reportDelivery: { ...value.reportDelivery, channelId: e.target.value.trim() } }
-                  : { ...value, whapiChannelId: e.target.value.trim() })} /></div>
+                  : { ...value, whapiChannelId: e.target.value.trim() })} />}</div>
             <div><Typography.Text>{t('loungeOperations.reportRecipient')}</Typography.Text>
               <Input value={value.reportDelivery?.recipient || ''} maxLength={16} aria-label={t('loungeOperations.reportRecipient')}
                 placeholder={value.reportDelivery ? '+60123456789' : t('loungeOperations.legacyRecipient')}
                 onChange={e => setValue({ ...value, reportDelivery: { provider: value.reportDelivery?.provider || 'whapi',
                   channelId: value.reportDelivery?.channelId ?? value.whapiChannelId, recipient: e.target.value.trim() } })} /></div>
           </div>
-          <Button type="primary" loading={busy} onClick={save}>{t('common.save')}</Button>
+          {whapi && <Space direction="vertical">
+            <Typography.Text type={channelsError || !channelValid && !!selectedChannel ? 'warning' : 'secondary'}>
+              {t(channelsError ? 'loungeOperations.channelsLoadFailed' : !channelsBusy && !channels.length ? 'loungeOperations.noValidChannels' : 'loungeOperations.channelSource')}
+            </Typography.Text>
+            <Button size="small" aria-label={t('common.refresh')} icon={<ReloadOutlined />} loading={channelsBusy} onClick={loadChannels}>{t('common.refresh')}</Button>
+          </Space>}
+          <Button type="primary" loading={busy} disabled={value.dailyReportEnabled && whapi && (!channelValid || channelsBusy || channelsError)} onClick={save}>{t('common.save')}</Button>
         </Space> },
         { key: 'batches', label: t('loungeOperations.closing'), children: <>
           <Space wrap style={{ marginBottom: 12 }}>

@@ -11,6 +11,23 @@ const store = { id: 'lounge', name: 'Test Lounge', status: 'active' } as Store;
 afterEach(() => { cleanup(); vi.resetAllMocks(); });
 
 describe('lounge operations controls', () => {
+  it('uses verified system channel choices, preserves unavailable saved channels, and pauses reports on selection', async () => {
+    window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
+    mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [] });
+    render(<LoungeOperations store={{ ...store, operations: { ...emptyLoungeOperations(), whapiChannelId: 'old-channel' } }} />);
+    fireEvent.click(screen.getByRole('button', { name: /loungeOperations.title/ }));
+    await screen.findByText('loungeOperations.noValidChannels');
+    expect(screen.queryByRole('textbox', { name: 'loungeOperations.channel' })).toBeNull();
+    expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).disabled).toBe(true);
+    mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [{ provider: 'whapi', channelId: 'verified-channel' }] });
+    fireEvent.click(screen.getByRole('button', { name: 'common.refresh' }));
+    await waitFor(() => expect(screen.queryByText('loungeOperations.noValidChannels')).toBeNull());
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: 'loungeOperations.channel' }));
+    fireEvent.click(await screen.findByText('Whapi · verified-channel'));
+    expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).checked).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
+    await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('save-hours', { storeId: 'lounge', operations: expect.objectContaining({ whapiChannelId: 'verified-channel', dailyReportEnabled: false }) }));
+  }, 30000);
   it('clears recipient/channel and pauses daily reports when changing provider', async () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
     mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [] });
@@ -23,14 +40,15 @@ describe('lounge operations controls', () => {
     expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).checked).toBe(false);
     expect((screen.getByRole('textbox', { name: 'loungeOperations.channel' }) as HTMLInputElement).value).toBe('');
     expect((screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }) as HTMLInputElement).value).toBe('');
-    expect(mocks.request.mock.calls.every(([action]) => action === 'status')).toBe(true);
+    expect(mocks.request.mock.calls.every(([action]) => ['status', 'report-channels'].includes(action))).toBe(true);
   }, 15000);
   it('saves an explicit report recipient without enabling automatic closing', async () => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
-    mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [] });
+    mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [{ provider: 'whapi', channelId: 'channel' }] });
     render(<LoungeOperations store={{ ...store, operations: { ...emptyLoungeOperations(), whapiChannelId: 'channel' } }} />);
     fireEvent.click(screen.getByRole('button', { name: /loungeOperations.title/ }));
     await screen.findByRole('textbox', { name: 'loungeOperations.reportRecipient' });
+    await waitFor(() => expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).disabled).toBe(false));
     fireEvent.change(screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }), { target: { value: '+60199887766' } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }));
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));

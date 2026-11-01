@@ -1,0 +1,5 @@
+/* Static and App.useApp messages must clear operational modals/drawers (2100–2500).
+   Ant Design can set this on the portal itself, so override that value here. */
+.ant-message {
+  z-index: 3000 !important;
+}

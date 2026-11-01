@@ -17,7 +17,7 @@ describe('daily lounge payment statistics', () => {
       reload({ userId: 'other', requestedAmount: 0.2 }),
     ], [activation(), activation(), activation({ renewalType: 'renewal', userId: 'renewal' })], 'lounge', start, end, end);
     expect(result).toEqual({ payments: 4, customers: 2, received: 449.3, reloadAmount: 250.3,
-      annualFees: 199, newMembers: 1 });
+      annualFees: 199, newMembers: 1, newMemberReload: 250, registrations: 0 });
   });
   it('uses confirmation time in MYT, limits test snapshots and excludes other lounges and unconfirmed payments', () => {
     const rows = [reload({ verifiedAt: new Date(start) }),
@@ -27,11 +27,18 @@ describe('daily lounge payment statistics', () => {
     const fees = [activation({ deductedAt: new Date(start) }), activation({ status: 'pending', userId: 'pending' }),
       activation({ storeId: 'other', userId: 'other' }), activation({ deductedAt: new Date(end), userId: 'later' })];
     expect(loungeDailyPaymentStats(rows, fees, 'lounge', start, end, start + 1))
-      .toEqual({ payments: 1, customers: 1, received: 200, reloadAmount: 200, annualFees: 0, newMembers: 1 });
+      .toEqual({ payments: 1, customers: 1, received: 200, reloadAmount: 200, annualFees: 0, newMembers: 1, newMemberReload: 200, registrations: 0 });
   });
   it('returns explicit zeros on a quiet day', () => {
     expect(loungeDailyPaymentStats([], [], 'lounge', start, end, end))
-      .toEqual({ payments: 0, customers: 0, received: 0, reloadAmount: 0, annualFees: 0, newMembers: 0 });
+      .toEqual({ payments: 0, customers: 0, received: 0, reloadAmount: 0, annualFees: 0, newMembers: 0, newMemberReload: 0, registrations: 0 });
+  });
+  it('counts member registrations across the network, excluding staff and dates outside the snapshot', () => {
+    const users = [{ role: 'guest', createdAt: new Date(start) }, { role: 'vip', createdAt: at },
+      { role: 'admin', createdAt: at }, { role: 'guest', createdAt: new Date(end) },
+      { role: 'member', createdAt: new Date(start - 1) }, { role: 'guest' }];
+    expect(loungeDailyPaymentStats([], [], 'lounge', start, end, end, users).registrations).toBe(2);
+    expect(loungeDailyPaymentStats([], [], 'lounge', start, end, start, users).registrations).toBe(1);
   });
   it.each([{ requestedAmount: NaN }, { annualFeeAmount: 201 }, { actualAmount: -1 }])('rejects invalid receipts instead of silently reporting incorrect money: %o', extra => {
     expect(() => loungeDailyPaymentStats([reload(extra)], [], 'lounge', start, end, end)).toThrow('invalid-report-payment-amount');

@@ -1,5 +1,9 @@
 {
   "loungeOperations": {
+    "selectChannel": "请选择已验证的 Whapi 通道", "unavailableChannel": "{{channel}}（不可用）",
+    "channelsLoadFailed": "无法检查 WhatsApp 通道，请刷新后重试。",
+    "noValidChannels": "暂无有效 Whapi 通道。请在系统 WhatsApp 设置中连接并验证 Whapi、开启业务发送、将 Whapi 设为默认渠道，再在这里刷新。",
+    "channelSource": "选项来自系统 WhatsApp 设置中已激活且已验证的连接。更换通道后，需重新开启日报发送。",
     "reportPreviewTitle": "日报预览",
     "debt": {
       "viewLedger": "查看流水", "snapshotInfo": "快照说明与计算规则", "evidenceInfo": "凭据与对账工具",

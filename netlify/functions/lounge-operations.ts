@@ -9,7 +9,7 @@ import { authorizeLounge, checkInLounge, deductLoungeRealtime, loungeError, sett
 import { previewLoungeClosing } from './_shared/loungeClosing';
 import { dispatchLoungeClosing } from './_shared/loungeDispatch';
 import { localBusinessDate, businessCutoff } from '../../src/utils/loungeOperations';
-import { loadLoungeReportTransport } from './_shared/loungeReportTransport';
+import { loadLoungeReportTransport, loungeWhapiChannelOptions } from './_shared/loungeReportTransport';
 import { executeLoungeTestReport } from './_shared/loungeTestReport';
 import { saveWalletDebtBaseline } from './_shared/walletDebtBaseline';
 import { correctLegacyLoungeDebtDetails } from '../../src/utils/legacyLoungeReportSnapshot';
@@ -44,9 +44,10 @@ export const eventHandler: EventHandler = async event => {
     if (['test-report-preview', 'test-report-send', 'test-report-status'].includes(input.action)) {
       return reply(200, { success: true, ...await executeLoungeTestReport(db, uid, input) });
     }
-    if (['save-hours', 'status', 'preview', 'retry', 'report-details'].includes(input.action)) {
+    if (['save-hours', 'status', 'preview', 'retry', 'report-details', 'report-channels'].includes(input.action)) {
       // Administrators configure operations; ordinary staff only check in/out at their lounge.
       await db.runTransaction(async tx => { await authorizeLounge(tx, db, uid, uid, input.storeId, true); });
+      if (input.action === 'report-channels') return reply(200, { success: true, channels: await loungeWhapiChannelOptions(db) });
       if (input.action === 'report-details') {
         if (!validId(input.reportId) || !['test', 'formal'].includes(input.reportKind)) throw loungeError('invalid-request');
         const report = (await db.collection(input.reportKind === 'test' ? C.LOUNGE_TEST_REPORTS : C.LOUNGE_REPORTS).doc(input.reportId).get()).data();

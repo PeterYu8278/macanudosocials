@@ -44,7 +44,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   }, { readOnly: true });
   const { store, sessions, redemptions, entries, users, asOf } = source;
   const baselines = new Map<string, DebtBaseline>(source.baselines.map(doc => [doc.id, doc.data() as DebtBaseline]));
-  const paymentStats = loungeDailyPaymentStats(source.reloads.map(d => d.data()), source.fees.map(d => d.data()), storeId, start, end, asOf);
+  const paymentStats = loungeDailyPaymentStats(source.reloads.map(d => d.data()), source.fees.map(d => d.data()), storeId, start, end, asOf, users.map(d => d.data()));
   const daily = sessions.filter(d => { const at = asDate(d.data().checkInAt).getTime(); return at >= start && at < end; });
   const sessionIds = new Set(daily.map(d => d.id));
   let pendingCigars = 0, confirmedCigars = 0;
@@ -166,7 +166,8 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
     + `Customers: ${customers}\nCompleted visits: ${completed.length}\nIncompleted visits (including carryovers): ${test ? testPending : batch.remaining}\nVisit fees: ${n(fees)} pts / ${n(hours)} hrs\n`
     + `\n> *Cigar Redemption*\nConfirmed cigars: ${confirmedCigars}\nPending cigar selections: ${pendingCigars}\n`
     + `\n> *Daily Reloads*\nCompleted payments: ${paymentStats.payments}\nPaying customers: ${paymentStats.customers}\nPayments received (including annual fees): RM ${n(paymentStats.received)}\nReload amount (excluding annual fees): RM ${n(paymentStats.reloadAmount)}\nAnnual fees in these payments: RM ${n(paymentStats.annualFees)}\n`
-    + `\n> *New Members*\nFirst-time paid activations: ${paymentStats.newMembers}\nExcludes registrations and renewals.\n`
+    + `\n> *New Members*\nRegistration: ${paymentStats.registrations}\nActivations: ${paymentStats.newMembers}\nReload: RM ${n(paymentStats.newMemberReload)}\n`
+    + 'Registration is system-wide; activations and reloads are for this lounge. Reload is today\'s payments by today\'s first-time activations, excluding annual fees.\n'
     + `\n> *Outstanding*\nOutstanding lounge debt (verified): ${n(debt.closing)} pts\n`
     + `Data status: ${debt.review ? 'INCOMPLETE' : 'RECONCILED'}\nCustomers requiring review at this lounge: ${localReviewCount}\n`
     + (debt.review ? 'Verified debt excludes unreconciled wallets; the total may be incomplete.\n' : '')
