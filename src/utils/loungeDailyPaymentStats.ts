@@ -16,11 +16,13 @@ export function loungeDailyPaymentStats(reloads: Row[], fees: Row[], storeId: st
     return at >= start && at < end && at <= asOf;
   };
   let payments = 0, received = 0, reloadAmount = 0, annualFees = 0, newMemberReload = 0;
-  const customers = new Set<string>(), members = new Set<string>();
+  const customers = new Set<string>(), members = new Set<string>(), activated = new Map<string, number>();
   for (const row of fees) {
-    if (row.storeId === storeId && row.status === 'paid' && row.renewalType === 'initial'
-      && row.userId && within(row.deductedAt)) members.add(row.userId);
+    const at = timestamp(row.deductedAt);
+    if (row.storeId !== storeId || row.status !== 'paid' || row.renewalType !== 'initial' || !row.userId || !Number.isFinite(at) || at >= end || at > asOf) continue;
+    activated.set(row.userId, Math.min(activated.get(row.userId) ?? Infinity, at));
   }
+  for (const [userId, at] of activated) if (at >= start) members.add(userId);
   for (const row of reloads) {
     if (row.storeId !== storeId || row.status !== 'completed' || !within(row.verifiedAt)) continue;
     const gross = cents(row.actualAmount ?? row.requestedAmount);
@@ -33,5 +35,8 @@ export function loungeDailyPaymentStats(reloads: Row[], fees: Row[], storeId: st
   }
   return { payments, customers: customers.size, received: received / 100, reloadAmount: reloadAmount / 100,
     annualFees: annualFees / 100, newMembers: members.size, newMemberReload: newMemberReload / 100,
-    registrations: users.filter(row => ['guest', 'member', 'vip'].includes(row.role) && within(row.createdAt)).length };
+    registrations: users.filter(row => ['guest', 'member', 'vip'].includes(row.role) && within(row.createdAt)).length,
+    accumulatedRegistrations: users.filter(row => ['guest', 'member', 'vip'].includes(row.role)
+      && Number.isFinite(timestamp(row.createdAt)) && timestamp(row.createdAt) < end && timestamp(row.createdAt) <= asOf).length,
+    accumulatedActivations: activated.size };
 }

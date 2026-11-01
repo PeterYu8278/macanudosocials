@@ -27,20 +27,18 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   const source = await db.runTransaction(async tx => {
     const store = await tx.get(db.collection(C.STORES).doc(storeId));
     const read = (query: any) => readPaged(query, 10000, target => tx.get(target));
-    const [sessions, redemptions, entries, users, baselines, lounges, reloads, fees] = await Promise.all([
+    const [sessions, redemptions, entries, users, baselines, reloads, fees] = await Promise.all([
       read(db.collection(C.VISIT_SESSIONS).where('storeId', '==', storeId).orderBy('__name__')),
       read(db.collection(C.REDEMPTION_RECORDS).orderBy('__name__')),
       read(db.collection(C.POINTS_RECORDS).orderBy('__name__')),
       read(db.collection(C.USERS).orderBy('__name__')),
       read(db.collection(C.WALLET_DEBT_BASELINES).orderBy('__name__')),
-      tx.get(db.collection(C.STORES).orderBy('__name__').limit(2)),
       read(db.collection(C.RELOAD_RECORDS).where('verifiedAt', '>=', Timestamp.fromMillis(start))
         .where('verifiedAt', '<', Timestamp.fromMillis(end)).orderBy('verifiedAt')),
-      read(db.collection(C.MEMBERSHIP_FEE_RECORDS).where('deductedAt', '>=', Timestamp.fromMillis(start))
-        .where('deductedAt', '<', Timestamp.fromMillis(end)).orderBy('deductedAt')),
+      read(db.collection(C.MEMBERSHIP_FEE_RECORDS).where('deductedAt', '<', Timestamp.fromMillis(end)).orderBy('deductedAt')),
     ]);
     return { store: store.data(), sessions, redemptions, entries, users, baselines, reloads, fees,
-      hasOtherLounges: lounges.docs.some(doc => doc.id !== storeId), asOf: store.readTime?.toMillis() || Date.now() };
+      asOf: store.readTime?.toMillis() || Date.now() };
   }, { readOnly: true });
   const { store, sessions, redemptions, entries, users, asOf } = source;
   const baselines = new Map<string, DebtBaseline>(source.baselines.map(doc => [doc.id, doc.data() as DebtBaseline]));
@@ -95,7 +93,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
   const debt = { opening: 0, added: 0, repaid: 0, closing: 0, unallocated: 0, review: invalid };
   const debtDetails: LoungeDebtDetails = { businessDate: date, from: new Date(start).toISOString(), to: new Date(asOf).toISOString(),
     historical: asOf >= end, customers: [], otherReviewCount: 0, truncated: false, schemaVersion: 2, consistency: 'transaction', balanceOrigin: 'zero' };
-  let evidenceBudget = 1000, localReviewCount = 0;
+  let evidenceBudget = 1000, localReviewCount = 0, outstandingCustomers = 0;
   for (const user of users) {
     const current = user.data().membership?.points;
     const baseline = baselines.get(user.id);
@@ -125,6 +123,7 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
     }
     if (!relevant && needsReview && (current < 0 || grouped.has(user.id) || invalidUsers.has(user.id))) debtDetails.otherReviewCount++;
     if (needsReview) { if (relevant || current < 0 || grouped.has(user.id)) debt.review++; continue; }
+    if ((result.closing[storeId] || 0) > 0) outstandingCustomers++;
     debt.opening += result.opening[storeId] || 0; debt.added += result.added[storeId] || 0;
     debt.repaid += result.repaid[storeId] || 0; debt.closing += result.closing[storeId] || 0;
     debt.unallocated += result.closing.unallocated || 0;
@@ -161,22 +160,18 @@ export async function buildLoungeReportSnapshot(db: Firestore, storeId: string, 
       detailsLink = `Debt details (staff login required): ${url.toString()}\n`;
     }
   } catch { /* Local previews can open details directly without a public URL. */ }
-  const text = `[Macanudo Socials]\n${test ? '[TEST] ' : ''}Daily Lounge Report\n${store?.name || storeId}\nBusiness date: ${date} (MYT)\n${test ? 'Read-only test snapshot; no checkout or wallet changes.\n' : `Revision: ${revision}\n`}`
-    + `\n> *Visitation*\nSettlement: ${test ? 'NOT EXECUTED - TEST ONLY' : batch.status === 'completed' ? 'COMPLETE' : 'INCOMPLETE - action required'}\n`
-    + `Customers: ${customers}\nCompleted visits: ${completed.length}\nIncompleted visits (including carryovers): ${test ? testPending : batch.remaining}\nVisit fees: ${n(fees)} pts / ${n(hours)} hrs\n`
-    + `\n> *Cigar Redemption*\nConfirmed cigars: ${confirmedCigars}\nPending cigar selections: ${pendingCigars}\n`
+  const text = `[Macanudo Socials]\n${test ? '[TEST] ' : ''}Daily Lounge Report\n${store?.name || storeId}\nBusiness date: ${date}\nRevision: ${revision}\n`
+    + (test ? 'Read-only test snapshot; no checkout or wallet changes.\nSettlement: NOT EXECUTED - TEST ONLY\n'
+      : batch.status !== 'completed' ? 'Settlement: INCOMPLETE - action required\n' : '')
+    + `\n> *Membership*\nRegistration: ${paymentStats.registrations} / ${paymentStats.accumulatedRegistrations}\nActivations: ${paymentStats.newMembers} / ${paymentStats.accumulatedActivations}\n`
     + `\n> *Daily Reloads*\nCompleted payments: ${paymentStats.payments}\nPaying customers: ${paymentStats.customers}\nPayments received (including annual fees): RM ${n(paymentStats.received)}\nReload amount (excluding annual fees): RM ${n(paymentStats.reloadAmount)}\nAnnual fees in these payments: RM ${n(paymentStats.annualFees)}\n`
-    + `\n> *New Members*\nRegistration: ${paymentStats.registrations}\nActivations: ${paymentStats.newMembers}\nReload: RM ${n(paymentStats.newMemberReload)}\n`
-    + 'Registration is system-wide; activations and reloads are for this lounge. Reload is today\'s payments by today\'s first-time activations, excluding annual fees.\n'
-    + `\n> *Outstanding*\nOutstanding lounge debt (verified): ${n(debt.closing)} pts\n`
-    + `Data status: ${debt.review ? 'INCOMPLETE' : 'RECONCILED'}\nCustomers requiring review at this lounge: ${localReviewCount}\n`
+    + `\n> *Visitation*\nCustomers: ${customers}\nCompleted visits: ${completed.length}\nIncompleted visits: ${test ? testPending : batch.remaining}\nVisit fees: ${n(fees)} pts / ${n(hours)} hrs\n`
+    + `\n> *Cigar Redemption*\nConfirmed cigars: ${confirmedCigars}\nPending cigar selections: ${pendingCigars}\n`
+    + `\n> *Outstanding*\nOutstanding Points: ${n(debt.closing)} pts\nOutstanding Customer: ${outstandingCustomers}\nCustomers requiring review at this lounge: ${localReviewCount}\n`
     + (debt.review ? 'Verified debt excludes unreconciled wallets; the total may be incomplete.\n' : '')
-    + (source.hasOtherLounges ? `\nOther lounge review items: ${debtDetails.otherReviewCount}\nUnallocated lounge debt: ${n(debt.unallocated)} pts (excluded from this lounge)\n` : '')
     + (detailsLink ? `\n${detailsLink}` : '')
-    + `\nDebt period (MYT): ${time(debtDetails.from)} to ${time(debtDetails.to)}\n`
-    + (asOf >= end ? `${test ? 'HISTORICAL TEST' : 'LATE RECOVERY'}: includes activity after the business date; NOT the original day-end debt.\n` : '')
-    + `Snapshot (MYT): ${time(debtDetails.to)}`;
-  return { text, debt, debtDetails, paymentStats, createdAt: Timestamp.fromMillis(asOf) };
+    + (asOf >= end ? `\n${test ? 'HISTORICAL TEST' : 'LATE RECOVERY'}: includes activity after the business date; NOT the original day-end debt.\nSnapshot (MYT): ${time(debtDetails.to)}` : '');
+  return { text, debt, debtDetails, paymentStats, outstandingCustomers, createdAt: Timestamp.fromMillis(asOf) };
 }
 
 export async function createLoungeReport(db: Firestore, storeId: string, date: string, batch: any, revision: number) {

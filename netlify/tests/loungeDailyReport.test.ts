@@ -207,7 +207,7 @@ describe('read-only report snapshot rendering', () => {
     expect(report.debt.closing).toBe(0);
     expect(report.debtDetails.consistency).toBe('transaction');
   });
-  it.each([false, true])('marks tests explicitly and shows cross-lounge text only with other lounges (%s)', async (hasOtherLounges) => {
+  it.each([false, true])('uses the new five-section layout for single and multiple lounges (%s)', async (hasOtherLounges) => {
     const at = new Date('2026-10-15T12:00:00+08:00');
     const fixture: Record<string, any[]> = {
       reloadRecords: [{ id: 'package', userId: 'user', storeId: 'lounge', status: 'completed',
@@ -238,41 +238,44 @@ describe('read-only report snapshot rendering', () => {
     expect(report.paymentStats).toMatchObject({ received: 299, reloadAmount: 100, annualFees: 199, newMembers: 1 });
     expect(report.text).toContain('\n\n> *Daily Reloads*\nCompleted payments: 1');
     expect(report.text).toContain('Reload amount (excluding annual fees): RM 100.00');
-    expect(report.text).toContain('\n\n> *New Members*\nRegistration: 0\nActivations: 1\nReload: RM 100.00\n');
-    expect(report.text.includes('Other lounge review items:')).toBe(hasOtherLounges);
-    expect(report.text.includes('Unallocated lounge debt:')).toBe(hasOtherLounges);
+    expect(report.text).toContain('\n\n> *Membership*\nRegistration: 0 / 0\nActivations: 1 / 1\n');
+    expect([...report.text.matchAll(/> \*(.+)\*/g)].map(match => match[1]))
+      .toEqual(['Membership', 'Daily Reloads', 'Visitation', 'Cigar Redemption', 'Outstanding']);
+    expect(report.text).not.toContain('Other lounge review items:');
+    expect(report.text).not.toContain('Unallocated lounge debt:');
     expect(report.text).not.toContain('Other network review items:');
     expect(report.text).not.toContain('Unallocated network debt:');
-    expect(report.text).toContain('\n\n> *Visitation*\nSettlement:');
+    expect(report.text).toContain('\n\n> *Visitation*\nCustomers:');
     expect(report.text).toContain('\n\n> *Cigar Redemption*\nConfirmed cigars:');
-    expect(report.text).toContain('\n\n> *Outstanding*\nOutstanding lounge debt (verified):');
+    expect(report.text).toContain('\n\n> *Outstanding*\nOutstanding Points:');
     expect(report.text).toContain('Settlement: NOT EXECUTED - TEST ONLY');
     expect(report.text).toContain('Customers: 2');
     expect(report.text).toContain('Completed visits: 2');
-    expect(report.text).toContain('Incompleted visits (including carryovers): 2');
+    expect(report.text).toContain('Incompleted visits: 2');
     expect(report.text).toContain('Visit fees: 30.00 pts / 1.75 hrs');
     expect(report.text).not.toContain('Check-ins:');
     expect(report.text).not.toContain('Unresolved stock settlements:');
     expect(report.text).not.toContain('Unresolved visits');
     expect(report.text).toContain('Pending cigar selections: 2');
     expect(report.text).not.toContain('Closing debt after settlement');
-    expect(report.text).toContain('Outstanding lounge debt (verified): 0.00 pts');
+    expect(report.text).toContain('Outstanding Points: 0.00 pts');
+    expect(report.text).toContain('Outstanding Customer: 0');
     expect(report.text).not.toContain('Historical opening debt:');
     expect(report.text).toContain('Snapshot (MYT):');
     expect(report.debtDetails.historical).toBe(true);
     expect(report.debtDetails.customers).toEqual([expect.objectContaining({ userId: 'user', reliable: true, expectedBalance: 10, difference: 0 })]);
     expect(JSON.stringify(fixture)).toBe(before);
     const formal = await buildLoungeReportSnapshot(readOnlyDb, 'lounge', '2026-10-15', { status: 'completed', remaining: 0 }, 1);
-    expect(formal.text).toContain('Settlement: COMPLETE'); expect(formal.text).not.toContain('[TEST]');
-    expect(formal.text.includes('Other lounge review items:')).toBe(hasOtherLounges);
-    expect(formal.text.includes('Unallocated lounge debt:')).toBe(hasOtherLounges);
-    expect(formal.text).toContain('Revision: 1\n\n> *Visitation*\n');
+    expect(formal.text).not.toContain('Settlement: COMPLETE'); expect(formal.text).not.toContain('[TEST]');
+    expect(formal.text).not.toContain('Other lounge review items:');
+    expect(formal.text).not.toContain('Unallocated lounge debt:');
+    expect(formal.text).toContain('Business date: 2026-10-15\nRevision: 1\n\n> *Membership*\n');
     expect(formal.paymentStats).toEqual(report.paymentStats);
     expect(formal.text).toContain('Payments received (including annual fees): RM 299.00');
     expect(formal.text).toContain('\n\n> *Cigar Redemption*\n');
     expect(formal.text).toContain('\n\n> *Outstanding*\n');
     expect(formal.text).toContain('Customers: 2');
-    expect(formal.text).toContain('Incompleted visits (including carryovers): 0');
+    expect(formal.text).toContain('Incompleted visits: 0');
     expect(formal.text).toContain('Visit fees: 30.00 pts / 1.75 hrs');
     expect(formal.text).not.toContain('Unresolved stock settlements:');
   });
@@ -296,8 +299,11 @@ describe('read-only report snapshot rendering', () => {
     };
     try {
       const report = await buildLoungeReportSnapshot({ collection, runTransaction: async (work: any) => work({ get: (target: any) => target.get() }) } as unknown as Firestore, 'lounge', '2026-10-15', {}, 0, true, 'saved-report');
-      expect(report.text).toContain('Outstanding lounge debt (verified): 15.00 pts');
-      expect(report.text).toContain('Data status: INCOMPLETE');
+      expect(report.text).toContain('Outstanding Points: 15.00 pts');
+      expect(report.text).toContain('Outstanding Customer: 1');
+      expect(report.outstandingCustomers).toBe(1);
+      expect(report.text).not.toContain('Data status:');
+      expect(report.text).toContain('Verified debt excludes unreconciled wallets; the total may be incomplete.');
       expect(report.text).toContain('Customers requiring review at this lounge: 1');
       expect(report.text).toContain('loungeId=lounge&reportId=saved-report&reportKind=test');
       const [customer, review] = report.debtDetails.customers;

@@ -18,7 +18,8 @@ export default function LoungeReportPreview({ text }: { text: string }) {
     {sections.filter(section => section.lines.join('').trim() || section.title).map((section, index) =>
       <section className={section.title ? 'lounge-report-preview-section' : 'lounge-report-preview-heading'} key={index}>
         {section.title && <h3>{section.title}</h3>}
-        <pre>{section.lines.join('\n').trim()}</pre>
+        <pre>{section.lines.filter(line => section.title !== 'New Members'
+          || (!line.startsWith('Reload: RM ') && !line.startsWith('Registration is system-wide; activations and reloads are for this lounge.'))).join('\n').trim()}</pre>
       </section>)}
   </article>;
 }
