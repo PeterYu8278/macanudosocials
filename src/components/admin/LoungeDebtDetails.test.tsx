@@ -18,6 +18,33 @@ beforeEach(() => {
 });
 afterEach(() => { cleanup(); vi.clearAllMocks(); });
 describe('lounge debt evidence view', () => {
+  it.each([true, false])('shows one visit row instead of separate charge stages in compact=%s layout', compact => {
+    const row: LoungeDebtCustomer = { userId: 'member', name: 'Member', memberId: 'MEM', reliable: true,
+      reasons: [], walletBalance: 10, opening: 0, added: 0, repaid: 0, outstanding: 0, entryCount: 2,
+      entries: [{ id: 'settlement', at: '2026-10-05T10:00:00Z', amount: -72, before: 82, after: 10,
+        source: 'visit', local: true, relatedId: 'same-session', participation: 'included', description: 'Visit final settlement' },
+      { id: 'initial', at: '2026-10-05T08:00:00Z', amount: -18, before: 100, after: 82,
+        source: 'visit', local: true, relatedId: 'same-session', participation: 'included', description: 'Visit first-hour charge' }] };
+    render(<LoungeDebtLedger row={row} compact={compact} time={value => value || ''} />);
+    expect(screen.getAllByText('Lounge visit')).toHaveLength(1);
+    expect(screen.getByText('-90.00')).toBeTruthy();
+    expect(screen.queryByText('First-hour charge')).toBeNull();
+    expect(screen.queryByText('Final settlement adjustment')).toBeNull();
+    expect(screen.getByText('initial')).toBeTruthy();
+    expect(screen.getByText('settlement')).toBeTruthy();
+  });
+  it.each([true, false])('distinguishes the recorded balance from a conflicting calculated balance in compact=%s layout', compact => {
+    const row: LoungeDebtCustomer = { userId: 'member', name: 'Member', memberId: 'MEM', reliable: false,
+      reasons: ['entry-mismatch'], walletBalance: 1, opening: null, added: null, repaid: null, outstanding: null,
+      entryCount: 1, entries: [{ id: 'reload', at: '2026-10-05T08:30:00Z', amount: 300,
+        before: null, after: 300, calculatedBefore: 123, calculatedAfter: 423, source: 'reload', local: true,
+        relatedId: '', participation: 'included', description: 'Reload RM 300' }] };
+    render(<LoungeDebtLedger row={row} compact={compact} time={value => value || ''} />);
+    expect(screen.getByText('123.00')).toBeTruthy();
+    expect(screen.getByText('423.00')).toBeTruthy();
+    expect(screen.getByText('loungeOperations.debt.recorded: 300.00')).toBeTruthy();
+    expect(screen.getAllByText('loungeOperations.debt.calculated')).toHaveLength(2);
+  });
   it.each([true, false])('keeps English historical descriptions and original references in compact=%s layout', compact => {
     const row: LoungeDebtCustomer = { userId: 'member', name: 'Member', memberId: 'MEM', reliable: true, reasons: [],
       walletBalance: 46, opening: 0, added: 0, repaid: 0, outstanding: 0, entryCount: 1,

@@ -4,16 +4,18 @@ import { useTranslation } from 'react-i18next';
 import type { PointsRecord } from '../../types';
 import type { LoungeDebtCustomer } from '../../types/loungeReport';
 import { formatPointsRecordDescription } from '../../utils/pointsRecordDisplay';
+import { groupLoungeLedgerEntries, type LoungeLedgerDisplayEntry } from '../../utils/loungeLedgerDisplay';
 
-type Entry = LoungeDebtCustomer['entries'][number];
+type Entry = LoungeLedgerDisplayEntry;
 export default function LoungeDebtLedger({ row, compact, time }: {
   row: LoungeDebtCustomer; compact: boolean; time: (value: string | null) => string;
 }) {
   const { t, i18n } = useTranslation();
   const [page, setPage] = useState(1);
   const label = (key: string) => t(`loungeOperations.debt.${key}`);
+  const entries = groupLoungeLedgerEntries(row.entries);
   const number = (value: number | null | undefined) => value == null ? '—' : value.toFixed(2);
-  const description = (entry: Entry) => entry.description ? formatPointsRecordDescription({
+  const description = (entry: Entry) => entry.visitGroup ? i18n.getFixedT('en-US')('profile.visitSessionPoints', { defaultValue: 'Lounge visit' }) : entry.description ? formatPointsRecordDescription({
     id: entry.id, userId: row.userId, source: entry.source as PointsRecord['source'],
     type: (entry.amount || 0) < 0 ? 'spend' : 'earn', amount: Math.abs(entry.amount || 0),
     description: entry.description, createdAt: new Date(entry.at || 0),
@@ -26,18 +28,21 @@ export default function LoungeDebtLedger({ row, compact, time }: {
     {label(`shortParticipation.${entry.participation}`)}</Tag> : <Tag>{label('oldClassification')}</Tag>;
   const balance = (entry: Entry, side: 'before' | 'after') => {
     const recorded = entry[side], calculated = side === 'before' ? entry.calculatedBefore : entry.calculatedAfter;
-    return <>{number(recorded ?? calculated)}{recorded == null && calculated != null
-      && <div className="lounge-debt-calculated">{label('calculated')}</div>}</>;
+    return <>{number(calculated ?? recorded)}{calculated != null
+      && <div className="lounge-debt-calculated">{label('calculated')}</div>}
+      {recorded != null && calculated != null && Math.abs(recorded - calculated) >= 0.005
+        && <div><Typography.Text type="warning">{label('recorded')}: {number(recorded)}</Typography.Text></div>}</>;
   };
   const references = (entry: Entry) => <details className="lounge-debt-references">
     <summary>{label('reference')}</summary>
-    <div><Typography.Text copyable>{entry.id}</Typography.Text></div>
+    {entry.ledgerIds.map(id => <div key={id}><Typography.Text copyable>{id}</Typography.Text></div>)}
     {entry.relatedId && <div><Typography.Text copyable>{entry.relatedId}</Typography.Text></div>}
   </details>;
   if (compact) return <div className="lounge-debt-transactions">
-    {row.entries.slice((page - 1) * 10, page * 10).map(entry => <article key={entry.id} className="lounge-debt-transaction">
+    {entries.slice((page - 1) * 10, page * 10).map(entry => <article key={entry.id} className="lounge-debt-transaction">
       <div className="lounge-debt-transaction-head"><span>{time(entry.at)}</span>{treatment(entry)}</div>
       <div className="lounge-debt-description">{description(entry)}</div>
+      {entry.interleaved && <Typography.Text type="secondary">{label('visitInterleaved')}</Typography.Text>}
       <dl className="lounge-debt-amounts">
         <div><dt>{label('amount')}</dt><dd>{number(entry.amount)}</dd></div>
         <div><dt>{label('before')}</dt><dd>{balance(entry, 'before')}</dd></div>
@@ -45,15 +50,16 @@ export default function LoungeDebtLedger({ row, compact, time }: {
       </dl>
       {references(entry)}
     </article>)}
-    {row.entries.length === 0 && <Typography.Text type="secondary">{t('common.noData')}</Typography.Text>}
-    {row.entries.length > 10 && <Pagination simple current={page} pageSize={10} total={row.entries.length} onChange={setPage} />}
+    {entries.length === 0 && <Typography.Text type="secondary">{t('common.noData')}</Typography.Text>}
+    {entries.length > 10 && <Pagination simple current={page} pageSize={10} total={entries.length} onChange={setPage} />}
   </div>;
-  return <Table<Entry> size="small" rowKey="id" tableLayout="fixed" dataSource={row.entries}
+  return <Table<Entry> size="small" rowKey="id" tableLayout="fixed" dataSource={entries}
     pagination={{ defaultPageSize: 20, showSizeChanger: true, pageSizeOptions: [10, 20, 50, 100], size: 'small' }} scroll={{ x: 850 }} columns={[
       { title: label('time'), dataIndex: 'at', width: 155, render: time },
       { title: label('participation'), width: 150, render: (_, entry) => treatment(entry) },
       { title: label('entry'), width: 280, render: (_, entry) => <>
-        <div className="lounge-debt-description">{description(entry)}</div>{references(entry)}</> },
+        <div className="lounge-debt-description">{description(entry)}</div>
+        {entry.interleaved && <div><Typography.Text type="secondary">{label('visitInterleaved')}</Typography.Text></div>}{references(entry)}</> },
       { title: label('amount'), dataIndex: 'amount', width: 90, align: 'right', render: number },
       { title: label('before'), width: 100, align: 'right', render: (_, entry) => balance(entry, 'before') },
       { title: label('after'), width: 100, align: 'right', render: (_, entry) => balance(entry, 'after') },

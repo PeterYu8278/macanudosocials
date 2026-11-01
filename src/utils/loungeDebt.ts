@@ -17,6 +17,7 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
   const lots: DebtLot[] = [];
   const openingByStore: Record<string, number> = {}, added: Record<string, number> = {}, repaid: Record<string, number> = {};
   let balance: number | undefined, reliable = true, anchored = false, opened = false;
+  let calculationOrdered = true;
   const reasons = new Set<string>();
   const calculatedBalances: Record<string, { before: number; after: number }> = {};
   const totals = () => lots.reduce((out, lot) => {
@@ -44,7 +45,7 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
     if (numeric(at)) while (index < rows.length && rows[index].at === at) group.push(rows[index++]);
     const pending = group.filter(entry => {
       if (!numeric(entry.at) || !numeric(entry.amount) || (entry.before !== undefined && !numeric(entry.before))
-        || (entry.after !== undefined && !numeric(entry.after))) { reliable = false; reasons.add('invalid-entry'); return false; }
+        || (entry.after !== undefined && !numeric(entry.after))) { calculationOrdered = false; reliable = false; reasons.add('invalid-entry'); return false; }
       return true;
     });
     while (pending.length) {
@@ -55,7 +56,7 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
       });
       // ID order does not establish financial order for equal timestamps.
       const entry = candidates.length === 1 ? candidates[0] : pending.length === 1 ? pending[0] : undefined;
-      if (!entry) { reliable = false; reasons.add('ambiguous-order'); break; }
+      if (!entry) { calculationOrdered = false; reliable = false; reasons.add('ambiguous-order'); break; }
       pending.splice(pending.indexOf(entry), 1);
       const before = beforeOf(entry);
       if (balance === undefined) {
@@ -67,7 +68,9 @@ export function reconcileLoungeDebt(entries: DebtEntry[], opening: number, closi
       }
       if (!opened && entry.at >= opening) { Object.assign(openingByStore, totals()); opened = true; }
       const after = round(balance! + entry.amount), change = round(Math.max(0, -after) - Math.max(0, -balance!));
-      if (origin === 'zero' && reliable) calculatedBalances[entry.id] = { before: balance!, after };
+      // Recorded checkpoints can disagree without making the chronological sum unknowable.
+      // Keep calculated evidence separate; discrepancies still make debt unconfirmed.
+      if (origin === 'zero' && calculationOrdered && (!baseline || baselineValid)) calculatedBalances[entry.id] = { before: balance!, after };
       if (change > 0) {
         const key = entry.storeId || 'unallocated';
         lots.push({ storeId: entry.storeId || null, amount: change, openedAt: entry.at });

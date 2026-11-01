@@ -1,6 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { reconcileLoungeDebt, type DebtBaseline } from './loungeDebt';
 describe('shared-wallet debt attribution', () => {
+  it('keeps chronological calculated balances visible across conflicting recorded checkpoints', () => {
+    const result = reconcileLoungeDebt([
+      { id: 'history', at: 1, amount: 123 },
+      { id: 'reload', at: 2, amount: 300, after: 300 },
+      { id: 'day-pass', at: 3, amount: -100, after: 200 },
+      { id: 'annual', at: 4, amount: -199, after: 1 },
+    ], 0, 5, 1, undefined, 'zero');
+    expect(result).toMatchObject({ reliable: false, expectedBalance: 124, difference: -123 });
+    expect(result.reasons).toEqual(expect.arrayContaining(['balance-gap', 'entry-mismatch', 'wallet-mismatch']));
+    expect(result.calculatedBalances).toMatchObject({ reload: { before: 123, after: 423 },
+      'day-pass': { before: 423, after: 323 }, annual: { before: 323, after: 124 } });
+  });
+  it('does not invent row balances after an ambiguous chronological boundary', () => {
+    const result = reconcileLoungeDebt([{ id: 'a', at: 1, amount: 100 }, { id: 'b', at: 1, amount: -10 },
+      { id: 'later', at: 2, amount: 5 }], 0, 3, 95, undefined, 'zero');
+    expect(result.calculatedBalances).toEqual({});
+    expect(result.reliable).toBe(false);
+  });
   it('reconciles imported history from the owner-confirmed zero opening balance without writing balances', () => {
     const history = [{ id: 'reload', at: 1, amount: 100 }, { id: 'v1', at: 2, amount: -18 },
       { id: 'v2', at: 3, amount: -27 }, { id: 'v3', at: 4, amount: -36 }];
