@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import type { GuestPageConfig } from '../../../config/guestPage';
 import { guestContactUrl, currentGuestMembership } from '../../../config/guestPage';
 import GuestMembership from '../../../components/common/GuestMembership';
-import WebsiteTrafficPrivacy from '../../../components/common/WebsiteTrafficPrivacy';
 import './guest-lounge.css';
 
 const PHOTO = '/lounge/';
@@ -149,8 +148,7 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
     <footer className="guest-footer guest-gutter">
       <a href="#home" aria-label={config.loungeName}><BrandLogo url={logoUrl} name={config.loungeName} /></a>
       <p>{copy('footer')}</p><a href={contact} target="_blank" rel="noopener noreferrer">{copy('planVisit')}</a>
-      <WebsiteTrafficPrivacy />
-      <p className="guest-copyright">© {new Date().getFullYear()} Macanudo Socials</p>
+<p className="guest-copyright">© {new Date().getFullYear()} Macanudo Socials</p>
     </footer>
   </div>;
 }
