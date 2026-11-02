@@ -3841,5 +3841,59 @@
     "pinned": "置顶",
     "pin": "置顶",
     "unpin": "取消置顶"
+  },
+  "guestLounge": {
+    "skip": "跳至主要内容",
+    "navigation": "主要导航",
+    "openMenu": "打开菜单",
+    "closeMenu": "关闭菜单",
+    "lounge": "会所空间",
+    "visit": "到访",
+    "membership": "会员权益",
+    "signIn": "会员登录",
+    "language": "切换语言",
+    "heroTitle": "坐下来，好好聊",
+    "heroBody": "在亚庇的雪茄会所，放松一下，与朋友见面，让聊天慢慢展开。",
+    "heroAlt": "Macanudo Socials 会所的舒适皮沙发与温暖灯光",
+    "planVisit": "安排到访",
+    "aboutTitle": "放松，慢慢来",
+    "aboutBody": "温暖的灯光、舒适的座位，还有朋友之间的一张小桌。在 Macanudo Socials，从忙碌中歇一歇。",
+    "aboutSecond": "与老朋友叙叙旧，认识新朋友，或留一点时间，好好聊聊。",
+    "explore": "找到你喜欢的角落",
+    "cornersTitle": "找到你喜欢的角落",
+    "chooseCorner": "选择会所座位场景",
+    "windowAlt": "石纹墙旁的灰色沙发与橙色座椅",
+    "caramelAlt": "焦糖色皮沙发环绕圆形茶几",
+    "caramelCaption": "舒舒服服地坐下来",
+    "drinksAlt": "会所饮品与茶点区",
+    "drinksCaption": "饮品与茶点，一起分享",
+    "screenAlt": "投影幕旁的皮质扶手椅",
+    "screenCaption": "留给朋友的小角落",
+    "visitTitle": "来坐坐吧",
+    "address": "地址",
+    "hours": "营业时间",
+    "contact": "联系方式",
+    "directions": "查看路线",
+    "footer": "与好朋友，度过一段悠闲时光。",
+    "rooms": {
+      "quiet": {
+        "title": "安静叙叙旧",
+        "hint": "柔软皮沙发，围坐更亲近",
+        "description": "舒适的皮沙发、温暖灯光，与朋友一起坐坐。",
+        "alt": "棕色皮沙发与两张圆形茶几"
+      },
+      "table": {
+        "title": "围桌畅聊",
+        "hint": "让聊天多一点时间",
+        "description": "在共用木桌旁，与朋友相聚。",
+        "alt": "茶点区旁的长木桌与座椅"
+      },
+      "window": {
+        "title": "窗边小聚",
+        "hint": "石纹墙旁的一席",
+        "description": "灰色沙发与橙色扶手椅，组成窗边的舒适角落。",
+        "alt": "窗旁的灰色沙发与橙色扶手椅"
+      }
+    }
   }
 }

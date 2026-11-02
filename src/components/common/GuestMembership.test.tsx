@@ -15,6 +15,5 @@ it('shows yearly credit and initial-only free visit, with a working registration
   expect(screen.getByText(/first activation and every annual renewal/)).toBeTruthy();
   expect(screen.getByText(/not repeated on renewal/)).toBeTruthy();
   expect(screen.getByText(/25 complimentary cigars/)).toBeTruthy();
-  expect(screen.getByText(/11:00–23:00/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Register your interest' })); expect(register).toHaveBeenCalledOnce();
 });

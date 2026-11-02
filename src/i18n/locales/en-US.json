@@ -3843,5 +3843,59 @@
     "pinned": "Pin to top",
     "pin": "Pin",
     "unpin": "Unpin"
+  },
+  "guestLounge": {
+    "skip": "Skip to content",
+    "navigation": "Main navigation",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "lounge": "The lounge",
+    "visit": "Visit",
+    "membership": "Membership",
+    "signIn": "Member sign-in",
+    "language": "Change language",
+    "heroTitle": "Room for conversation",
+    "heroBody": "A cigar lounge in Kota Kinabalu for unwinding, catching up and conversations that need a little more time.",
+    "heroAlt": "Comfortable leather sofas and warm lighting at Macanudo Socials",
+    "planVisit": "Plan a visit",
+    "aboutTitle": "Settle in",
+    "aboutBody": "Warm light, comfortable seating and a table between friends. Take a break from the day at Macanudo Socials.",
+    "aboutSecond": "Come for a quiet catch-up, meet someone new, or make time for a conversation without rushing.",
+    "explore": "Find your corner",
+    "cornersTitle": "Find your corner",
+    "chooseCorner": "Choose a lounge setting",
+    "windowAlt": "Window seating with grey sofas, orange chairs and a textured stone wall",
+    "caramelAlt": "Caramel leather sofas around a coffee table",
+    "caramelCaption": "Room to make yourself comfortable",
+    "drinksAlt": "The lounge drinks and refreshments corner",
+    "drinksCaption": "Drinks and a little something to share",
+    "screenAlt": "Leather armchairs beside the lounge projection screen",
+    "screenCaption": "A quieter corner for your circle",
+    "visitTitle": "Come on over",
+    "address": "Address",
+    "hours": "Opening hours",
+    "contact": "Contact",
+    "directions": "Get directions",
+    "footer": "Good company. A little time well spent.",
+    "rooms": {
+      "quiet": {
+        "title": "A quiet catch-up",
+        "hint": "Soft leather, a smaller circle",
+        "description": "Comfortable leather sofas, warm light and space to sit together.",
+        "alt": "Brown leather sofas arranged around two round tables"
+      },
+      "table": {
+        "title": "Around the table",
+        "hint": "Room for a longer conversation",
+        "description": "A shared wooden table for gathering with your circle.",
+        "alt": "A long wooden table and chairs beside the refreshments counter"
+      },
+      "window": {
+        "title": "By the window",
+        "hint": "A seat beside the stone wall",
+        "description": "Settle into the window seating, with grey sofas and orange armchairs.",
+        "alt": "Grey sofas and orange armchairs beside the lounge window"
+      }
+    }
   }
 }
