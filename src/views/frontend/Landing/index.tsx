@@ -61,7 +61,24 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     schema.type = 'application/ld+json'; schema.id = 'guest-local-business'
     schema.textContent = JSON.stringify(metadata.schema).replace(/</g, '\\u003c')
     document.getElementById(schema.id)?.remove(); document.head.appendChild(schema)
-    return () => { schema.remove() }
+    const membership = publicProfile.membershipVersions?.slice().sort((a, b) => Date.parse(b.effectiveAt) - Date.parse(a.effectiveAt))[0]
+    const faq = document.createElement('script')
+    faq.type = 'application/ld+json'; faq.id = 'guest-faq'
+    faq.textContent = JSON.stringify({
+      '@context': 'https://schema.org', '@type': 'FAQPage',
+      mainEntity: [
+        { '@type': 'Question', name: 'What is the annual membership fee at Macanudo Socials?',
+          acceptedAnswer: { '@type': 'Answer', text: `Annual membership at Macanudo Socials Kota Kinabalu is RM ${membership?.annualPrice ?? 299}. Members receive RM ${membership?.credit ?? 100} lounge credit and ${membership?.cigarsPerYear ?? 25} cigars per year. The first visit is complimentary.` } },
+        { '@type': 'Question', name: 'What are the opening hours of Macanudo Socials in Kota Kinabalu?',
+          acceptedAnswer: { '@type': 'Answer', text: `Macanudo Socials is open daily from ${publicProfile.opensAt} to ${publicProfile.closesAt}. Located at Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 Kota Kinabalu, Sabah, Malaysia.` } },
+        { '@type': 'Question', name: 'Where is Macanudo Socials located in Kota Kinabalu?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Macanudo Socials is located at Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 Kota Kinabalu, Sabah, Malaysia. Contact: +60162773800.' } },
+        { '@type': 'Question', name: 'Can non-smokers visit Macanudo Socials?',
+          acceptedAnswer: { '@type': 'Answer', text: 'Yes. Macanudo Socials membership includes a non-smoker companion benefit. Members may bring non-smoking guests to enjoy the lounge ambience and beverages.' } },
+      ],
+    }).replace(/</g, '\\u003c')
+    document.getElementById(faq.id)?.remove(); document.head.appendChild(faq)
+    return () => { schema.remove(); faq.remove() }
   }, [appConfig?.guestPage, loginOnly, i18n.language])
 
 

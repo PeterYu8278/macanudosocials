@@ -49,10 +49,34 @@ export function guestPageConfig(value?: GuestPageConfig): GuestPageConfig {
 }
 export function guestContactUrl(config: GuestPageConfig) { return `https://wa.me/${config.phone}`; }
 export function guestMetadata(config: GuestPageConfig) {
+  const membership = currentGuestMembership(config);
   return { title: `${config.loungeName} | Membership & Visiting Information`,
-    description: `${config.loungeName}. ${config.address}. Open daily ${config.opensAt}–${config.closesAt}. Contact +${config.phone}.`,
-    schema: { '@context': 'https://schema.org', '@type': 'LocalBusiness', name: config.loungeName,
-      url: 'https://macanudosocials.com/', telephone: `+${config.phone}`, address: config.address,
-      openingHoursSpecification: [{ '@type': 'OpeningHoursSpecification', dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
-        opens: config.opensAt, closes: config.closesAt }] } };
+    description: `${config.loungeName}. A premium cigar lounge and social club in Kota Kinabalu, Sabah. Open daily ${config.opensAt}–${config.closesAt}. Contact +${config.phone}.`,
+    schema: {
+      '@context': 'https://schema.org',
+      '@type': ['LocalBusiness', 'FoodEstablishment'],
+      name: config.loungeName,
+      description: 'A premium cigar lounge and social club in Kota Kinabalu, Sabah, Malaysia. Annual membership includes lounge credit, cigars, and exclusive access.',
+      url: 'https://macanudosocials.com/',
+      telephone: `+${config.phone}`,
+      priceRange: membership ? `RM ${membership.annualPrice}/year membership` : undefined,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: 'Block J, Unit 56, Ground Floor, Off Jalan Coastal',
+        addressLocality: 'Kota Kinabalu',
+        addressRegion: 'Sabah',
+        postalCode: '88100',
+        addressCountry: 'MY',
+      },
+      geo: { '@type': 'GeoCoordinates', latitude: 5.9749, longitude: 116.0724 },
+      image: [
+        'https://macanudosocials.com/lounge/lounge-hero.png',
+        'https://macanudosocials.com/lounge/quiet-lounge.png',
+        'https://macanudosocials.com/lounge/window-lounge.png',
+      ],
+      openingHoursSpecification: [{ '@type': 'OpeningHoursSpecification',
+        dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+        opens: config.opensAt, closes: config.closesAt }],
+      sameAs: [`https://wa.me/${config.phone}`],
+    } };
 }

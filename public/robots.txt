@@ -1,9 +1,3 @@
 User-agent: *
 Allow: /
-Disallow: /admin
-Disallow: /developer
-Disallow: /auth
-Disallow: /profile
-Disallow: /.netlify/
-
 Sitemap: https://macanudosocials.com/sitemap.xml
