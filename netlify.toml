@@ -16,12 +16,12 @@
 [functions]
   directory = "netlify/functions"
 
-# IndexNow key file — must come before the SPA catch-all
+# IndexNow key file served via function so it is never caught by the SPA rewrite
 [[redirects]]
   from = "/130657a0b3814d2ba585346b261174df.txt"
-  to = "/130657a0b3814d2ba585346b261174df.txt"
+  to = "/.netlify/functions/indexnow-key"
   status = 200
-  force = false
+  force = true
 
 # 重定向规则 - 支持SPA路由
 [[redirects]]
