@@ -6,6 +6,10 @@ import { guestContactUrl, currentGuestMembership } from '../../../config/guestPa
 import GuestMembership from '../../../components/common/GuestMembership';
 import './guest-lounge.css';
 
+function trackEvent(name: string, params?: Record<string, string | number>) {
+  (window as Window & { gtag?: (...args: unknown[]) => void }).gtag?.('event', name, params);
+}
+
 const PHOTO = '/lounge/';
 const rooms = [
   { key: 'quiet', photo: 'quiet-lounge.png' },
@@ -82,7 +86,8 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
         <div className="guest-hero-copy guest-gutter">
           <h1>{copy('heroTitle')}</h1>
           <p>{copy('heroBody')}</p>
-          <a className="guest-cta" href={contact} target="_blank" rel="noopener noreferrer">{copy('planVisit')}</a>
+          <a className="guest-cta" href={contact} target="_blank" rel="noopener noreferrer"
+            onClick={() => trackEvent('whatsapp_click', { section: 'hero' })}>{copy('planVisit')}</a>
         </div>
       </section>
       <section id="lounge" className="guest-about guest-gutter guest-section">
@@ -118,8 +123,10 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
           <dl><div><dt>{copy('address')}</dt><dd><address>{config.address}</address></dd></div>
             <div><dt>{copy('hours')}</dt><dd>{t('guestPublic.visitHours', { hours: `${config.opensAt}–${config.closesAt}` })}</dd></div>
             <div><dt>{copy('contact')}</dt><dd><a href={`tel:+${config.phone}`}>+{config.phone}</a></dd></div></dl>
-          <div className="guest-visit-actions"><a className="guest-cta" href={contact} target="_blank" rel="noopener noreferrer">{copy('planVisit')}</a>
-            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.address)}`} target="_blank" rel="noopener noreferrer">{copy('directions')}</a></div>
+          <div className="guest-visit-actions"><a className="guest-cta" href={contact} target="_blank" rel="noopener noreferrer"
+              onClick={() => trackEvent('whatsapp_click', { section: 'visit' })}>{copy('planVisit')}</a>
+            <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.address)}`} target="_blank" rel="noopener noreferrer"
+              onClick={() => trackEvent('directions_click')}>{copy('directions')}</a></div>
         </div>
       </section>
       <section id="faq" className="guest-faq guest-gutter guest-section">
@@ -147,7 +154,8 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
     </main>
     <footer className="guest-footer guest-gutter">
       <a href="#home" aria-label={config.loungeName}><BrandLogo url={logoUrl} name={config.loungeName} /></a>
-      <p>{copy('footer')}</p><a href={contact} target="_blank" rel="noopener noreferrer">{copy('planVisit')}</a>
+      <p>{copy('footer')}</p><a href={contact} target="_blank" rel="noopener noreferrer"
+        onClick={() => trackEvent('whatsapp_click', { section: 'footer' })}>{copy('planVisit')}</a>
 <p className="guest-copyright">© {new Date().getFullYear()} Macanudo Socials</p>
     </footer>
   </div>;

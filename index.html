@@ -48,6 +48,15 @@
     
     <title>Macanudo Socials Kota Kinabalu | Cigar Lounge</title>
 
+    <!-- Google Analytics 4 — static load so guest page visits are tracked before React hydrates -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=%VITE_FIREBASE_MEASUREMENT_ID%"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', '%VITE_FIREBASE_MEASUREMENT_ID%', { send_page_view: true });
+    </script>
+
     <!-- LocalBusiness structured data — static so AI/non-JS crawlers can read it -->
     <script id="guest-local-business" type="application/ld+json">{"@context":"https://schema.org","@type":["LocalBusiness","FoodEstablishment"],"name":"Macanudo Socials Kota Kinabalu","description":"A premium cigar lounge and social club in Kota Kinabalu, Sabah, Malaysia. Annual membership includes lounge credit, cigars, and exclusive access.","url":"https://macanudosocials.com/","telephone":"+60162773800","priceRange":"RM 299/year membership","address":{"@type":"PostalAddress","streetAddress":"Block J, Unit 56, Ground Floor, Off Jalan Coastal","addressLocality":"Kota Kinabalu","addressRegion":"Sabah","postalCode":"88100","addressCountry":"MY"},"geo":{"@type":"GeoCoordinates","latitude":5.9749,"longitude":116.0724},"image":["https://macanudosocials.com/og-cover-1200x630-v1.jpg","https://macanudosocials.com/lounge/lounge-hero.png","https://macanudosocials.com/lounge/quiet-lounge.png"],"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"],"opens":"11:00","closes":"23:00"}],"sameAs":["https://wa.me/60162773800"]}</script>
 
