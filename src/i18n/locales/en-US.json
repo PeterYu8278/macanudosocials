@@ -3880,6 +3880,18 @@
     "contact": "Contact",
     "directions": "Get directions",
     "footer": "Good company. A little time well spent.",
+    "faqTitle": "Frequently asked questions",
+    "faqNav": "FAQ",
+    "faq": {
+      "membershipQ": "What is the annual membership fee at Macanudo Socials?",
+      "membershipA": "Annual membership at Macanudo Socials Kota Kinabalu is RM {{price}}. Members receive RM {{credit}} lounge credit and {{cigars}} cigars per year. The first visit is complimentary.",
+      "hoursQ": "What are the opening hours of Macanudo Socials?",
+      "hoursA": "Open daily {{hours}}, at Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 Kota Kinabalu, Sabah.",
+      "locationQ": "Where is Macanudo Socials located in Kota Kinabalu?",
+      "locationA": "Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 Kota Kinabalu, Sabah, Malaysia. Contact: +60162773800.",
+      "nonSmokersQ": "Can non-smokers visit Macanudo Socials?",
+      "nonSmokersA": "Yes. Annual membership includes a non-smoker companion benefit — members may bring non-smoking guests to enjoy the lounge ambience and beverages."
+    },
     "rooms": {
       "quiet": {
         "title": "A quiet catch-up",

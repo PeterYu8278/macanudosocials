@@ -3878,6 +3878,18 @@
     "contact": "联系方式",
     "directions": "查看路线",
     "footer": "与好朋友，度过一段悠闲时光。",
+    "faqTitle": "常见问题",
+    "faqNav": "FAQ",
+    "faq": {
+      "membershipQ": "Macanudo Socials 的年费是多少？",
+      "membershipA": "Macanudo Socials 亚庇（哥打京那巴鲁）年费为 RM {{price}}。会员每年享有 RM {{credit}} 会所消费额度及 {{cigars}} 支雪茄，首次到访免费。",
+      "hoursQ": "Macanudo Socials 的营业时间是什么时候？",
+      "hoursA": "每日 {{hours}} 营业，地址：Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 哥打京那巴鲁，沙巴。",
+      "locationQ": "Macanudo Socials 在亚庇（哥打京那巴鲁）的哪里？",
+      "locationA": "Block J, Unit 56, Ground Floor, Off Jalan Coastal, 88100 Kota Kinabalu（哥打京那巴鲁），沙巴，马来西亚。联系：+60162773800。",
+      "nonSmokersQ": "非吸烟者可以来访 Macanudo Socials 吗？",
+      "nonSmokersA": "可以。年费会员包含非吸烟者同伴权益，会员可带非吸烟访客一同体验会所氛围及饮品。"
+    },
     "rooms": {
       "quiet": {
         "title": "安静叙叙旧",

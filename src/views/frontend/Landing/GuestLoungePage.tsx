@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { MenuOutlined, CloseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import type { GuestPageConfig } from '../../../config/guestPage';
-import { guestContactUrl } from '../../../config/guestPage';
+import { guestContactUrl, currentGuestMembership } from '../../../config/guestPage';
 import GuestMembership from '../../../components/common/GuestMembership';
 import WebsiteTrafficPrivacy from '../../../components/common/WebsiteTrafficPrivacy';
 import './guest-lounge.css';
@@ -52,6 +52,7 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
     return () => document.removeEventListener('keydown', close);
   }, [menuOpen]);
   const contact = guestContactUrl(config);
+  const membership = currentGuestMembership(config);
   return <div className="guest-lounge" ref={root}>
     <a className="guest-skip" href="#guest-main">{copy('skip')}</a>
     <header className="guest-header guest-gutter">
@@ -64,6 +65,7 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
         <a href="#lounge" onClick={() => setMenuOpen(false)}>{copy('lounge')}</a>
         <a href="#visit" onClick={() => setMenuOpen(false)}>{copy('visit')}</a>
         <a href="#trust" onClick={() => setMenuOpen(false)}>{copy('membership')}</a>
+        <a href="#faq" onClick={() => setMenuOpen(false)}>{copy('faqNav')}</a>
         <button type="button" className="guest-text-button" onClick={() => { setMenuOpen(false); onLogin(); }}>{copy('signIn')}</button>
         <button type="button" className="guest-language" aria-label={copy('language')}
           onClick={() => void i18n.changeLanguage(i18n.language.startsWith('zh') ? 'en-US' : 'zh-CN')}>
@@ -119,6 +121,27 @@ export default function GuestLoungePage({ config, logoUrl, onRegister, onLogin }
             <div><dt>{copy('contact')}</dt><dd><a href={`tel:+${config.phone}`}>+{config.phone}</a></dd></div></dl>
           <div className="guest-visit-actions"><a className="guest-cta" href={contact} target="_blank" rel="noopener noreferrer">{copy('planVisit')}</a>
             <a href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(config.address)}`} target="_blank" rel="noopener noreferrer">{copy('directions')}</a></div>
+        </div>
+      </section>
+      <section id="faq" className="guest-faq guest-gutter guest-section">
+        <h2 data-guest-reveal>{copy('faqTitle')}</h2>
+        <div className="guest-faq-list">
+          <details className="guest-faq-item" data-guest-reveal>
+            <summary>{copy('faq.membershipQ')}</summary>
+            <p>{t('guestLounge.faq.membershipA', { price: membership?.annualPrice ?? 299, credit: membership?.credit ?? 100, cigars: membership?.cigarsPerYear ?? 25 })}</p>
+          </details>
+          <details className="guest-faq-item" data-guest-reveal>
+            <summary>{copy('faq.hoursQ')}</summary>
+            <p>{t('guestLounge.faq.hoursA', { hours: `${config.opensAt}–${config.closesAt}` })}</p>
+          </details>
+          <details className="guest-faq-item" data-guest-reveal>
+            <summary>{copy('faq.locationQ')}</summary>
+            <p>{copy('faq.locationA')}</p>
+          </details>
+          <details className="guest-faq-item" data-guest-reveal>
+            <summary>{copy('faq.nonSmokersQ')}</summary>
+            <p>{copy('faq.nonSmokersA')}</p>
+          </details>
         </div>
       </section>
       <div className="guest-gutter guest-section guest-membership-wrap" data-guest-reveal><GuestMembership config={config} onRegister={onRegister} /></div>
