@@ -2,6 +2,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 import { Timestamp } from './firestoreMonitoring';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { writeMembershipPaymentStatus } from './membershipPaymentStatus';
+import { verifiedHistoricalActivationAt } from './historicalMembership';
 
 export const dateOf = (value: any): Date | null => {
   const date = value?.toDate?.() || (value ? new Date(value) : null);
@@ -19,14 +20,15 @@ export function annualFee(config: any, now = new Date()): number {
 }
 
 export async function hasAnnualHistory(db: Firestore, userId: string): Promise<boolean> {
-  // Membership dates can be legacy placeholders or client-editable metadata.
-  // Only trusted paid fee records authorize the wallet renewal path.
+  // Dates alone are not evidence. Historical activation requires a separate
+  // server-verified record; it must not be fabricated as a paid fee.
   const records = await db.collection(C.MEMBERSHIP_FEE_RECORDS)
     .where('userId', '==', userId).where('status', '==', 'paid').limit(100).get();
-  return records.docs.some(record => {
+  const paid = records.docs.some(record => {
     const amount = Number(record.data().amount);
     return Number.isFinite(amount) && amount > 0;
   });
+  return paid || Boolean(await verifiedHistoricalActivationAt(db, userId));
 }
 
 export async function reconcileMembershipStatus(db: Firestore, userId: string, current: any): Promise<void> {
@@ -48,12 +50,13 @@ export async function reconcileMembershipStatus(db: Firestore, userId: string, c
       const records = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
         .where('userId', '==', userId).where('status', '==', 'paid').limit(100));
       // A paid fee must match this activation period, not merely exist in older history.
+      const historical = await verifiedHistoricalActivationAt(db, userId, tx);
       const verified = from && from <= now && until > from && until.getTime() - from.getTime() <= 367 * 86400000
-        && records.docs.some(record => {
+        && (Boolean(historical && historical.getTime() === from.getTime()) || records.docs.some(record => {
           const fee = record.data();
           const paidAt = dateOf(fee.deductedAt);
           return Number(fee.amount) > 0 && paidAt && Math.abs(paidAt.getTime() - from.getTime()) <= 60000;
-        });
+        }));
       if (!verified) throw new Error('MEMBERSHIP_STATUS_UNVERIFIED');
       tx.update(userRef, {
         status: 'active', role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,

@@ -241,6 +241,55 @@ describe('Annual Pass payment', () => {
     expect(await response.json()).toMatchObject({ code: 'INITIAL_MEMBERSHIP_REQUIRED' });
     expect([...m.docs.keys()].filter(key => key.startsWith(`${C.RELOAD_RECORDS}/`))).toHaveLength(0);
   });
+  it('allows an audited historical member to reload without inventing fees or charging activation twice', async () => {
+    const from = new Date(Date.now() - 86400000), until = new Date(Date.now() + 364 * 86400000);
+    const user = m.docs.get(`${C.USERS}/user`);
+    Object.assign(user, { role: 'vip', status: 'active' });
+    Object.assign(user.membership, { activeFrom: from, firstActivatedAt: from, activeUntil: until });
+    m.docs.set(`${C.MEMBERSHIP_ACTIVATIONS}/user`, { version: 1, userId: 'user',
+      source: 'owner_confirmed_historical', status: 'verified', activatedAt: from,
+      verifiedAt: new Date(Date.now() - 1000), auditLogId: 'owner-repair' });
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+    expect(await (await request()).json()).toMatchObject({ renewal: true, accountStatus: 'active' });
+    m.docs.set(`${C.USERS}/operator`, { role: 'admin' }); m.auth.mockResolvedValue({ uid: 'operator' });
+    const created = await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200, operatorManual: true });
+    expect(created.status).toBe(200);
+    const { recordId } = await created.json();
+    expect((await review({ action: 'approve', recordId, actualAmount: 200 })).status).toBe(200);
+    expect((await review({ action: 'approve', recordId, actualAmount: 200 })).status).toBe(200);
+    expect(m.docs.get(`${C.USERS}/user`).membership).toMatchObject({ points: 280, activeFrom: from, activeUntil: until });
+    expect([...m.docs.keys()].filter(key => key.startsWith(`${C.MEMBERSHIP_FEE_RECORDS}/`))).toHaveLength(0);
+    expect([...m.docs.keys()].filter(key => key.startsWith(`${C.POINTS_RECORDS}/`))).toHaveLength(1);
+  });
+  it.each([
+    { status: 'revoked' }, { revokedAt: new Date() }, { userId: 'other-user' },
+    { auditLogId: '' }, { source: 'profile' }, { activatedAt: 'invalid' },
+    { verifiedAt: new Date(Date.now() + 86400000) },
+  ])('rejects unverified historical evidence for creation and approval: %o', async invalid => {
+    m.docs.set(`${C.MEMBERSHIP_ACTIVATIONS}/user`, { version: 1, userId: 'user',
+      source: 'owner_confirmed_historical', status: 'verified', activatedAt: new Date(Date.now() - 86400000),
+      verifiedAt: new Date(Date.now() - 1000), auditLogId: 'owner-repair', ...invalid });
+    m.docs.get(`${C.APP_CONFIG}/default`).payment.billplz.enabled = false;
+    expect(await (await request()).json()).toMatchObject({ renewal: false });
+    m.docs.set(`${C.USERS}/operator`, { role: 'admin' }); m.auth.mockResolvedValue({ uid: 'operator' });
+    const created = await review({ action: 'create', userId: 'user', storeId: 'store', amount: 200, operatorManual: true });
+    expect(await created.json()).toMatchObject({ code: 'INITIAL_MEMBERSHIP_REQUIRED' });
+    m.docs.set(`${C.RELOAD_RECORDS}/ordinary`, { userId: 'user', storeId: 'store', requestedAmount: 200, status: 'pending' });
+    expect(await (await review({ action: 'approve', recordId: 'ordinary' })).json()).toMatchObject({ code: 'INITIAL_MEMBERSHIP_REQUIRED' });
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+  });
+  it('reconciles the exact verified historical activation period without a wallet debit', async () => {
+    const from = new Date(Date.now() - 86400000), until = new Date(Date.now() + 364 * 86400000);
+    Object.assign(m.docs.get(`${C.USERS}/user`).membership, { activeFrom: from, activeUntil: until });
+    m.docs.set(`${C.MEMBERSHIP_ACTIVATIONS}/user`, { version: 1, userId: 'user',
+      source: 'owner_confirmed_historical', status: 'verified', activatedAt: from,
+      verifiedAt: new Date(Date.now() - 1000), auditLogId: 'owner-repair' });
+    expect(await (await request()).json()).toMatchObject({ renewal: true, accountStatus: 'active' });
+    expect(m.docs.get(`${C.USERS}/user`).membership.points).toBe(80);
+    m.docs.get(`${C.USERS}/user`).status = 'inactive';
+    m.docs.get(`${C.USERS}/user`).membership.activeFrom = new Date(from.getTime() - 3600000);
+    expect(await (await request()).json()).toMatchObject({ code: 'MEMBERSHIP_STATUS_UNVERIFIED' });
+  });
   it('awards configured first reload referral bonuses once alongside package settlement', async () => {
     m.docs.get(`${C.USERS}/user`).referral = { referredByUserId: 'referrer' };
     m.docs.set(`${C.USERS}/referrer`, { membership: { points: 10 }, referral: { referrals: [] } });

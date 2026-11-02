@@ -4,6 +4,7 @@ import { getFirestore, Timestamp } from './_shared/firestoreMonitoring';
 import { toWebFunction, type EventHandler } from './_shared/webFunction';
 import { requireReloadOperator, reviewManualReload } from './_shared/manualReload';
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections';
+import { verifiedHistoricalActivationAt } from './_shared/historicalMembership';
 
 const reply = (statusCode: number, data: Record<string, unknown>) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify(data) });
@@ -52,7 +53,8 @@ export const eventHandler: EventHandler = async event => {
         }
         const fees = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS)
           .where('userId', '==', body.userId).where('status', '==', 'paid'));
-        if (!fees.docs.some(doc => Number(doc.data().amount) > 0)) throw new Error('INITIAL_MEMBERSHIP_REQUIRED');
+        if (!fees.docs.some(doc => Number(doc.data().amount) > 0)
+          && !await verifiedHistoricalActivationAt(db, body.userId, tx)) throw new Error('INITIAL_MEMBERSHIP_REQUIRED');
         const timestamp = Timestamp.now();
         // Serializes simultaneous requests for the same user even if the query was initially empty.
         tx.update(target.ref, { updatedAt: timestamp });

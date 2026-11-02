@@ -4,6 +4,7 @@ import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { annualFee, dateOf } from './membershipPayment';
 import { calculateReferralPointsFromArray } from '../../../src/utils/referral';
 import { writeMembershipPaymentStatus } from './membershipPaymentStatus';
+import { verifiedHistoricalActivationAt } from './historicalMembership';
 
 export interface ReloadReview {
   action: 'approve' | 'reject' | 'cancel';
@@ -78,7 +79,8 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
     const points = Number(user.membership?.points || 0);
     if (!Number.isFinite(points)) throw new Error('INVALID_POINTS_BALANCE');
     const fees = await tx.get(db.collection(C.MEMBERSHIP_FEE_RECORDS).where('userId', '==', record.userId));
-    const renewal = fees.docs.some(doc => doc.data().status === 'paid' && Number(doc.data().amount) > 0);
+    const renewal = fees.docs.some(doc => doc.data().status === 'paid' && Number(doc.data().amount) > 0)
+      || Boolean(await verifiedHistoricalActivationAt(db, record.userId, tx));
     if (!order && !renewal) throw new Error('INITIAL_MEMBERSHIP_REQUIRED');
     const feeConfig = await tx.get(db.collection(C.CONFIG).doc('membershipFee'));
     const fee = order ? Number(order.annualFee) : annualFee(feeConfig.data());

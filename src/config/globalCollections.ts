@@ -10,6 +10,7 @@ export const GLOBAL_COLLECTIONS = {
   WEBSITE_JOBS: '_websiteJobs',
   MIGRATION_BATCHES: 'migrationBatches',
   MEMBERSHIP_PAYMENTS: '_membershipPayments',
+  MEMBERSHIP_ACTIVATIONS: '_membershipActivations',
   MEMBERSHIP_PAYMENT_STATUSES: '_membershipPaymentStatuses',
   MEMBERSHIP_PAYMENT_LOCKS: '_membershipPaymentLocks',
   FIRESTORE_METRICS: '_firestoreMetrics',
