@@ -20,7 +20,8 @@ export interface User {
   } | null;
   displayName: string;
   role: UserRole;
-  storeId?: string; // 所属门店 ID (仅针对 admin 角色)
+  storeId?: string; // Primary lounge, retained for compatibility.
+  storeIds?: string[]; // Lounges assigned to admin/storeAdmin accounts.
   // 个人折扣，仅管理员/开发者可见
   discount?: {
     rate?: number;      // 折扣百分比，例如 10 表示 10%

@@ -1,5 +1,9 @@
 {
   "loungeOperations": {
+    "adminAssignments": "门店管理员",
+    "adminAssignmentsHelp": "将 admin、storeAdmin 账号分配到当前门店。同一账号可管理多个门店，关闭开关仅移除当前门店，不影响其他分配。仅超级管理员和开发者可修改分配。",
+    "searchAdmin": "搜索管理员姓名或 ID", "adminName": "管理员", "adminRole": "角色",
+    "assignedHere": "关联当前门店", "assignedLounges": "已分配门店数", "assignAdmin": "将 {{name}} 分配到当前门店",
     "loadingBatches": "正在加载日结批次…", "refreshingBatches": "正在刷新，暂时显示上次加载的记录。",
     "selectChannel": "请选择已验证的 Whapi 通道", "unavailableChannel": "{{channel}}（不可用）",
     "channelsLoadFailed": "无法检查 WhatsApp 通道，请刷新后重试。",
@@ -57,7 +61,10 @@
     "negativeWarning": "23:00 将结束驻店，余额不足时保留负余额。充值用于偿还现有余额，不会重复收取费用。",
     "opensAt": "开始营业时间", "exceptions": "特殊日期", "date": "营业日期", "open": "营业",
     "reportEnabled": "发送英文日报", "channel": "日报通道 ID",
-    "reportProvider": "日报发送服务", "reportRecipient": "日报接收号码（需含国家码，+ 可省略）", "legacyRecipient": "已连接的 Whapi 号码（旧配置）",
+    "reportProvider": "日报发送服务", "reportRecipient": "日报接收对象（号码或 Chat ID）", "legacyRecipient": "已连接的 Whapi 号码（旧配置）",
+    "chatRecipientPlaceholder": "+60123456789 / 120363123456789@g.us",
+    "chatRecipientHelp": "Whapi 支持国际号码（+ 可省略）或完整的联系人、群组、频道 Chat ID，请保留 @ 后缀。",
+    "phoneRecipientHelp": "当前 Whatsmeow 网关仅支持国际电话号码（+ 可省略）。",
     "recipient": "接收人：已验证 Whapi 通道自身的 user.id。发送还需开启服务端日报开关。",
     "closing": "日终批次", "preview": "预览结算", "remaining": "未解决驻店", "delivery": "日报提交状态",
     "retry": "重试批次", "retryConfirm": "重试未解决的结算并生成新版日报？已完成的驻店不会重复扣款。",
@@ -66,6 +73,7 @@
     "days": ["星期日", "星期一", "星期二", "星期三", "星期四", "星期五", "星期六"],
     "status": { "running": "执行中", "waiting": "等待下一轮", "completed": "完成", "incomplete": "未完成：需要处理", "not-sent": "未发送", "accepted": "已提交（尚未确认送达）", "submitting": "发送中（结果尚未确认）", "sent": "已发出", "delivered": "已送达", "read": "已读", "failed": "发送失败", "unknown": "结果未知：重新发送前请核实" },
     "errors": {
+      "assignment-conflict": "该管理员的门店分配已被修改，请刷新后重试。",
       "invalid-baseline": "请核对基准截止时间、余额、证据和确认勾选。",
       "baseline-conflict": "基准版本已变化，请重新加载后核对。",
       "baseline-does-not-reconcile": "此基准加后续流水仍无法与钱包对平，请检查证据及遗漏流水；未保存任何改动。",

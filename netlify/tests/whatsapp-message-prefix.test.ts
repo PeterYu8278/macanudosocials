@@ -4,6 +4,12 @@ import { submitWhapi, submitWhapiButtons, submitWhapiQuickReply, submitWhapiUrlB
 
 describe('Outgoing WhatsApp messages', () => {
   afterEach(() => vi.unstubAllGlobals());
+  it('preserves a group Chat ID in the actual Whapi text request', async () => {
+    const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'message' }) });
+    vi.stubGlobal('fetch', fetch);
+    await submitWhapi('test-token', '120363123456789@g.us', 'Daily report');
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toMatchObject({ to: '120363123456789@g.us' });
+  });
   it.each(['text', 'confirmation', 'restart', 'link'])('brands %s messages while preserving destinations and buttons', async kind => {
     const fetch = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ id: 'message' }) });
     vi.stubGlobal('fetch', fetch);

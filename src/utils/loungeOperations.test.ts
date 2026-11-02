@@ -76,6 +76,20 @@ describe('daily report delivery configuration', () => {
     expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: false,
       reportDelivery: { provider: 'whatsmeow', channelId: '', recipient: '' } })).not.toThrow();
   });
+  it.each(['120363123456789@g.us', '60123456789-1234567890@g.us', '60123456789@c.us',
+    '60123456789@s.whatsapp.net', '123456789012345@lid', '120363123456789@newsletter'])('preserves a Whapi chat ID %s', recipient => {
+    expect(normalizeLoungeReportRecipient(` ${recipient} `)).toBe(recipient);
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+      reportDelivery: { provider: 'whapi', channelId: 'channel', recipient } })).not.toThrow();
+    expect(normalizeLoungeReportRecipient(recipient, 'whatsmeow')).toBeNull();
+    expect(() => validateLoungeOperations({ ...operations(), dailyReportEnabled: true,
+      reportDelivery: { provider: 'whatsmeow', channelId: 'gateway', recipient } })).toThrow();
+  });
+  it.each(['status@broadcast', '1234567890@evil.example', '1234567890@g.us/extra',
+    '+60123456789@c.us', '12345@g.us', '1234567890--1234567890@g.us', '1234567890 @g.us',
+    '0@s.whatsapp.net', '1234567890@g.us\n1234567890@g.us'])('rejects an invalid chat destination %s', recipient => {
+    expect(normalizeLoungeReportRecipient(recipient)).toBeNull();
+  });
 });
 
 describe('closing fee quotes', () => {

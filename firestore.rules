@@ -142,10 +142,12 @@ service cloud.firestore {
       // 用户可维护个人资料和消费积分，但不能提升角色、激活账户或自行增加积分。
       // Identity mappings and email audit state are written only by the trusted backend.
       allow update: if managedWalletUnchanged()
+                    && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['storeId', 'storeIds'])
+                        || hasRole('superAdmin') || hasRole('developer'))
                     && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'email', 'emailAuth', 'emailChange', 'phone'])
                     && !request.resource.data.get('profile', {}).diff(resource.data.get('profile', {})).affectedKeys().hasAny(['phone', 'phoneAuth'])
                     && (((isOwner(userId) || (isSignedIn() && resource.data.get('authUid', '') == request.auth.uid)) &&
-                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'storeId'])
+                       !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'status', 'storeId', 'storeIds'])
                        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['membership'])
                            || request.resource.data.membership.points <= resource.data.membership.points))
                     || isAdmin()

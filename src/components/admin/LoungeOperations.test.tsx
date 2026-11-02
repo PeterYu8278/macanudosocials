@@ -63,18 +63,19 @@ describe('lounge operations controls', () => {
     expect((screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }) as HTMLInputElement).value).toBe('');
     expect(mocks.request.mock.calls.every(([action]) => ['status', 'report-channels'].includes(action))).toBe(true);
   }, 15000);
-  it('saves an explicit report recipient without enabling automatic closing', async () => {
+  it.each([['60199887766', '+60199887766'], ['120363123456789@g.us', '120363123456789@g.us']])('saves report recipient %s without enabling automatic closing', async (input, recipient) => {
     window.matchMedia = vi.fn().mockReturnValue({ matches: false, addListener: vi.fn(), removeListener: vi.fn(), addEventListener: vi.fn(), removeEventListener: vi.fn() });
     mocks.request.mockResolvedValue({ success: true, enabled: true, batches: [], channels: [{ provider: 'whapi', channelId: 'channel' }] });
     render(<LoungeOperations store={{ ...store, operations: { ...emptyLoungeOperations(), whapiChannelId: 'channel' } }} />);
     fireEvent.click(screen.getByRole('button', { name: /loungeOperations.title/ }));
-    await screen.findByRole('textbox', { name: 'loungeOperations.reportRecipient' });
+    const recipientInput = await screen.findByRole('textbox', { name: 'loungeOperations.reportRecipient' });
+    expect((recipientInput as HTMLInputElement).maxLength).toBe(64);
     await waitFor(() => expect((screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }) as HTMLInputElement).disabled).toBe(false));
-    fireEvent.change(screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }), { target: { value: '60199887766' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'loungeOperations.reportRecipient' }), { target: { value: input } });
     fireEvent.click(screen.getByRole('checkbox', { name: 'loungeOperations.reportEnabled' }));
     fireEvent.click(screen.getByRole('button', { name: 'common.save' }));
     await waitFor(() => expect(mocks.request).toHaveBeenCalledWith('save-hours', { storeId: 'lounge', operations: expect.objectContaining({
-      enabled: false, dailyReportEnabled: true, reportDelivery: { provider: 'whapi', channelId: 'channel', recipient: '+60199887766' },
+      enabled: false, dailyReportEnabled: true, reportDelivery: { provider: 'whapi', channelId: 'channel', recipient },
     }) }));
   }, 15000);
   it('keeps activation disabled until the server reports readiness', async () => {

@@ -8,9 +8,12 @@ import { loungeRequest } from '../../services/loungeOperations';
 import LoungeTestReport from './LoungeTestReport';
 import LoungeDebtDetails from './LoungeDebtDetails';
 import LoungeReportPreview from './LoungeReportPreview';
+import LoungeAdminAssignments from './LoungeAdminAssignments';
+import { useAuthStore } from '../../store/modules/auth';
 
 export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: () => void }) {
   const { t } = useTranslation();
+  const { user } = useAuthStore();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false);
   const [value, setValue] = useState<Operations>(store.operations || emptyLoungeOperations());
   const [statusSnapshot, setStatusSnapshot] = useState<{ storeId: string; data: any } | null>(null);
@@ -57,7 +60,7 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
   const save = () => run(async () => {
     try { validateLoungeOperations(value); } catch { throw new Error(t('loungeOperations.errors.invalid-hours')); }
     const operations = value.reportDelivery?.recipient ? { ...value,
-      reportDelivery: { ...value.reportDelivery, recipient: normalizeLoungeReportRecipient(value.reportDelivery.recipient)! } } : value;
+      reportDelivery: { ...value.reportDelivery, recipient: normalizeLoungeReportRecipient(value.reportDelivery.recipient, value.reportDelivery.provider)! } } : value;
     await loungeRequest('save-hours', { storeId: store.id, operations });
     setValue(operations);
     message.success(t('common.saveSuccess')); onSaved?.(); await load(true);
@@ -110,10 +113,11 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
                 onChange={e => setValue(value.reportDelivery ? { ...value, reportDelivery: { ...value.reportDelivery, channelId: e.target.value.trim() } }
                   : { ...value, whapiChannelId: e.target.value.trim() })} />}</div>
             <div><Typography.Text>{t('loungeOperations.reportRecipient')}</Typography.Text>
-              <Input value={value.reportDelivery?.recipient || ''} maxLength={16} aria-label={t('loungeOperations.reportRecipient')}
-                placeholder={value.reportDelivery ? '+60123456789 / 60123456789' : t('loungeOperations.legacyRecipient')}
+              <Input value={value.reportDelivery?.recipient || ''} maxLength={whapi ? 64 : 16} aria-label={t('loungeOperations.reportRecipient')}
+                placeholder={whapi ? t('loungeOperations.chatRecipientPlaceholder') : '+60123456789 / 60123456789'}
                 onChange={e => setValue({ ...value, reportDelivery: { provider: value.reportDelivery?.provider || 'whapi',
-                  channelId: value.reportDelivery?.channelId ?? value.whapiChannelId, recipient: e.target.value.trim() } })} /></div>
+                  channelId: value.reportDelivery?.channelId ?? value.whapiChannelId, recipient: e.target.value.trim() } })} />
+              <Typography.Text type="secondary">{t(whapi ? 'loungeOperations.chatRecipientHelp' : 'loungeOperations.phoneRecipientHelp')}</Typography.Text></div>
           </div>
           {whapi && <Space direction="vertical">
             <Typography.Text type={channelsError || !channelValid && !!selectedChannel ? 'warning' : 'secondary'}>
@@ -158,6 +162,8 @@ export function LoungeOperations({ store, onSaved }: { store: Store; onSaved?: (
             ]} /></>}
         </> },
         { key: 'test-report', label: t('loungeOperations.test.title'), children: <LoungeTestReport key={store.id} storeId={store.id} /> },
+        ...(['superAdmin', 'developer'].includes(user?.role || '') ? [{ key: 'admins', label: t('loungeOperations.adminAssignments'),
+          children: <LoungeAdminAssignments key={store.id} storeId={store.id} /> }] : []),
       ]} />
     </Modal>
     <Modal title={t('loungeOperations.reportPreviewTitle')} open={reportText !== null} onCancel={() => setReportText(null)}

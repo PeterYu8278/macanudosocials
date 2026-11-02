@@ -29,10 +29,17 @@ export function firstVisitCutoff(checkIn: Date): Date {
   return checkIn < cutoff ? cutoff : new Date(cutoff.getTime() + DAY);
 }
 
-/** Accept international digits with or without '+', without guessing a country code. */
-export function normalizeLoungeReportRecipient(value: unknown): string | null {
-  if (typeof value !== 'string' || !/^\+?[1-9]\d{6,14}$/.test(value.trim())) return null;
-  return `+${value.trim().replace(/^\+/, '')}`;
+/** Preserve Whapi chat destinations; the current Whatsmeow gateway accepts phones only. */
+export function normalizeLoungeReportRecipient(value: unknown, provider: LoungeReportDelivery['provider'] = 'whapi'): string | null {
+  if (typeof value !== 'string') return null;
+  const recipient = value.trim();
+  if (/^\+?[1-9]\d{6,14}$/.test(recipient)) return `+${recipient.replace(/^\+/, '')}`;
+  if (provider !== 'whapi' || recipient.length > 64) return null;
+  if (/^[1-9]\d{6,14}@(c\.us|s\.whatsapp\.net)$/.test(recipient)
+    || /^[1-9]\d{6,19}@lid$/.test(recipient)
+    || /^(?=.{10,31}@)[1-9]\d*(?:-\d+)?@g\.us$/.test(recipient)
+    || /^[1-9]\d{9,30}@newsletter$/.test(recipient)) return recipient;
+  return null;
 }
 
 export function validateLoungeOperations(value: LoungeOperations): void {
@@ -43,7 +50,7 @@ export function validateLoungeOperations(value: LoungeOperations): void {
   if (route && (!['whapi', 'whatsmeow'].includes(route.provider)
     || typeof route.channelId !== 'string' || route.channelId.length > 200
     || typeof route.recipient !== 'string'
-    || (route.recipient !== '' && !normalizeLoungeReportRecipient(route.recipient))
+    || (route.recipient !== '' && !normalizeLoungeReportRecipient(route.recipient, route.provider))
     || (value.dailyReportEnabled && (!route.channelId.trim() || !route.recipient)))) throw new Error('invalid-hours');
   const validDay = (d: LoungeDay) => d && typeof d.open === 'boolean' && typeof d.startsAt === 'string'
     && (!d.open || /^([01]\d|2[0-2]):[0-5]\d$/.test(d.startsAt));

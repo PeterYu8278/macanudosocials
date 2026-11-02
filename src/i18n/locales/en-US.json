@@ -1,5 +1,9 @@
 {
   "loungeOperations": {
+    "adminAssignments": "Lounge Administrators",
+    "adminAssignmentsHelp": "Assign admin and storeAdmin accounts to this lounge. Accounts can manage multiple lounges. Switching off removes only this lounge; other assignments remain. Only super administrators and developers can change these assignments.",
+    "searchAdmin": "Search administrator name or ID", "adminName": "Administrator", "adminRole": "Role",
+    "assignedHere": "Assigned to this lounge", "assignedLounges": "Assigned lounges", "assignAdmin": "Assign {{name}} to this lounge",
     "loadingBatches": "Loading closing batches…", "refreshingBatches": "Refreshing; showing the last loaded records.",
     "selectChannel": "Select a verified Whapi channel", "unavailableChannel": "{{channel}} (unavailable)",
     "channelsLoadFailed": "Unable to check WhatsApp channels. Refresh and try again.",
@@ -57,7 +61,10 @@
     "negativeWarning": "At 23:00, visits end even if the wallet becomes negative. Reloads repay the existing balance; fees are not charged twice.",
     "opensAt": "Opening time", "exceptions": "Special Dates", "date": "Business date", "open": "Open",
     "reportEnabled": "Send English daily report", "channel": "Report channel ID",
-    "reportProvider": "Report provider", "reportRecipient": "Report recipient (country code required; + optional)", "legacyRecipient": "Connected Whapi account (legacy)",
+    "reportProvider": "Report provider", "reportRecipient": "Report recipient (phone or Chat ID)", "legacyRecipient": "Connected Whapi account (legacy)",
+    "chatRecipientPlaceholder": "+60123456789 / 120363123456789@g.us",
+    "chatRecipientHelp": "Whapi: international phone (+ optional) or full contact, group or channel Chat ID. Keep the @ suffix.",
+    "phoneRecipientHelp": "This Whatsmeow gateway currently supports international phone numbers only (+ optional).",
     "recipient": "Recipient: the verified Whapi channel's own user.id. Sending also requires the server-side daily report switch.",
     "closing": "Closing Batches", "preview": "Preview settlement", "remaining": "Unresolved visits", "delivery": "Report submission",
     "retry": "Retry batch", "retryConfirm": "Retry unresolved settlement and generate a new report revision? Completed visits will not be charged again.",
@@ -66,6 +73,7 @@
     "days": ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"],
     "status": { "running": "Running", "waiting": "Waiting for next round", "completed": "Complete", "incomplete": "Incomplete: action required", "not-sent": "Not sent", "accepted": "Submitted (delivery not yet confirmed)", "submitting": "Sending (result not yet confirmed)", "sent": "Sent", "delivered": "Delivered", "read": "Read", "failed": "Failed", "unknown": "Unknown: verify before resending" },
     "errors": {
+      "assignment-conflict": "This administrator's lounge assignments changed. Refresh and try again.",
       "invalid-baseline": "Check the verified cutoff, balance, evidence and confirmation.",
       "baseline-conflict": "The baseline version changed. Reload and review again.",
       "baseline-does-not-reconcile": "This baseline and later transactions do not reconcile to the wallet. Check the evidence and missing transactions; no changes were saved.",

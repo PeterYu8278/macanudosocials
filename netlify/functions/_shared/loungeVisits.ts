@@ -2,6 +2,7 @@ import { Timestamp, type Firestore } from 'firebase-admin/firestore';
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections';
 import { firstVisitCutoff, loungeAvailability, visitChargeQuote } from '../../../src/utils/loungeOperations';
 import { visitRedemptionStockOutReason } from '../../../src/utils/inventoryReason';
+import { canManageLounge } from '../../../src/utils/loungeAccess';
 
 export const loungeError = (code: string, details = {}) => Object.assign(new Error(code), { details });
 export const asDate = (value: any): Date => value?.toDate?.() || new Date(value);
@@ -22,8 +23,7 @@ export async function authorizeLounge(tx: any, db: Firestore, uid: string, userI
     const linked = await tx.get(db.collection(C.USERS).where('authUid', '==', uid).limit(2));
     if (linked.size === 1) operator = linked.docs[0].data();
   }
-  const global = ['developer', 'superAdmin'].includes(operator?.role);
-  const admin = global || ['admin', 'storeAdmin'].includes(operator?.role) && operator?.storeId === storeId;
+  const admin = canManageLounge(operator, storeId);
   const owner = member && (member.authUid ? member.authUid === uid : userId === uid);
   if (!admin && (adminOnly || !owner)) throw loungeError('forbidden');
   if (!member && !(adminOnly && userId === uid && admin)) throw loungeError('member-not-found');

@@ -108,6 +108,22 @@ describe('daily report verified Whapi self-delivery', () => {
     await sendLoungeReport(db, report());
     expect(mocks.meowSend).toHaveBeenCalledWith(expect.anything(), expect.any(String), '+60199887766', 'English report', expect.any(Number));
   });
+  it('sends a Whapi group report without stripping its chat ID suffix', async () => {
+    const recipient = '120363123456789@g.us';
+    records['stores/lounge'].operations.reportDelivery = { provider: 'whapi', channelId: 'channel', recipient };
+    await sendLoungeReport(db, report()); await sendLoungeReport(db, report());
+    expect(mocks.send).toHaveBeenCalledExactlyOnceWith('server-only-token', recipient, 'English report');
+    expect(records['_loungeDailyReports/report'].delivery.recipient).toBe(recipient);
+  });
+  it('fences group destination changes before submitting a report', async () => {
+    records['stores/lounge'].operations.reportDelivery = { provider: 'whapi', channelId: 'channel', recipient: '120363123456789@g.us' };
+    mocks.health.mockImplementation(async () => {
+      records['stores/lounge'].operations.reportDelivery.recipient = '120363987654321@g.us';
+      return { status: 'connected', channelId: 'channel', account: '60123456789' };
+    });
+    await expect(sendLoungeReport(db, report())).rejects.toThrow('channel-unverified');
+    expect(mocks.send).not.toHaveBeenCalled();
+  });
   it('does not silently migrate legacy self-delivery when the global provider changes', async () => {
     records['_whatsappConfig/settings'].config.defaultProvider = 'whatsmeow';
     await expect(sendLoungeReport(db, report())).rejects.toThrow('channel-unverified');

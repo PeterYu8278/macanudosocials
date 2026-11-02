@@ -14,6 +14,7 @@ import { executeLoungeTestReport } from './_shared/loungeTestReport';
 import { saveWalletDebtBaseline } from './_shared/walletDebtBaseline';
 import { correctLegacyLoungeDebtDetails } from '../../src/utils/legacyLoungeReportSnapshot';
 import { readLoungeStatus } from './_shared/loungeStatus';
+import { loungeAssignments } from './_shared/loungeAssignments';
 
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[\w-]{1,160}$/.test(value);
 const reply = (statusCode: number, data: object) => ({ statusCode,
@@ -33,6 +34,9 @@ export const eventHandler: EventHandler = async event => {
       initializeApp({ credential: cert(JSON.parse(credentials)) });
     }
     const { uid } = await getAuth().verifyIdToken(token, true), db = getFirestore(), now = new Date();
+    if (['list-lounge-admins', 'assign-lounge-admin'].includes(input.action)) {
+      return reply(200, { success: true, ...await loungeAssignments(db, uid, input) });
+    }
     if (input.action === 'save-debt-baseline') return reply(200, { success: true, ...await saveWalletDebtBaseline(db, uid, input) });
     if (input.action === 'debt-baseline') {
       if (!validId(input.userId)) throw loungeError('invalid-request');
@@ -64,7 +68,7 @@ export const eventHandler: EventHandler = async event => {
       if (input.action === 'save-hours') {
         validateLoungeOperations(input.operations);
         if (input.operations.reportDelivery?.recipient) input.operations = { ...input.operations,
-          reportDelivery: { ...input.operations.reportDelivery, recipient: normalizeLoungeReportRecipient(input.operations.reportDelivery.recipient) } };
+          reportDelivery: { ...input.operations.reportDelivery, recipient: normalizeLoungeReportRecipient(input.operations.reportDelivery.recipient, input.operations.reportDelivery.provider) } };
         if (input.operations.enabled && (process.env.LOUNGE_OPERATIONS_ENABLED !== 'true'
           || (process.env.LOUNGE_JOB_SECRET || '').length < 32 || !process.env.URL)) throw loungeError('not-ready');
         const reportTransport = input.operations.dailyReportEnabled ? await loadLoungeReportTransport(db, input.operations) : null;
@@ -110,7 +114,7 @@ export const eventHandler: EventHandler = async event => {
     const known = ['invalid-hours', 'invalid-request', 'forbidden', 'not-ready', 'not-enabled', 'outside-hours', 'already-checked-in',
       'membership-inactive', 'insufficient-checkin', 'lounge-unavailable', 'session-not-found', 'member-not-found', 'active-visits', 'channel-unverified', 'busy', 'before-closing',
       'invalid-report-date', 'report-not-found', 'test-report-not-found', 'test-confirm-required', 'test-report-expired', 'test-report-rate-limit',
-      'invalid-baseline', 'baseline-conflict', 'baseline-does-not-reconcile', 'scan-limit'];
+      'invalid-baseline', 'baseline-conflict', 'baseline-does-not-reconcile', 'scan-limit', 'assignment-conflict'];
     return reply(code === 'forbidden' ? 403 : known.includes(code) ? 409 : 503, {
       success: false, code: known.includes(code) ? code : 'service-unavailable', details: error?.details || {},
     });
