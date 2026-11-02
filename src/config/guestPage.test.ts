@@ -1,6 +1,23 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_GUEST_PAGE as base, currentGuestMembership, guestPageConfig, guestMetadata, nextGuestPageRevision, validateGuestPage } from './guestPage';
+import { readFileSync, existsSync } from 'node:fs';
+import { DEFAULT_GUEST_PAGE as base, currentGuestMembership, guestPageConfig, guestMetadata, nextGuestPageRevision, validateGuestPage, GUEST_SOCIAL_IMAGE } from './guestPage';
 describe('approved public guest information', () => {
+  it('publishes matching static and runtime sharing metadata with an existing standard-size image', () => {
+    const document = new DOMParser().parseFromString(readFileSync('index.html', 'utf8'), 'text/html');
+    const content = (property: string) => document.querySelector(`meta[property="${property}"]`)?.getAttribute('content');
+    const metadata = guestMetadata(base);
+    expect(metadata.title.length).toBeLessThanOrEqual(60);
+    expect(document.title).toBe(metadata.title);
+    expect(content('og:title')).toBe(metadata.title);
+    expect(content('og:site_name')).toBe('Macanudo Socials');
+    expect(content('og:image')).toBe(GUEST_SOCIAL_IMAGE.url);
+    expect(content('og:image:width')).toBe(String(GUEST_SOCIAL_IMAGE.width));
+    expect(content('og:image:height')).toBe(String(GUEST_SOCIAL_IMAGE.height));
+    expect(content('og:image:type')).toBe(GUEST_SOCIAL_IMAGE.type);
+    expect(content('og:image:alt')).toBe(GUEST_SOCIAL_IMAGE.alt);
+    expect(document.querySelector('meta[name="twitter:image"]')?.getAttribute('content')).toBe(GUEST_SOCIAL_IMAGE.url);
+    expect(existsSync(`public${new URL(GUEST_SOCIAL_IMAGE.url).pathname}`)).toBe(true);
+  });
   it('publishes the confirmed storefront and annual membership without a salon offer', () => {
     expect(base).toMatchObject({ phone: '60162773800', opensAt: '11:00', closesAt: '23:00' });
     expect(currentGuestMembership(base, Date.parse('2026-11-02T00:00:00+08:00'))).toMatchObject({ annualPrice: 299, credit: 100, cigarsPerYear: 25 });

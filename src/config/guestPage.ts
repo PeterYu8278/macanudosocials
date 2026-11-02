@@ -48,9 +48,16 @@ export function guestPageConfig(value?: GuestPageConfig): GuestPageConfig {
   return DEFAULT_GUEST_PAGE;
 }
 export function guestContactUrl(config: GuestPageConfig) { return `https://wa.me/${config.phone}`; }
+export const GUEST_SOCIAL_IMAGE = {
+  url: 'https://macanudosocials.com/og-cover-1200x630-v1.jpg',
+  width: 1200,
+  height: 630,
+  type: 'image/jpeg',
+  alt: 'Macanudo Socials Kota Kinabalu lounge with daily 11am–11pm opening hours and WhatsApp contact.',
+} as const;
 export function guestMetadata(config: GuestPageConfig) {
   const membership = currentGuestMembership(config);
-  return { title: `${config.loungeName} | Membership & Visiting Information`,
+  return { title: `${config.loungeName} | Cigar Lounge`,
     description: `${config.loungeName}. A premium cigar lounge and social club in Kota Kinabalu, Sabah. Open daily ${config.opensAt}–${config.closesAt}. Contact +${config.phone}.`,
     schema: {
       '@context': 'https://schema.org',
