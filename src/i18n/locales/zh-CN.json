@@ -2931,8 +2931,11 @@
       "manualCreateNotesLabel": "备注（可选）",
       "manualCreateNotesPlaceholder": "输入备注...",
       "manualCreateAutoVerify": "立即自动验证",
-      "manualCreateSubmit": "创建"
-    }
+      "manualCreateSubmit": "创建",
+  "statusWithdrawed": "已撤回",
+  "mobileReload": "充值",
+  "mobileAnnualFee": "年费"
+}
   },
   "performance": {
     "title": "性能监控",
@@ -3857,8 +3860,8 @@
     "heroAlt": "Macanudo Socials 会所的舒适皮沙发与温暖灯光",
     "planVisit": "安排到访",
     "aboutTitle": "放松，慢慢来",
-    "aboutBody": "温暖的灯光、舒适的座位，还有朋友之间的一张小桌。在 Macanudo Socials，从忙碌中歇一歇。",
-    "aboutSecond": "与老朋友叙叙旧，认识新朋友，或留一点时间，好好聊聊。",
+    "aboutBody": "温暖的灯光、舒适的座位，还有朋友之间的一张小桌。Macanudo Socials 是亚庇（哥打京那巴鲁）专属的雪茄会所，让你从忙碌中真正歇一歇。",
+    "aboutSecond": "与老朋友叙叙旧，认识新朋友，或留一点时间，好好聊聊。年费会员包含会所消费额度、赠送雪茄，以及首次到访免费体验。",
     "explore": "找到你喜欢的角落",
     "cornersTitle": "找到你喜欢的角落",
     "chooseCorner": "选择会所座位场景",

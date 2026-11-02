@@ -2933,8 +2933,11 @@
       "manualCreateNotesLabel": "Notes (Optional)",
       "manualCreateNotesPlaceholder": "Enter notes...",
       "manualCreateAutoVerify": "Auto-verify immediately",
-      "manualCreateSubmit": "Create"
-    }
+      "manualCreateSubmit": "Create",
+  "statusWithdrawed": "Withdrawed",
+  "mobileReload": "Reload",
+  "mobileAnnualFee": "Annual fee"
+}
   },
   "performance": {
     "title": "Performance Monitor",
@@ -3859,8 +3862,8 @@
     "heroAlt": "Comfortable leather sofas and warm lighting at Macanudo Socials",
     "planVisit": "Plan a visit",
     "aboutTitle": "Settle in",
-    "aboutBody": "Warm light, comfortable seating and a table between friends. Take a break from the day at Macanudo Socials.",
-    "aboutSecond": "Come for a quiet catch-up, meet someone new, or make time for a conversation without rushing.",
+    "aboutBody": "Warm light, comfortable seating and a table between friends. Macanudo Socials is Kota Kinabalu's dedicated cigar lounge — a place to unwind, settle in, and take the day at your own pace.",
+    "aboutSecond": "Come for a quiet catch-up or stay for a longer conversation. Annual membership includes lounge credit, complimentary cigars, and a complimentary first visit.",
     "explore": "Find your corner",
     "cornersTitle": "Find your corner",
     "chooseCorner": "Choose a lounge setting",
