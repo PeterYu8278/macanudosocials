@@ -54,9 +54,9 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     setMeta('og:title', metadata.title, 'property')
     setMeta('og:description', metadata.description, 'property')
     setMeta('og:url', 'https://macanudosocials.com/', 'property')
-    setMeta('og:image', 'https://macanudosocials.com/lounge/lounge-hero.png', 'property')
-    setMeta('og:image:width', '1360', 'property')
-    setMeta('og:image:height', '1020', 'property')
+    setMeta('og:image', 'https://macanudosocials.com/og-cover.webp', 'property')
+    setMeta('og:image:width', '1733', 'property')
+    setMeta('og:image:height', '908', 'property')
     setMeta('og:image:alt', metadata.title, 'property')
     setMeta('robots', window.location.hostname === 'macanudosocials.com' ? 'index,follow' : 'noindex,nofollow')
     let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
