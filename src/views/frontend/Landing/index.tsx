@@ -10,7 +10,7 @@ import { normalizePhoneNumber } from '../../../utils/phoneNormalization'
 import ResetPasswordModal from '../../../components/common/ResetPasswordModal'
 import RegisterForm from '../../../components/auth/RegisterForm'
 import GuestLoungePage from './GuestLoungePage'
-import { guestPageConfig, guestMetadata } from '../../../config/guestPage'
+import { guestPageConfig, guestMetadata, GUEST_SOCIAL_IMAGE } from '../../../config/guestPage'
 
 const { Text } = Typography
 
@@ -51,13 +51,21 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     }
     setMeta('description', metadata.description)
     setMeta('og:type', 'website', 'property')
+    setMeta('og:site_name', 'Macanudo Socials', 'property')
     setMeta('og:title', metadata.title, 'property')
     setMeta('og:description', metadata.description, 'property')
     setMeta('og:url', 'https://macanudosocials.com/', 'property')
-    setMeta('og:image', 'https://macanudosocials.com/og-cover.webp', 'property')
-    setMeta('og:image:width', '1733', 'property')
-    setMeta('og:image:height', '908', 'property')
-    setMeta('og:image:alt', metadata.title, 'property')
+    setMeta('og:image', GUEST_SOCIAL_IMAGE.url, 'property')
+    setMeta('og:image:secure_url', GUEST_SOCIAL_IMAGE.url, 'property')
+    setMeta('og:image:type', GUEST_SOCIAL_IMAGE.type, 'property')
+    setMeta('og:image:width', String(GUEST_SOCIAL_IMAGE.width), 'property')
+    setMeta('og:image:height', String(GUEST_SOCIAL_IMAGE.height), 'property')
+    setMeta('og:image:alt', GUEST_SOCIAL_IMAGE.alt, 'property')
+    setMeta('twitter:card', 'summary_large_image')
+    setMeta('twitter:title', metadata.title)
+    setMeta('twitter:description', metadata.description)
+    setMeta('twitter:image', GUEST_SOCIAL_IMAGE.url)
+    setMeta('twitter:image:alt', GUEST_SOCIAL_IMAGE.alt)
     setMeta('robots', window.location.hostname === 'macanudosocials.com' ? 'index,follow' : 'noindex,nofollow')
     let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
     if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
