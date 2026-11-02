@@ -19,6 +19,8 @@ import AppMessageBridge from './components/common/AppMessageBridge'
 import SystemUpdateBanner from './components/common/SystemUpdateBanner'
 import { isFeatureVisible } from './services/firebase/featureVisibility'
 import { getLoginLandingPath } from './utils/loginLanding'
+import { guestMetadata, guestPageConfig } from './config/guestPage'
+import WebsiteTrafficTracker from './components/common/WebsiteTrafficTracker'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -207,7 +209,10 @@ const AppContent: React.FC = () => {
         }
 
         // Update document.title
-        document.title = `${appName} - Premium Cigar Community`
+        const publicSeo = !useAuthStore.getState().user && window.location.pathname === '/' ? guestMetadata(guestPageConfig(config?.guestPage)) : null
+        const seoTitle = publicSeo?.title || `${appName} - Premium Cigar Community`
+        const seoDescription = publicSeo?.description || `${appName} - Premium Cigar Community`
+        document.title = seoTitle
 
         // 更新 meta 标签
         const updateMetaTag = (name: string, content: string, attribute: string = 'name') => {
@@ -221,7 +226,7 @@ const AppContent: React.FC = () => {
         }
 
         // Update description
-        updateMetaTag('description', `${appName} - Premium Cigar Community`)
+        updateMetaTag('description', seoDescription)
 
         // Update author
         updateMetaTag('author', appName)
@@ -230,12 +235,12 @@ const AppContent: React.FC = () => {
         updateMetaTag('apple-mobile-web-app-title', appName)
 
         // Update Open Graph
-        updateMetaTag('og:title', `${appName} - Premium Cigar Community`, 'property')
-        updateMetaTag('og:description', 'Premium membership platform for cigar lovers.', 'property')
+        updateMetaTag('og:title', seoTitle, 'property')
+        updateMetaTag('og:description', seoDescription, 'property')
 
         // Update Twitter Card
-        updateMetaTag('twitter:title', `${appName} - Premium Cigar Community`)
-        updateMetaTag('twitter:description', 'Premium membership platform for cigar lovers.')
+        updateMetaTag('twitter:title', seoTitle)
+        updateMetaTag('twitter:description', seoDescription)
 
         // 应用动态图标更新（包括 manifest、favicon、apple-touch-icon）
         // 注意：manifest 现在由 Service Worker 动态生成，这里只更新图标
@@ -391,6 +396,7 @@ const AppContent: React.FC = () => {
                   {/* 默认重定向 */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
+                <WebsiteTrafficTracker guestVisible={guestPageVisible === true} />
               </Suspense>
             </div>
           </Content>

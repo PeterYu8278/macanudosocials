@@ -30,9 +30,11 @@ import type { Brand, Event as CigarEvent, AppConfig } from '../../../types'
 import { identifyInputType, normalizePhoneNumber, isValidEmail } from '../../../utils/phoneNormalization'
 import ResetPasswordModal from '../../../components/common/ResetPasswordModal'
 import RegisterForm from '../../../components/auth/RegisterForm'
+import GuestMembership from '../../../components/common/GuestMembership'
+import { guestPageConfig, guestMetadata, guestContactUrl } from '../../../config/guestPage'
+import { recordWebsiteEvent } from '../../../services/websiteTraffic'
 
 const { Title, Paragraph, Text } = Typography
-const WHATSAPP_USER_ID = '601157288278'
 
 const usePrefersReducedMotion = () => {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(() => {
@@ -62,7 +64,7 @@ interface LandingProps {
 
 const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const navigate = useNavigate()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const prefersReducedMotion = usePrefersReducedMotion()
   const { data: brands = [] } = useFirestoreQuery(
@@ -82,7 +84,6 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const [scrolled, setScrolled] = useState(false)
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 992)
   const [mobileMenuVisible, setMobileMenuVisible] = useState(false)
-  const [salonModalVisible, setSalonModalVisible] = useState(false)
   const [authModalVisible, setAuthModalVisible] = useState(loginOnly || openRegisterFromUrl || openLoginFromUrl)
   const [authMode, setAuthMode] = useState<'login' | 'register'>(openRegisterFromUrl ? 'register' : 'login')
   const [authLoading, setAuthLoading] = useState(false)
@@ -91,6 +92,38 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   const [loginForm] = Form.useForm()
   const [registerForm] = Form.useForm()
   const [loginError, setLoginError] = useState<string>('')
+  const publicProfile = guestPageConfig(appConfig?.guestPage)
+  const WHATSAPP_USER_ID = publicProfile.phone
+  useEffect(() => {
+    if (loginOnly) {
+      let robots = document.head.querySelector('meta[name="robots"]') as HTMLMetaElement | null
+      if (!robots) { robots = document.createElement('meta'); robots.name = 'robots'; document.head.appendChild(robots) }
+      robots.content = 'noindex,nofollow'
+      return
+    }
+    const metadata = guestMetadata(publicProfile)
+    document.title = metadata.title
+    document.documentElement.lang = i18n.language.startsWith('zh') ? 'zh-CN' : 'en'
+    const setMeta = (key: string, content: string, attr = 'name') => {
+      let node = document.head.querySelector('meta[' + attr + '="' + key + '"]') as HTMLMetaElement | null
+      if (!node) { node = document.createElement('meta'); node.setAttribute(attr, key); document.head.appendChild(node) }
+      node.content = content
+    }
+    setMeta('description', metadata.description)
+    setMeta('og:title', metadata.title, 'property')
+    setMeta('og:description', metadata.description, 'property')
+    setMeta('og:url', 'https://macanudosocials.com/', 'property')
+    setMeta('robots', window.location.hostname === 'macanudosocials.com' ? 'index,follow' : 'noindex,nofollow')
+    let canonical = document.head.querySelector('link[rel="canonical"]') as HTMLLinkElement | null
+    if (!canonical) { canonical = document.createElement('link'); canonical.rel = 'canonical'; document.head.appendChild(canonical) }
+    canonical.href = 'https://macanudosocials.com/'
+    const schema = document.createElement('script')
+    schema.type = 'application/ld+json'; schema.id = 'guest-local-business'
+    schema.textContent = JSON.stringify(metadata.schema).replace(/</g, '\\u003c')
+    document.getElementById(schema.id)?.remove(); document.head.appendChild(schema)
+    return () => { schema.remove() }
+  }, [appConfig?.guestPage, loginOnly, i18n.language])
+
 
   useEffect(() => {
     if (!openLoginFromUrl) return
@@ -99,19 +132,9 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
   }, [loginForm, openLoginFromUrl])
 
   useEffect(() => {
-    if (loginOnly || openLoginFromUrl || prefersReducedMotion || isMobile) return
-
-    const timer = setTimeout(() => {
-      setSalonModalVisible(true)
-    }, 1500)
-    return () => clearTimeout(timer)
-  }, [isMobile, loginOnly, openLoginFromUrl, prefersReducedMotion])
-
-  useEffect(() => {
     if (!loginOnly || openRegisterFromUrl) return
     setAuthMode('login')
     setAuthModalVisible(true)
-    setSalonModalVisible(false)
   }, [loginOnly, openRegisterFromUrl])
 
   useEffect(() => {
@@ -122,7 +145,6 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
     if (!referralCode) {
       setAuthMode('register')
       setAuthModalVisible(true)
-      setSalonModalVisible(false)
       return
     }
 
@@ -461,13 +483,13 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
               <a href="#home" className="nav-link">{t('navigation.home')}</a>
               <a href="#problem-solution" className="nav-link">{t('navigation.about')}</a>
               <a href="#offerings" className="nav-link">{t('navigation.collections')}</a>
-              <a href="#trust" className="nav-link">{t('navigation.salonEvents')}</a>
+              <a href="#trust" className="nav-link">{t('guestPublic.membership')}</a>
             </Space>
           )}
 
           <Space>
             <a
-              href="https://api.whatsapp.com/send?phone=601157288278&text=Name%3A%0AContact%3A%0ABudget%3A%0APreferred%20date%3A%0A/"
+              href={guestContactUrl(publicProfile)}
               target="_blank"
               rel="noopener noreferrer"
               className="btn-outline-gold"
@@ -568,9 +590,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             marginBottom: '24px',
             animationDelay: '0.1s'
           }}>
-            Farewell to Generic Gifting.<br />
-            <span className="gold-text">Ignite Deep Connections</span><br />
-            Through the Art of Cigars.
+            {publicProfile.loungeName}
           </h1>
           <p className="font-italic-serif animate-fade-in-up" style={{
             fontSize: isMobile ? '18px' : '24px',
@@ -579,7 +599,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             marginBottom: '40px',
             animationDelay: '0.2s'
           }}>
-            Does your thoughtfulness get lost in the shuffle of forgettable gifts?
+            {t('guestPublic.heroDescription')}
           </p>
           <Button
             className="btn-gold animate-fade-in-up"
@@ -598,10 +618,11 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
               animationDelay: '0.3s'
             }}
             onClick={() => {
-              window.open('https://api.whatsapp.com/send?phone=601157288278&text=Name%3A%0AContact%3A%0ABudget%3A%0APreferred%20date%3A%0A/', '_blank')
+              recordWebsiteEvent('whatsapp_click')
+                        window.open(guestContactUrl(publicProfile), '_blank', 'noopener,noreferrer')
             }}
           >
-            Explore Your Exclusive Taste <ArrowRightOutlined />
+            {t('guestPublic.contact')} <ArrowRightOutlined />
           </Button>
         </div>
       </section>
@@ -725,7 +746,8 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                       className="btn-outline-gold"
                       style={{ height: '48px', width: '100%' }}
                       onClick={() => {
-                        window.open('https://api.whatsapp.com/send?phone=601157288278&text=Name%3A%0AContact%3A%0ABudget%3A%0APreferred%20date%3A%0A/', '_blank')
+                        recordWebsiteEvent('whatsapp_click')
+                        window.open(guestContactUrl(publicProfile), '_blank', 'noopener,noreferrer')
                       }}
                     >
                       Customize Your Key <ArrowRightOutlined />
@@ -738,66 +760,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
         </div>
       </section>
 
-      {/* Experience & Community (Salon) */}
-      <section id="trust" className="noise-overlay" style={{ position: 'relative', padding: isMobile ? '80px 24px' : '120px 0' }}>
-        <div style={{ maxWidth: '1200px', margin: '0 auto' }}>
-          <Row gutter={[48, 48]} align="middle">
-            <Col xs={24} lg={12}>
-              <div style={{ position: 'relative', height: isMobile ? '300px' : '500px', overflow: 'hidden' }}>
-                <img src="https://images.pexels.com/photos/25747045/pexels-photo-25747045.jpeg" alt="Salon" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                <div style={{ position: 'absolute', bottom: '24px', left: '24px', backgroundColor: 'rgba(0,0,0,0.8)', padding: '24px', border: '1px solid var(--gold)' }}>
-                  <p style={{ color: 'var(--gold)', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.2em', marginBottom: '8px' }}>Monthly Salon</p>
-                  <p style={{ fontSize: '24px', fontWeight: 700 }}>RM 150</p>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: '12px' }}>Includes food, drinks & cigars</p>
-                </div>
-              </div>
-            </Col>
-            <Col xs={24} lg={12}>
-              <p style={{ color: 'var(--gold)', fontSize: '12px', letterSpacing: '0.4em', textTransform: 'uppercase', marginBottom: '16px' }}>Experience & Community</p>
-              <h2 className="font-serif" style={{ fontSize: isMobile ? '32px' : '44px', marginBottom: '24px' }}>
-                Monthly Taste <span style={{ color: '#A0522D', fontStyle: 'italic' }}>Salon</span>
-              </h2>
-              <p style={{ color: 'var(--text-secondary)', fontSize: '16px', lineHeight: 1.8, marginBottom: '32px' }}>
-                Join our exclusive monthly gathering where a professional cigar sommelier guides you through the art of cigar appreciation. Network with fellow connoisseurs, share stories of success, and master the art of social connection — all in an atmosphere of refined elegance.
-              </p>
-              <Row gutter={[16, 16]} style={{ marginBottom: '40px' }}>
-                {['Premium Pairings', 'Curated Guests', 'Monthly Event'].map((f, i) => (
-                  <Col key={i} span={8}>
-                    <div style={{ backgroundColor: '#1A1A1A', border: '1px solid #2F2F2F', padding: '12px', textAlign: 'center' }}>
-                      <Text style={{ fontSize: '10px', color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{f}</Text>
-                    </div>
-                  </Col>
-                ))}
-              </Row>
-              <Button
-                className="btn-gold"
-                style={{ height: '60px', padding: '0 48px', fontSize: '16px', fontWeight: 700 }}
-                onClick={() => {
-                  setAuthMode('register')
-                  setAuthModalVisible(true)
-                }}
-              >
-                Join the Club Now
-              </Button>
-            </Col>
-          </Row>
-
-          <div style={{ marginTop: '100px', borderTop: '1px solid #2F2F2F', borderBottom: '1px solid #2F2F2F', padding: '64px 0' }}>
-            <Row gutter={[32, 32]}>
-              {[
-                { label: 'Salons Hosted', value: '150+' },
-                { label: 'Connections Made', value: '2,000+' },
-                { label: 'Return Rate', value: '95%' }
-              ].map((stat, i) => (
-                <Col key={i} span={8} style={{ textAlign: 'center' }}>
-                  <p className="gold-text font-serif" style={{ fontSize: isMobile ? '24px' : '48px', fontWeight: 700, marginBottom: '8px' }}>{stat.value}</p>
-                  <p style={{ color: '#52525B', fontSize: '12px', textTransform: 'uppercase', letterSpacing: '0.1em' }}>{stat.label}</p>
-                </Col>
-              ))}
-            </Row>
-          </div>
-        </div>
-      </section>
+      <GuestMembership config={publicProfile} onRegister={() => { setAuthMode('register'); setAuthModalVisible(true); }} />
 
       {/* Testimonials */}
       <section style={{ padding: isMobile ? '80px 24px' : '120px 0', backgroundColor: '#000' }}>
@@ -857,31 +820,32 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
                 <Col xs={12} sm={8}>
                   <h4 className="font-serif" style={{ fontSize: '18px', marginBottom: '24px' }}>Offerings</h4>
                   <Space direction="vertical">
-                    <a href="#" className="nav-link">Signature Box</a>
-                    <a href="#" className="nav-link">Discovery Set</a>
-                    <a href="#" className="nav-link">Her Series</a>
-                    <a href="#" className="nav-link">Accessories</a>
+                    <a href="#trust" className="nav-link">Signature Box</a>
+                    <a href="#trust" className="nav-link">Discovery Set</a>
+                    <a href="#trust" className="nav-link">Her Series</a>
+                    <a href="#trust" className="nav-link">Accessories</a>
                   </Space>
                 </Col>
                 <Col xs={12} sm={8}>
                   <h4 className="font-serif" style={{ fontSize: '18px', marginBottom: '24px' }}>Community</h4>
                   <Space direction="vertical">
-                    <a href="#" className="nav-link">Taste Salon</a>
-                    <a href="#" className="nav-link">Network</a>
-                    <a href="#" className="nav-link">Private Club</a>
-                    <a href="#" className="nav-link">Events</a>
+                    <a href="#trust" className="nav-link">Taste Salon</a>
+                    <a href="#trust" className="nav-link">Network</a>
+                    <a href="#trust" className="nav-link">Private Club</a>
+                    <a href="#trust" className="nav-link">Events</a>
                   </Space>
                 </Col>
                 <Col xs={24} sm={8}>
                   <h4 className="font-serif" style={{ fontSize: '18px', marginBottom: '24px' }}>Contact</h4>
                   <Space direction="vertical">
-                    <Text style={{ color: 'var(--text-secondary)', fontSize: '13px' }}><EnvironmentOutlined /> Kuala Lumpur, MY</Text>
-                    <Text style={{ color: 'var(--text-secondary)', fontSize: '13px' }}><CalendarOutlined /> Mon - Fri: 9am - 6pm</Text>
+                    <Text style={{ color: 'var(--text-secondary)', fontSize: '13px' }}><EnvironmentOutlined /> {publicProfile.address}</Text>
+                    <Text style={{ color: 'var(--text-secondary)', fontSize: '13px' }}><CalendarOutlined /> {t('guestPublic.visitHours', { hours: publicProfile.opensAt + '–' + publicProfile.closesAt })}</Text>
                     <Button
                       className="btn-gold"
                       style={{ height: '40px', width: '100%', marginTop: '16px' }}
                       onClick={() => {
-                        window.open('https://api.whatsapp.com/send?phone=601157288278&text=Name%3A%0AContact%3A%0ABudget%3A%0APreferred%20date%3A%0A/', '_blank')
+                        recordWebsiteEvent('whatsapp_click')
+                        window.open(guestContactUrl(publicProfile), '_blank', 'noopener,noreferrer')
                       }}
                     >
                       Contact Us
@@ -971,7 +935,7 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
             </Button>
 
             <a
-              href="https://api.whatsapp.com/send?phone=601157288278&text=Name%3A%0AContact%3A%0ABudget%3A%0APreferred%20date%3A%0A"
+              href={guestContactUrl(publicProfile)}
               target="_blank"
               rel="noopener noreferrer"
               style={{
@@ -1168,88 +1132,6 @@ const Landing: React.FC<LandingProps> = ({ loginOnly = false }) => {
         onClose={() => setResetPasswordVisible(false)}
         appConfig={appConfig}
       />
-
-      {/* Salon Special Offer Modal */}
-      <Modal
-        open={salonModalVisible}
-        onCancel={() => setSalonModalVisible(false)}
-        footer={null}
-        width={isMobile ? 'calc(100vw - 32px)' : 500}
-        centered
-        styles={{
-          mask: { backdropFilter: 'blur(12px)', background: 'rgba(0, 0, 0, 0.6)' },
-          content: {
-            padding: 0,
-            background: '#111',
-            borderRadius: isMobile ? '18px' : '24px',
-            overflow: 'hidden',
-            border: '1px solid rgba(197, 165, 90, 0.4)'
-          }
-        }}
-      >
-        <div style={{ position: 'relative' }}>
-          <div style={{ height: isMobile ? '180px' : '300px', overflow: 'hidden' }}>
-            <img
-              src="https://images.pexels.com/photos/25747045/pexels-photo-25747045.jpeg"
-              alt="Monthly Taste Salon"
-              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-            />
-            {/* Tag Overlay */}
-            <div style={{
-              position: 'absolute',
-              top: '20px',
-              left: '20px',
-              background: 'var(--gold)',
-              color: '#000',
-              padding: '6px 16px',
-              fontSize: '12px',
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-              borderRadius: '20px'
-            }}>
-              SPECIAL OFFER
-            </div>
-          </div>
-
-          <div style={{ padding: isMobile ? '24px 18px' : '40px 32px', textAlign: 'center' }}>
-            <p style={{ color: 'var(--gold)', fontSize: isMobile ? '12px' : '14px', letterSpacing: isMobile ? '0.22em' : '0.4em', textTransform: 'uppercase', marginBottom: '16px' }}>Exclusive Experience</p>
-            <h2 className="font-serif" style={{ fontSize: isMobile ? '28px' : '36px', marginBottom: '16px', color: '#FFF' }}>Monthly Taste <span className="gold-text">Salon</span></h2>
-            <p style={{ color: 'var(--text-secondary)', fontSize: isMobile ? '14px' : '16px', lineHeight: isMobile ? 1.6 : 1.8, marginBottom: isMobile ? '24px' : '32px' }}>
-              Join our monthly gathering of connoisseurs. Indulge in premium cigars, curated food, and spirits for only <span style={{ color: '#FFF', fontWeight: 600 }}>RM 150</span>.
-            </p>
-
-            <Button
-              className="btn-gold"
-              style={{
-                minHeight: '50px',
-                height: 'auto',
-                width: '100%',
-                padding: isMobile ? '12px 14px' : '0 18px',
-                fontSize: isMobile ? '14px' : '16px',
-                fontWeight: 600,
-                letterSpacing: isMobile ? '0.05em' : '0.1em',
-                lineHeight: 1.25,
-                whiteSpace: 'normal'
-              }}
-              onClick={() => {
-                window.open('https://api.whatsapp.com/send?phone=601157288278&text=I%20am%20interested%20in%20joining%20the%20Monthly%20Taste%20Salon!/', '_blank');
-                setSalonModalVisible(false);
-              }}
-            >
-              BOOK YOUR SEAT NOW
-            </Button>
-
-            <button
-              type="button"
-              className="nav-link"
-              style={{ marginTop: '20px', display: 'inline-block', fontSize: '14px', opacity: 0.6, border: 0, background: 'transparent', cursor: 'pointer' }}
-              onClick={() => setSalonModalVisible(false)}
-            >
-              Maybe later
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       <style>{`
         .auth-input {

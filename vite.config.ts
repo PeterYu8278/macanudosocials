@@ -135,6 +135,11 @@ export default defineConfig({
     port: parseInt(process.env.PORT || '3000'),
     open: true,
     proxy: {
+      '/api/website-traffic': {
+        target: 'http://localhost:8888',
+        changeOrigin: true,
+        rewrite: path => path.replace('/api/website-traffic', '/.netlify/functions/website-traffic'),
+      },
       '/.netlify/functions': {
         target: 'http://localhost:8888',
         changeOrigin: true,

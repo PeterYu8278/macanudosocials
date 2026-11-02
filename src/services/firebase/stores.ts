@@ -14,8 +14,9 @@ import {
 import { db } from '../../config/firebase';
 import type { Store } from '../../types';
 import { convertFirestoreTimestamps } from './auth';
+import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 
-const STORES_COLLECTION = 'stores';
+const STORES_COLLECTION = GLOBAL_COLLECTIONS.STORES;
 
 const DEFAULT_STORE_ID = 'default';
 
@@ -39,14 +40,14 @@ const ensureDefaultStore = async () => {
 /**
  * 获取所有门店
  */
-export const getAllStores = async () => {
+export const getAllStores = async (options: { ensureDefault?: boolean } = {}) => {
   try {
-    await ensureDefaultStore();
+    if (options.ensureDefault !== false) await ensureDefaultStore();
     const q = query(collection(db, STORES_COLLECTION));
     const querySnapshot = await getDocs(q);
     const stores = querySnapshot.docs.map(doc => ({
+      ...convertFirestoreTimestamps(doc.data()),
       id: doc.id,
-      ...convertFirestoreTimestamps(doc.data())
     })) as Store[];
     // HQ (id: 'default') first, then by createdAt desc
     return stores.sort((a, b) => {

@@ -1,13 +1,21 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Input, Select, Segmented, Space, Statistic, Table, Typography } from 'antd';
+import { Alert, Button, Input, Select, Segmented, Space, Statistic, Table, Tabs, Typography } from 'antd';
 import { ReloadOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { getAuth } from 'firebase/auth';
 import type { MetricRow } from '@/services/firebase/monitoringQueue';
 import MonitoringChart from './MonitoringChart';
+import WebsiteTraffic from './WebsiteTraffic';
 
 type Row = MetricRow & { id: string; date: string; hour?: string; source: 'frontend' | 'backend' };
 export default function SystemMonitoring() {
+  const { t } = useTranslation();
+  return <Tabs destroyOnHidden items={[
+    { key: 'traffic', label: t('websiteTraffic.title'), children: <WebsiteTraffic /> },
+    { key: 'database', label: t('websiteTraffic.database'), children: <FirestoreMonitoring /> },
+  ]} />;
+}
+function FirestoreMonitoring() {
   const { t } = useTranslation();
   const [days, setDays] = useState(1);
   const [granularity, setGranularity] = useState<'day' | 'hour'>('day');

@@ -62,6 +62,7 @@ const CONFIG_CACHE_TTL_MS = 30_000;
 
 let appConfigRequest: Promise<AppConfig | null> | null = null;
 let appConfigMemoryCache: { value: AppConfig; expiresAt: number } | null = null;
+export function invalidateAppConfigCache() { appConfigMemoryCache = null; appConfigRequest = null; }
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> =>
   new Promise<T>((resolve, reject) => {
@@ -158,6 +159,7 @@ const fetchAppConfig = async (): Promise<AppConfig | null> => {
 
     return {
       id: docSnap.id,
+      guestPage: data.guestPage,
       logoUrl: data.logoUrl || undefined,
       appName: data.appName || undefined,
       hideFooter: data.hideFooter ?? true,
@@ -286,6 +288,7 @@ const fetchAppConfig = async (): Promise<AppConfig | null> => {
               bankAccountNo: data.invoice.bankAccountNo || undefined,
               notes: Array.isArray(data.invoice.notes) ? data.invoice.notes : undefined,
             } : undefined,
+            guestPage: data.guestPage,
             invoiceTemplate: data.invoiceTemplate ?? undefined,
             whapi: whapiConfig,
             whapiTemplates,

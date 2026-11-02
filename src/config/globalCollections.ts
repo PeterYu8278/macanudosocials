@@ -4,6 +4,10 @@
  */
 
 export const GLOBAL_COLLECTIONS = {
+  WEBSITE_EVENTS: '_websiteEvents',
+  WEBSITE_HOURS: '_websiteHours',
+  WEBSITE_ATTRIBUTION: '_websiteAttribution',
+  WEBSITE_JOBS: '_websiteJobs',
   MIGRATION_BATCHES: 'migrationBatches',
   MEMBERSHIP_PAYMENTS: '_membershipPayments',
   MEMBERSHIP_PAYMENT_STATUSES: '_membershipPaymentStatuses',

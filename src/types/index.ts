@@ -490,6 +490,7 @@ export interface FeatureVisibilityConfig {
 
 // 应用配置类型
 export interface AppConfig {
+  guestPage?: import('../config/guestPage').GuestPageConfig;
   id: string; // 'default'
   logoUrl?: string;        // Logo URL
   appName?: string;        // 应用名称（例如：Cigar Club）

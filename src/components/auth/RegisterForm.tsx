@@ -3,6 +3,7 @@ import { GiftOutlined, LockOutlined, MailOutlined, UserOutlined } from '@ant-des
 import { useTranslation } from 'react-i18next'
 import { isValidEmail, normalizePhoneNumber } from '../../utils/phoneNormalization'
 import { getUserByMemberId } from '../../utils/memberId'
+import { recordWebsiteEvent } from '../../services/websiteTraffic'
 
 type RegisterFormProps = {
   form: ReturnType<typeof Form.useForm>[0]
@@ -26,6 +27,7 @@ export default function RegisterForm({ form, loading = false, onFinish, onSwitch
   return <>
     <Form
       className="auth-form"
+      onFocusCapture={() => recordWebsiteEvent('registration_start')}
       form={form}
       name="register"
       onFinish={onFinish}

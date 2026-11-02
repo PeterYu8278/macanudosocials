@@ -7,6 +7,7 @@ import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './_shared/memberIdentity'
 import { assertUniqueMemberIdentity, lockMemberIdentity } from './_shared/memberIdentityLock'
+import { trafficContext } from '../../src/utils/websiteTraffic'
 
 const reply = (statusCode: number, code: string) => ({ statusCode,
   headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }, body: JSON.stringify({ success: statusCode === 200, code }) })
@@ -24,7 +25,7 @@ async function readinessRead<T>(work: () => Promise<T>): Promise<T> {
 export const eventHandler: Handler = async event => {
   if (event.httpMethod !== 'POST') return reply(405, 'method-not-allowed')
   if (!event.body || event.body.length > 4096) return reply(400, 'invalid-request')
-  let input: { email?: unknown; password?: unknown; displayName?: unknown; phone?: unknown; referralCode?: unknown }
+  let input: { email?: unknown; password?: unknown; displayName?: unknown; phone?: unknown; referralCode?: unknown; trafficAttribution?: unknown }
   try { input = JSON.parse(event.body) } catch { return reply(400, 'invalid-request') }
   const email = typeof input?.email === 'string' ? input.email.trim().toLowerCase() : ''
   const name = typeof input?.displayName === 'string' ? input.displayName.trim() : ''
@@ -109,6 +110,10 @@ export const eventHandler: Handler = async event => {
       if (referrer) transaction.update(referrer.ref, { 'referral.referrals': FieldValue.arrayUnion({ userId: account.uid, userName: name, memberId }),
         'referral.totalReferred': FieldValue.increment(1), updatedAt: now })
       transaction.create(registrationDb.collection(GLOBAL_COLLECTIONS.AUDIT_LOGS).doc(), { action: 'register-member', userId: account.uid, createdAt: now })
+      const attribution = trafficContext(input.trafficAttribution)
+      if (attribution) transaction.create(registrationDb.collection(GLOBAL_COLLECTIONS.WEBSITE_ATTRIBUTION).doc(account.uid), {
+        ...attribution, expiresAt: Timestamp.fromMillis(Date.now() + 31 * 86400000),
+      })
     }))
     return reply(200, 'member-created')
   } catch (error) {

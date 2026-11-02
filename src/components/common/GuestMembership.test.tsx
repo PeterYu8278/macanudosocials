@@ -1,0 +1,20 @@
+import { afterEach, expect, it, vi } from 'vitest';
+import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import i18next from 'i18next';
+import { I18nextProvider } from 'react-i18next';
+import english from '../../i18n/locales/en-US.json';
+import { DEFAULT_GUEST_PAGE } from '../../config/guestPage';
+import GuestMembership from './GuestMembership';
+afterEach(() => { cleanup(); vi.useRealTimers(); });
+it('shows yearly credit and initial-only free visit, with a working registration CTA', async () => {
+  vi.useFakeTimers(); vi.setSystemTime(new Date('2026-11-02T12:00:00+08:00'));
+  const i = i18next.createInstance(); await i.init({ lng: 'en-US', resources: { 'en-US': { translation: english } } });
+  const register = vi.fn();
+  render(<I18nextProvider i18n={i}><GuestMembership config={DEFAULT_GUEST_PAGE} onRegister={register} /></I18nextProvider>);
+  expect(screen.getByText('RM 299.00 / year')).toBeTruthy();
+  expect(screen.getByText(/first activation and every annual renewal/)).toBeTruthy();
+  expect(screen.getByText(/not repeated on renewal/)).toBeTruthy();
+  expect(screen.getByText(/25 complimentary cigars/)).toBeTruthy();
+  expect(screen.getByText(/11:00–23:00/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Register your interest' })); expect(register).toHaveBeenCalledOnce();
+});

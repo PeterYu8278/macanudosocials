@@ -2,6 +2,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth'
 import { auth } from '../../config/firebase'
 import i18n from '../../i18n'
 import { normalizePhoneNumber } from '../../utils/phoneNormalization'
+import { getWebsiteAttribution } from '../websiteTraffic'
 
 export async function registerUser(email: string, password: string, displayName: string, phone: string, referralCode?: string) {
   const normalizedPhone = normalizePhoneNumber(phone)
@@ -13,7 +14,7 @@ export async function registerUser(email: string, password: string, displayName:
   try {
     const response = await fetch('/.netlify/functions/register-member', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: normalizedEmail, password, displayName, phone: normalizedPhone, referralCode }),
+      body: JSON.stringify({ email: normalizedEmail, password, displayName, phone: normalizedPhone, referralCode, trafficAttribution: getWebsiteAttribution() }),
       signal: AbortSignal.timeout(30000),
     })
     const result = await response.json() as { success?: boolean; code?: string }
