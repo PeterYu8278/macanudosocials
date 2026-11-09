@@ -1,5 +1,5 @@
 // 订单管理页面
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import dayjs from 'dayjs'
 import { Table, Space, Input, Select, DatePicker, App, Modal, Tabs, Button, Drawer } from 'antd'
 import { SearchOutlined, CheckOutlined, ClockCircleOutlined, PlusOutlined, CloseOutlined } from '@ant-design/icons'
@@ -16,7 +16,6 @@ import { collection, query as firestoreQuery, where, getDocs, limit as firestore
 import { getOrdersPaginated } from '../../../services/firebase/paginatedQueries'
 import { usePaginatedData } from '../../../hooks/usePaginatedData'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
-import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll'
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer'
 import { useTranslation } from 'react-i18next'
 import { filterOrders, sortOrders, getStatusColor, getStatusText, getUserName, getUserPhone } from './helpers'
@@ -30,7 +29,19 @@ const { Search } = Input
 const { Option } = Select
 
 const AdminOrders: React.FC = () => {
-  const tableScroll = useVirtualTableScroll(1096, 390)
+  const tableWrapperRef = useRef<HTMLDivElement>(null)
+  const [tableScrollY, setTableScrollY] = useState(400)
+  useEffect(() => {
+    const el = tableWrapperRef.current
+    if (!el) return
+    const obs = new ResizeObserver(() => {
+      // container height minus table header (39) minus pagination (56) minus bottom padding (16)
+      setTableScrollY(Math.max(160, el.clientHeight - 111))
+    })
+    obs.observe(el)
+    return () => obs.disconnect()
+  }, [])
+  const tableScroll = { x: 1096, y: tableScrollY }
   const { t, i18n } = useTranslation()
   const { message } = App.useApp()
   const { isSuperAdmin, user: authUser } = useAuthStore()
@@ -340,10 +351,10 @@ const AdminOrders: React.FC = () => {
   return (
     <div
       style={{
-        height: isMobile ? '90vh' : 'calc(100vh - 100px)',
+        height: isMobile ? '90vh' : 'calc(100vh - 24px)',
         display: 'flex',
         flexDirection: 'column',
-        overflow: 'hidden'
+        overflow: 'hidden',
       }}
     >
       <style>{`
@@ -624,17 +635,8 @@ const AdminOrders: React.FC = () => {
                   })()}
                 </div>
 
-                {/* 列表滚动容器开始：仅列表滚动 */}
-                <div
-                  style={{
-                    flex: 1,
-                    overflowY: 'auto',
-                    overflowX: 'hidden',
-                    paddingBottom: 16
-                  }}
-                >
                   {!isMobile ? (
-                    <div className="points-config-form">
+                    <div ref={tableWrapperRef} className="points-config-form" style={{ flex: 1, overflow: 'hidden' }}>
                       {loading || paginatedLoading ? (
                         <OrderSkeleton isMobile={false} />
                       ) : (
@@ -669,7 +671,7 @@ const AdminOrders: React.FC = () => {
                       )}
                     </div>
                   ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                    <div style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', paddingBottom: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
                       {loading || paginatedLoading ? (
                         <OrderSkeleton isMobile={true} />
                       ) : (
@@ -773,7 +775,6 @@ const AdminOrders: React.FC = () => {
                       )}
                     </div>
                   )}
-                </div>
               </div>
             )
           },
