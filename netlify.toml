@@ -15,6 +15,7 @@
 # Functions 配置
 [functions]
   directory = "netlify/functions"
+  node_bundler = "esbuild"
 
 # IndexNow key file served via function so it is never caught by the SPA rewrite
 [[redirects]]
