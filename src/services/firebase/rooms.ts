@@ -11,7 +11,7 @@ import {
   orderBy,
   Timestamp,
   runTransaction
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { convertFirestoreTimestamps } from './auth';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
@@ -24,6 +24,7 @@ export interface Room {
   id?: string;
   storeId: string;
   name: string;
+  imageUrl?: string | null;
   status: 'active' | 'inactive';
   timeslots: string[]; // e.g. ["09:00 - 12:00", "12:00 - 15:00"]
   bookingStart?: string; // e.g. "10:00"

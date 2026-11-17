@@ -1,6 +1,46 @@
 {
   "indexes": [
     {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "checkInAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "userId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }, { "fieldPath": "checkInAt", "order": "DESCENDING" }]
+    },
+    {
+      "collectionGroup": "redemptionRecords", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "adminStatuses", "arrayConfig": "CONTAINS" }]
+    },
+    {
+      "collectionGroup": "_dashboardVisitStatsSources", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "end", "order": "ASCENDING" }, { "fieldPath": "start", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "status", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "visitSessions", "queryScope": "COLLECTION",
+      "fields": [{ "fieldPath": "storeId", "order": "ASCENDING" }, { "fieldPath": "inventorySettlementStatus", "order": "ASCENDING" }]
+    },
+    {
+      "collectionGroup": "_membershipPaymentStatuses",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "reloadRecords",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "membershipFeeRecords",
       "queryScope": "COLLECTION",
       "fields": [
@@ -209,6 +249,15 @@
     }
   ],
   "fieldOverrides": [
+    {"collectionGroup": "_websiteHours", "fieldPath": "campaigns", "indexes": []},
+    {"collectionGroup": "_websiteEvents", "fieldPath": "expiresAt", "ttl": true, "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "expiresAt", "ttl": true, "indexes": []},
+    {"collectionGroup": "_websiteAttribution", "fieldPath": "expiresAt", "ttl": true, "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "visitors", "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "sessions", "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "pages", "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "sources", "indexes": []},
+    {"collectionGroup": "_websiteHours", "fieldPath": "counts", "indexes": []},
     {
       "collectionGroup": "cigar_database",
       "fieldPath": "searchKeywords",

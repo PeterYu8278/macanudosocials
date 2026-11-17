@@ -1,7 +1,7 @@
 // 首页组件 - Cigar Club黑金主题
 import React, { useEffect, useState } from 'react'
 import { useFirestoreQuery } from '../../../hooks/useFirestoreQuery'
-import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, App, Alert } from 'antd'
+import { Row, Col, Card, Typography, Button, Space, Statistic, Badge, Spin, Empty, App } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
@@ -40,6 +40,7 @@ import { hasPermission } from '../../../config/permissions'
 import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
 import { requestPushSubscription, syncPushSubscriptionToFirestore } from '../../../services/oneSignal'
 import { usePWA } from '../../../utils/pwa'
+import SystemUpdateBanner from '../../../components/common/SystemUpdateBanner'
 import './home.css'
 
 const usePrefersReducedMotion = () => {
@@ -433,45 +434,21 @@ const Home: React.FC = () => {
           transform: scale(1.2);
         }
       `}</style>
-      {showPWAInstallPrompt && (
-        <Alert
-          className="home-device-prompt home-install-prompt"
-          type="info"
-          showIcon
-          icon={<DownloadOutlined />}
-          message={t('home.installPrompt.title')}
-          description={t('home.installPrompt.description')}
-          action={(
-            <Button size="small" type="primary" icon={<DownloadOutlined />} onClick={handleInstallPWA}>
-              {t('home.installPrompt.install')}
-            </Button>
-          )}
-        />
-      )}
-      {showPushPrompt && (
-        <Alert
-          className="home-device-prompt home-push-prompt"
-          type={pushStatus === 'denied' ? 'warning' : 'info'}
-          showIcon
-          message={t('home.pushPrompt.title')}
-          description={pushStatus === 'denied'
-            ? t('home.pushPrompt.deniedDescription')
-            : t('home.pushPrompt.description')}
-          action={(
-            <Button
-              size="small"
-              type="primary"
-              icon={pushStatus === 'denied' ? <SettingOutlined /> : <BellOutlined />}
-              loading={pushBusy}
-              onClick={handleEnablePush}
-            >
-              {pushStatus === 'denied'
-                ? t('home.pushPrompt.settings')
-                : t('home.pushPrompt.enable')}
-            </Button>
-          )}
-        />
-      )}
+      <SystemUpdateBanner prompts={[
+        ...(showPWAInstallPrompt ? [{
+          id: 'install', title: t('home.installPrompt.title'), description: t('home.installPrompt.description'),
+          icon: <DownloadOutlined />,
+          action: <Button size="small" type="primary" icon={<DownloadOutlined />} onClick={handleInstallPWA}>{t('home.installPrompt.install')}</Button>,
+        }] : []),
+        ...(showPushPrompt ? [{
+          id: 'push', title: t('home.pushPrompt.title'), warning: pushStatus === 'denied',
+          description: t(pushStatus === 'denied' ? 'home.pushPrompt.deniedDescription' : 'home.pushPrompt.description'),
+          icon: pushStatus === 'denied' ? <SettingOutlined /> : <BellOutlined />,
+          action: <Button size="small" type="primary" icon={pushStatus === 'denied' ? <SettingOutlined /> : <BellOutlined />} loading={pushBusy} onClick={handleEnablePush}>
+            {t(pushStatus === 'denied' ? 'home.pushPrompt.settings' : 'home.pushPrompt.enable')}
+          </Button>,
+        }] : []),
+      ]} />
       {/* 顶部标题栏 */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
       </div>

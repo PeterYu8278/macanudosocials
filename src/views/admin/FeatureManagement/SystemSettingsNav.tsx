@@ -1,12 +1,12 @@
 import { Select } from 'antd';
-import { BgColorsOutlined, SafetyOutlined, MessageOutlined, CreditCardOutlined, ExperimentOutlined, CloudServerOutlined } from '@ant-design/icons';
+import { BgColorsOutlined, SafetyOutlined, MessageOutlined, CreditCardOutlined, ExperimentOutlined, CloudServerOutlined, LineChartOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { SETTINGS_SECTIONS, type SettingsSection } from './settingsNavigation';
 import './settings.css';
 
 const icons = {
   appearance: <BgColorsOutlined />, login: <SafetyOutlined />, communication: <MessageOutlined />,
-  payment: <CreditCardOutlined />, ai: <ExperimentOutlined />, environment: <CloudServerOutlined />,
+  payment: <CreditCardOutlined />, ai: <ExperimentOutlined />, environment: <CloudServerOutlined />, monitoring: <LineChartOutlined />,
 };
 
 export default function SystemSettingsNav({ section, onChange }: {

@@ -1,55 +1,74 @@
 // 用户充值页面
 import React, { useState } from 'react';
-import { Card, Button, Typography, Space, Spin, Tag, App } from 'antd';
+import { Card, Button, Typography, Space, Spin, Tag, App, Alert } from 'antd';
 import { WalletOutlined, ReloadOutlined, ClockCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
-import { createReloadRecord, getUserReloadRecords, getUserPendingReloadRecord, cancelReloadRecord } from '../../../services/firebase/reload';
+import { createReloadRecord, cancelReloadRecord } from '../../../services/firebase/reload';
 import { getAppConfig } from '../../../services/firebase/appConfig';
-import { createBill } from '../../../services/billplz';
+import { getBillStatus } from '../../../services/billplz';
 import { useNavigate } from 'react-router-dom';
 import type { ReloadRecord, AppConfig } from '../../../types';
 import dayjs from 'dayjs';
 import { useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { useTranslation } from 'react-i18next';
 import StoreSelect from '../../../components/common/StoreSelect';
-import { MINIMUM_RELOAD_AMOUNT_RM } from '../../../utils/visitCheckout';
+import { MINIMUM_WALLET_RELOAD_RM as MINIMUM_RELOAD_AMOUNT_RM, WALLET_RELOAD_OPTIONS } from '../../../utils/reloadAmount';
+import { usePendingPayments } from '../../../hooks/usePendingPayments';
+import { getMembershipPaymentStatus, getMembershipPaymentQuote, createMembershipPayment } from '../../../services/membershipActivation';
+import { toDateOrNull } from '../../../services/firebase/core/sanitize';
+import { getUserData } from '../../../services/firebase/auth';
+import { netReloadPoints } from '../../../utils/reloadPoints';
 
 const { Title, Text } = Typography;
 
 const ReloadPage: React.FC = () => {
   const { t } = useTranslation();
-  const { user } = useAuthStore();
+  const { user, setUser } = useAuthStore();
   const navigate = useNavigate();
   const { modal, message } = App.useApp(); // 使用 App.useApp() 获取 modal 实例以支持 React 19
   const [loading, setLoading] = useState(false);
   const [selectedAmount, setSelectedAmount] = useState<number | null>(null);
   const [selectedStoreId, setSelectedStoreId] = useState<string>('');
 
-  const amountOptions = [MINIMUM_RELOAD_AMOUNT_RM, 500, 1000];
+  const amountOptions = WALLET_RELOAD_OPTIONS;
 
   // 支付配置
   const { data: appConfig } = useFirestoreDoc(getAppConfig);
   const paymentConfig = appConfig?.payment ?? null;
 
-  // 检查是否有未验证的充值记录
-  const { data: pendingRecord, loading: checkingPending, refresh: refreshPendingRecord } = useFirestoreDoc(
-    async () => {
-      if (!user?.id) return null;
-      try {
-        return await getUserPendingReloadRecord(user.id);
-      } catch (error) {
-        console.error('[ReloadPage] 检查充值记录失败:', error);
-        try {
-          const records = await getUserReloadRecords(user.id, 10);
-          return records.find(r => r.status === 'pending') ?? null;
-        } catch (fallbackError) {
-          console.error('[ReloadPage] 备用查询也失败:', fallbackError);
-          return null;
+  const pendingPayments = usePendingPayments(user?.id);
+  const checkingPending = pendingPayments.loading;
+  const refreshPendingRecord = pendingPayments.retry;
+  const pendingData = pendingPayments.reloads.find(record => record.id === pendingPayments.request?.recordId);
+  const pendingRecord = pendingData ? { ...pendingData,
+    createdAt: toDateOrNull(pendingData.createdAt) || new Date(),
+  } as ReloadRecord : null;
+
+  const handleContinuePayment = async () => {
+    if (loading || !pendingPayments.request || !user) return;
+    setLoading(true);
+    try {
+      const request = pendingPayments.request;
+      if (request.kind === 'online_membership' && request.orderId) {
+        const result = await getMembershipPaymentStatus(request.orderId);
+        if (['fulfilled', 'credited'].includes(result.status)) {
+          const freshUser = await getUserData(user.id);
+          if (freshUser) setUser(freshUser);
+          refreshPendingRecord();
+          return;
         }
+        if (result.status !== 'pending' || !result.paymentUrl) throw new Error('PAYMENT_NOT_READY');
+        window.location.assign(result.paymentUrl);
+      } else if (pendingRecord?.billplzId) {
+        const result = await getBillStatus(pendingRecord.billplzId);
+        if (!result.success || !result.data?.url || result.data.paid) throw new Error('PAYMENT_NOT_READY');
+        window.location.assign(result.data.url);
       }
-    },
-    [user?.id]
-  );
+    } catch {
+      message.error(t('annualPassPayment.unavailable'));
+      refreshPendingRecord();
+    } finally { setLoading(false); }
+  };
 
   const handleReload = async (amount: number) => {
     if (!user?.id) {
@@ -64,7 +83,7 @@ const ReloadPage: React.FC = () => {
     }
 
     // 如果有未验证的充值记录，不允许再次提交
-    if (pendingRecord) {
+    if (pendingPayments.request || pendingPayments.loading || pendingPayments.error) {
       message.warning(t('reload.pendingReloadExists'));
       return;
     }
@@ -77,35 +96,20 @@ const ReloadPage: React.FC = () => {
     setLoading(true);
     try {
       // 检查是否开启了 Billplz 支付
+      const quote = await getMembershipPaymentQuote();
+      if (!quote.renewal) {
+        modal.warning({ title: t('annualPassPayment.initialPackageLabel'),
+          content: t('annualPassPayment.initialMembershipRequired'),
+          onOk: () => navigate('/') });
+        return;
+      }
       if (paymentConfig?.billplz?.enabled) {
-        const billResponse = await createBill(
-          amount,
-          `Reload ${amount} RM for ${user.displayName || 'Member'}`,
-          user.displayName || 'Member',
-          user.email || '',
-          user.phone || ''
-        );
-
-        if (billResponse.success && billResponse.data?.url) {
-          // 先创建一个 pending 记录，备注 Billplz ID
-          await createReloadRecord(
-            user.id, 
-            amount, 
-            user.displayName, 
-            selectedStoreId, 
-            billResponse.data.id
-          );
-          
-          message.loading(t('common.redirectingToPayment'), 2);
-          setTimeout(() => {
-            window.location.href = billResponse.data!.url;
-          }, 1000);
-          return;
-        } else {
-          message.error(billResponse.error || t('common.paymentInitFailed'));
-          setLoading(false);
-          return;
-        }
+        // The server rechecks annual history and reserves the payment atomically.
+        const payment = await createMembershipPayment(amount, selectedStoreId);
+        refreshPendingRecord();
+        if (payment.paymentUrl) window.location.assign(payment.paymentUrl);
+        else message.success(t('reload.reloadRequestSubmitted', { amount }));
+        return;
       }
 
       // 传统模式：提交请求等待管理员验证
@@ -238,7 +242,20 @@ const ReloadPage: React.FC = () => {
           </div>
 
           {/* 如果有待验证的充值记录，显示记录信息 */}
-          {pendingRecord ? (
+          {pendingPayments.error ? (
+            <Alert type="error" message={t('annualPassPayment.requestCheckFailed')}
+              action={<Button icon={<ReloadOutlined />} onClick={pendingPayments.retry}>{t('annualPassPayment.retryStatus')}</Button>} />
+          ) : pendingPayments.request?.kind === 'online_membership' || (pendingPayments.request && !pendingRecord) ? (
+            <Space direction="vertical" style={{ width: '100%' }}>
+              <Text>{t(pendingPayments.request.kind === 'manual_membership' ? 'annualPassPayment.manualPending' : 'annualPassPayment.pendingDescription')}</Text>
+              <Text>{t('annualPassPayment.pendingAmount', { amount: pendingPayments.request.total?.toFixed(2) })}</Text>
+              {pendingPayments.request.kind === 'online_membership' && <Button type="primary" loading={loading}
+                disabled={pendingPayments.request.status === 'creating'} onClick={handleContinuePayment}>
+                {t(pendingPayments.request.status === 'creating' ? 'annualPassPayment.creating' : 'annualPassPayment.continuePayment')}
+              </Button>}
+              <Button icon={<ReloadOutlined />} onClick={pendingPayments.retry}>{t('annualPassPayment.retryStatus')}</Button>
+            </Space>
+          ) : pendingRecord ? (
             <div style={{
               background: 'rgba(255, 215, 0, 0.1)',
               border: '1px solid rgba(255, 215, 0, 0.3)',
@@ -265,14 +282,17 @@ const ReloadPage: React.FC = () => {
                 </Text>
                 <Text style={{ color: '#c0c0c0', fontSize: 14, display: 'block', marginBottom: 8 }}>
                   {t('reload.estimatedPoints')} <Text strong style={{ color: '#FFD700' }}>
-                    {pendingRecord.pointsEquivalent} {t('visitTimer.points')}
+                    {netReloadPoints(pendingRecord)} {t('visitTimer.points')}
                   </Text>
                 </Text>
                 <Text style={{ color: '#999999', fontSize: 12, display: 'block' }}>
                   {t('reload.submittedAt')} {dayjs(pendingRecord.createdAt).format('YYYY-MM-DD HH:mm:ss')}
                 </Text>
               </div>
-              <Tag color="orange" style={{ 
+              {pendingRecord.membershipOrderId && <Text style={{ display: 'block', marginBottom: 12 }}>
+                {t('annualPassPayment.reviewBreakdown', { reload: pendingRecord.walletAmount, fee: pendingRecord.annualFeeAmount })}
+              </Text>}
+              <Tag color="orange" style={{
                 fontSize: 14,
                 padding: '4px 12px',
                 borderRadius: 4,
@@ -281,6 +301,9 @@ const ReloadPage: React.FC = () => {
               }}>
                 {t('reload.waitingAdminVerification')}
               </Tag>
+              {pendingRecord.billplzId && <Button type="primary" loading={loading} onClick={handleContinuePayment}>
+                {t('annualPassPayment.continuePayment')}
+              </Button>}
               <div style={{ marginTop: 20 }}>
                 <Button
                   type="default"
@@ -288,6 +311,7 @@ const ReloadPage: React.FC = () => {
                   size="large"
                   icon={<CloseCircleOutlined />}
                   onClick={handleCancelReload}
+                  disabled={Boolean(pendingRecord.billplzId)}
                   loading={loading}
                   style={{
                     height: 40,

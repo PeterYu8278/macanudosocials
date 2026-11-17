@@ -1,6 +1,6 @@
 import { toWebFunction } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore } from './_shared/firestoreMonitoring'
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections'
 import { settlePendingVisitCheckout } from './_shared/pendingVisitCheckout'
 

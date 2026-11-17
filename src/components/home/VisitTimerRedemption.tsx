@@ -1,12 +1,12 @@
 // 合并后的驻店计时器和兑换模块组件
 import React, { useState, useEffect } from 'react';
-import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col } from 'antd';
-import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined } from '@ant-design/icons';
+import { Card, Typography, Space, Image, App, Modal, List, Tag, Row, Col, Select, Alert, Button, Spin } from 'antd';
+import { ClockCircleOutlined, GiftOutlined, PictureOutlined, ShoppingCartOutlined, ReloadOutlined, WalletOutlined, LoadingOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../store/modules/auth';
 import { getPendingVisitSession, processSessionRealtimeDeduction, subscribeToVisitSession } from '../../services/firebase/visitSessions';
 import { getUserRedemptionLimits, canUserRedeem, getDailyRedemptions, getTotalRedemptions, getHourlyRedemptions, getRedemptionConfig, createRedemptionRecord, subscribeToRedemptionRecordsBySession } from '../../services/firebase/redemption';
 import { getUserMembershipPeriod } from '../../services/firebase/membershipFee';
-import { activateMembership } from '../../services/membershipActivation';
+import { activateMembership, createMembershipPayment, getMembershipPaymentQuote, type MembershipPaymentQuote } from '../../services/membershipActivation';
 import { getUserData } from '../../services/firebase/auth';
 import StoreSelect from '../common/StoreSelect';
 import { useNavigate } from 'react-router-dom';
@@ -15,10 +15,13 @@ import { getAppConfig } from '../../services/firebase/appConfig';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { getRedemptionCooldownSeconds } from '../../utils/redemptionCooldown';
-import { shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
+import { getMembershipEntryAction } from '../../utils/membershipEntry';
+import { usePendingPayments } from '../../hooks/usePendingPayments';
+import { isCurrentVisitCheckedIn, shouldRedirectToCheckoutReload, shouldShowCheckoutReload } from '../../utils/visitCheckout';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
+import { subscribeToRedemptionStats, type RedemptionStatsState } from '../../services/firebase/redemptionStats';
 
 const { Title, Text } = Typography;
 
@@ -28,6 +31,7 @@ interface VisitTimerRedemptionProps {
 
 export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ style }) => {
   const { user, setUser } = useAuthStore();
+  const pendingPayments = usePendingPayments(user?.id);
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { modal, message } = App.useApp();
@@ -37,8 +41,18 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [loading, setLoading] = useState(false);
   const [limits, setLimits] = useState({ dailyLimit: 3, totalLimit: 25, hourlyLimit: undefined as number | undefined });
   const [dailyCount, setDailyCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
+  const [redemptionStats, setRedemptionStats] = useState<RedemptionStatsState>({
+    userId: '', status: 'loading', completedQuantity: 0, pendingQuantity: 0,
+  });
+  const totalCount = redemptionStats.userId === user?.id && redemptionStats.status === 'ready'
+    ? redemptionStats.completedQuantity + redemptionStats.pendingQuantity : null;
+  useEffect(() => {
+    if (!user?.id) return;
+    setRedemptionStats({ userId: user.id, status: 'loading', completedQuantity: 0, pendingQuantity: 0 });
+    return subscribeToRedemptionStats(user.id, setRedemptionStats);
+  }, [user?.id]);
   const [hourlyCount, setHourlyCount] = useState(0);
+  const [redemptionStatus, setRedemptionStatus] = useState({ userId: '', loading: true, error: false });
 
   const [cutoffTime, setCutoffTime] = useState('23:00');
   const [totalHours, setTotalHours] = useState(0);
@@ -51,6 +65,60 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   const [historyModalVisible, setHistoryModalVisible] = useState(false);
   const [membershipModalVisible, setMembershipModalVisible] = useState(false);
   const [selectedAccess, setSelectedAccess] = useState<'membership' | 'daypass' | null>(null);
+  const [membershipQuote, setMembershipQuote] = useState<MembershipPaymentQuote | null>(null);
+  const [membershipQuoteError, setMembershipQuoteError] = useState(false);
+  const [membershipReload, setMembershipReload] = useState(100);
+  const [membershipRetry, setMembershipRetry] = useState(0);
+  useEffect(() => {
+    if (user?.status === 'active') {
+      setMembershipModalVisible(false);
+      setSelectedAccess(null);
+    }
+  }, [user?.status]);
+  useEffect(() => {
+    if (!user?.id || !membershipModalVisible) return;
+    let cancelled = false;
+    setMembershipQuote(null);
+    setMembershipQuoteError(false);
+    getMembershipPaymentQuote().then(async quote => {
+      if (!cancelled) {
+        setMembershipQuote(quote);
+        setAnnualFeeAmount(quote.annualFee);
+        setMembershipReload(quote.reloadAmount ?? 100);
+        if (quote.renewal) setSelectedAccess(current => current ?? 'membership');
+        if (quote.pending && quote.storeId) setSelectedStoreId(quote.storeId);
+        if (quote.accountStatus && quote.accountStatus !== user.status) {
+          const freshUser = await getUserData(user.id);
+          if (!cancelled && freshUser) setUser(freshUser);
+        }
+      }
+    }).catch(() => { if (!cancelled) setMembershipQuoteError(true); });
+    return () => { cancelled = true; };
+  }, [membershipModalVisible, user?.id, user?.status, user?.membership?.activeUntil, membershipRetry, setUser]);
+  const handleMembershipPayment = async () => {
+    if (loading || !membershipQuote) return;
+    if (!selectedStoreId) { message.warning(t('reload.pleaseSelectStore')); return; }
+    setLoading(true);
+    try {
+      const reloadAmount = membershipQuote.renewal || membershipQuote.pending ? membershipReload : 100;
+      const payment = await createMembershipPayment(reloadAmount, selectedStoreId);
+      if (payment.paymentMethod === 'manual') {
+        message.success(t('annualPassPayment.manualSubmitted'));
+        setMembershipModalVisible(false);
+        setMembershipRetry(value => value + 1);
+        navigate('/reload');
+        return;
+      }
+      if (payment.resumed) message.info(t('annualPassPayment.resuming'));
+      if (!payment.paymentUrl) throw new Error('PAYMENT_UNAVAILABLE');
+      window.location.assign(payment.paymentUrl);
+    } catch (error) {
+      const code = error instanceof Error ? error.message : 'PAYMENT_UNAVAILABLE';
+      message.error(t(code === 'PAYMENT_CREATING' ? 'annualPassPayment.creating'
+        : code === 'PAYMENT_TIMEOUT' ? 'annualPassPayment.timeout'
+        : code === 'PAYMENT_CONFIGURATION_INCOMPLETE' ? 'annualPassPayment.configurationIncomplete' : 'annualPassPayment.unavailable'));
+    } finally { setLoading(false); }
+  };
   useEffect(() => {
     if (!user?.id) { setDayPassEnabled(false); return; }
     return onSnapshot(doc(db, GLOBAL_COLLECTIONS.CONFIG, 'points'), snapshot => {
@@ -196,7 +264,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
     const updateDuration = () => {
       const now = new Date();
       const checkInAt = currentSession.checkInAt;
-      const diffMs = now.getTime() - checkInAt.getTime();
+      const end = currentSession.scheduledCheckOutAt ? Math.min(now.getTime(), currentSession.scheduledCheckOutAt.getTime()) : now.getTime();
+      const diffMs = Math.max(0, end - checkInAt.getTime());
       const hours = Math.floor(diffMs / (1000 * 60 * 60));
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
       const seconds = Math.floor((diffMs % (1000 * 60)) / 1000);
@@ -262,6 +331,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       return;
     }
     const userId = user.id;
+    setRedemptionStatus({ userId, loading: true, error: false });
+    let failed = false;
     try {
       // 加载累计驻店时长
       await loadTotalHours();
@@ -281,16 +352,14 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
 
       // 获取当日兑换记录（待处理申请也占用限额）
       const today = new Date().toISOString().split('T')[0];
-      const dailyRedemptionsData = await getDailyRedemptions(userId, today);
+      const dailyRedemptionsData = await getDailyRedemptions(userId, today, { throwOnError: true });
       setDailyRedemptions(dailyRedemptionsData);
       const dailyCountValue = dailyRedemptionsData.reduce((sum, r) => sum + r.quantity, 0);
       setDailyCount(dailyCountValue);
 
 
       // 获取总兑换记录（待处理申请也占用限额）
-      const totalRedemptions = await getTotalRedemptions(userId);
-      const totalCountValue = totalRedemptions.reduce((sum, r) => sum + r.quantity, 0);
-      setTotalCount(totalCountValue);
+      const totalRedemptions = await getTotalRedemptions(userId, { throwOnError: true });
 
       // Firestore is authoritative so every device shares the same cooldown.
       const sharedCooldown = getRedemptionCooldownSeconds(totalRedemptions);
@@ -304,22 +373,15 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       }
 
       // 获取本小时兑换记录（用于检查每小时限制）
-      try {
-        const now = new Date();
-        const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
-        const hourlyRedemptions = await getHourlyRedemptions(userId, hourKey);
-        const currentHourlyCount = hourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
-        setHourlyCount(currentHourlyCount);
+      const now = new Date();
+      const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
+      const hourlyRedemptions = await getHourlyRedemptions(userId, hourKey, { throwOnError: true });
+      const currentHourlyCount = hourlyRedemptions.reduce((sum, r) => sum + r.quantity, 0);
+      setHourlyCount(currentHourlyCount);
 
-        // 检查本小时是否还可以兑换（默认每小时只能兑换1次）
-        const effectiveHourlyLimit = userLimits.hourlyLimit !== undefined ? userLimits.hourlyLimit : 1;
-        setCanRedeemThisHour(currentHourlyCount < effectiveHourlyLimit);
-
-      } catch (error) {
-        // 如果获取失败，默认允许兑换（避免因为查询失败而禁用按钮）
-        setCanRedeemThisHour(true);
-        setHourlyCount(0);
-      }
+      // 检查本小时是否还可以兑换（默认每小时只能兑换1次）
+      const effectiveHourlyLimit = userLimits.hourlyLimit !== undefined ? userLimits.hourlyLimit : 1;
+      setCanRedeemThisHour(currentHourlyCount < effectiveHourlyLimit);
 
       // 获取 Day Pass 配置
       try {
@@ -332,7 +394,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
         console.error('加载 Day Pass 配置失败:', e);
       }
     } catch (error) {
-      // 加载失败，静默处理
+      failed = true;
+    } finally {
+      setRedemptionStatus({ userId, loading: false, error: failed });
     }
   };
 
@@ -503,9 +567,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
   }
 
   const dailyRemaining = Math.max(0, limits.dailyLimit - dailyCount);
-  const totalRemaining = Math.max(0, limits.totalLimit - totalCount);
+  const totalRemaining = totalCount === null ? null : Math.max(0, limits.totalLimit - totalCount);
   const dailyPercent = limits.dailyLimit > 0 ? (dailyCount / limits.dailyLimit) * 100 : 0;
-  const totalPercent = limits.totalLimit > 0 ? (totalCount / limits.totalLimit) * 100 : 0;
+  const totalPercent = totalCount !== null && limits.totalLimit > 0 ? (totalCount / limits.totalLimit) * 100 : 0;
 
   // 检查是否在截止时间之前
   const now = new Date();
@@ -537,6 +601,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
       styles={{ body: { padding: 16 } }}
     >
       <Space direction="vertical" size="middle" style={{ width: '100%' }}>
+        {currentSession?.scheduledCheckOutAt && currentSession.status === 'pending'
+          && currentSession.scheduledCheckOutAt.getTime() <= Date.now()
+          && <Alert showIcon type="info" message={t('loungeOperations.closingInProgress')} />}
         {/* 上半部分：计时器区域 */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           {/* 左侧：计时器信息 */}
@@ -578,8 +645,19 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               };
 
               // 检查用户会员状态
-              const isActiveMember = user?.status === 'active';
-              const hasDayPass = currentSession?.dayPass?.isPurchased;
+              const membershipAction = getMembershipEntryAction({
+                status: user?.status,
+                points: user?.membership?.points || 0,
+                activeFrom: user?.membership?.activeFrom,
+                activeUntil: user?.membership?.activeUntil,
+                firstActivatedAt: user?.membership?.firstActivatedAt,
+                annualFee: annualFeeAmount,
+                quote: membershipQuote,
+                pendingPayment: Boolean(pendingPayments.request),
+              });
+              const isActiveMember = membershipAction === 'active';
+              const checkedIn = isCurrentVisitCheckedIn(currentSession, user?.id);
+              const hasDayPass = checkedIn && currentSession?.dayPass?.isPurchased;
 
               // 计算显示用的限额
               const displayDailyLimit = hasDayPass ? (currentSession?.dayPass?.config.cigarAllowance ?? 1) : (isActiveMember ? limits.dailyLimit : 0);
@@ -588,13 +666,26 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               const displayDailyCount = hasDayPass ? dailyRedemptions.filter(r => r.isDayPass).reduce((sum, r) => sum + r.quantity, 0) : (isActiveMember ? dailyCount : 0);
 
               // 如果不是活跃会员且没有购买 Day Pass，显示合并按钮
-              if (!isActiveMember && !hasDayPass) {
+              if (membershipAction === 'blocked' || (!isActiveMember && !hasDayPass)) {
+                const needsRenewalReload = membershipAction === 'reload';
+                const blocked = membershipAction === 'blocked';
+                const checking = !blocked && pendingPayments.loading;
+                const checkFailed = !blocked && pendingPayments.error;
+                const label = blocked ? 'annualPassPayment.suspended'
+                  : checking ? 'annualPassPayment.checkingRequests'
+                  : checkFailed ? 'annualPassPayment.retryRequests'
+                  : membershipAction === 'resume' && pendingPayments.request?.kind === 'manual_membership' ? 'annualPassPayment.viewManualRequest'
+                  : membershipAction === 'resume' && pendingPayments.request?.kind === 'manual_reload' ? 'annualPassPayment.viewReloadRequest'
+                  : needsRenewalReload ? 'annualPassPayment.reload'
+                  : membershipAction === 'renew' ? 'annualPassPayment.renew'
+                  : membershipAction === 'resume' ? 'annualPassPayment.continuePayment' : 'visitTimer.joinNow';
                 return (
                   <>
                     <button
                       type="button"
-                      onClick={() => setMembershipModalVisible(true)}
-                      disabled={loading}
+                      onClick={() => checkFailed ? pendingPayments.retry()
+                        : needsRenewalReload || membershipAction === 'resume' ? navigate('/reload') : setMembershipModalVisible(true)}
+                      disabled={loading || blocked || checking}
                       style={{
                         background: appConfig?.colorTheme?.primaryButton
                           ? `linear-gradient(135deg, ${appConfig.colorTheme.primaryButton.startColor} 0%, ${appConfig.colorTheme.primaryButton.endColor} 100%)`
@@ -615,9 +706,9 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                         boxShadow: '0 4px 12px rgba(196, 141, 58, 0.3)'
                       }}
                     >
-                      {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                      <GiftOutlined />
-                      {t('visitTimer.joinNow')}
+                      {(loading || checking) && <LoadingOutlined spin />}
+                      {needsRenewalReload ? <WalletOutlined /> : <GiftOutlined />}
+                      {t(label)}
                     </button>
                     <Text style={{ fontSize: 13, display: 'block', marginTop: 8, color: '#FFFFFF', textAlign: 'center' }}>
                       {t('visitTimer.dailyLimit')}: 0/0
@@ -633,9 +724,10 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               const shouldReloadForCheckout = shouldShowCheckoutReload(
                 currentPoints,
                 checkoutPending,
-                checkoutPointsDue
+                checkoutPointsDue,
+                checkedIn
               );
-              const isLowPoints = shouldReloadForCheckout;
+              const checkingRedemptions = redemptionStatus.userId !== user?.id || redemptionStatus.loading;
 
               // 判断按钮状态和显示文本
               let buttonText = t('visitTimer.redeem');
@@ -654,15 +746,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 minWidth: 120
               };
 
-              // 如果是 Day Pass 模式，禁用 Redeem 按钮
-              if (hasDayPass) {
-                buttonText = t('visitTimer.redeem');
-                isDisabled = true;
-                buttonStyle.opacity = 0.5;
-                buttonIcon = <ShoppingCartOutlined />;
-              }
-              // 如果积分少于50，显示Reload按钮
-              else if (shouldReloadForCheckout) {
+              // Outside a visit, or when checkout needs payment, Reload takes precedence over quota/cooldown.
+              if (shouldReloadForCheckout) {
                 buttonText = t('visitTimer.reload');
                 buttonIcon = <ReloadOutlined />;
                 buttonOnClick = () => {
@@ -670,6 +755,18 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 };
                 isDisabled = false;
                 buttonStyle.opacity = 1;
+              }
+              else if (hasDayPass) {
+                isDisabled = true;
+                buttonStyle.opacity = 0.5;
+                buttonIcon = <ShoppingCartOutlined />;
+              }
+              else if (checkingRedemptions || redemptionStatus.error) {
+                buttonText = t(checkingRedemptions ? 'common.loading' : 'common.retry');
+                buttonIcon = checkingRedemptions ? <LoadingOutlined spin /> : <ReloadOutlined />;
+                buttonOnClick = () => loadData();
+                isDisabled = checkingRedemptions;
+                buttonStyle.opacity = isDisabled ? 0.5 : 1;
               }
               // 如果dailyCount >= dailyLimit，显示"No Quota"
               else if (dailyCount >= limits.dailyLimit) {
@@ -685,7 +782,7 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               }
               // 其他情况，检查是否可以兑换
               else {
-                isDisabled = !isBeforeCutoff || !currentSession || loading;
+                isDisabled = !isBeforeCutoff || !checkedIn || loading;
                 buttonStyle.opacity = isDisabled ? 0.5 : 1;
                 buttonIcon = countdownSeconds === null || countdownSeconds <= 0 ? <ShoppingCartOutlined /> : undefined;
               }
@@ -707,22 +804,24 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                       padding: '0 16px'
                     }}
                     title={
-                      hasDayPass
+                      shouldReloadForCheckout
+                        ? undefined
+                        : hasDayPass
                         ? t('visitTimer.dayPassIncludesRedemption', { quantity: currentSession?.dayPass?.config.cigarAllowance ?? 1 })
-                        : isLowPoints
-                          ? t('visitTimer.insufficientPointsTooltip', { currentPoints })
+                        : redemptionStatus.error
+                          ? t('visitTimer.redemptionCheckFailed')
                           : dailyCount >= limits.dailyLimit
                             ? t('visitTimer.dailyQuotaExhausted')
                             : countdownSeconds !== null && countdownSeconds > 0
                               ? t('visitTimer.waitBeforeRedeem', { countdown: formatCountdown(countdownSeconds) })
-                              : !currentSession
+                              : !checkedIn
                                 ? t('visitTimer.pleaseCheckInFirst')
                                 : !isBeforeCutoff
                                   ? t('visitTimer.cutoffPassedRetry', { cutoffTime })
                                   : undefined
                     }
                   >
-                    {loading && <span style={{ display: 'inline-block', width: 16, height: 16, border: '2px solid #111', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
+                    {loading && <LoadingOutlined spin />}
                     {buttonIcon}
                     {buttonText}
                   </button>
@@ -815,7 +914,11 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                     WebkitTextFillColor: 'transparent',
                     color: 'transparent',
                     display: 'inline-block'
-                  }}>{totalCount}</Text>
+                  }} title={totalCount !== null
+                    ? t('visitTimer.redemptionStatsDetails', { completed: redemptionStats.completedQuantity, pending: redemptionStats.pendingQuantity })
+                    : t(redemptionStats.status === 'initializing' ? 'visitTimer.redemptionStatsInitializing'
+                      : redemptionStats.status === 'error' ? 'visitTimer.redemptionStatsUnavailable' : 'common.loading')}
+                  >{totalCount ?? '-'}</Text>
                   <Text style={{ fontSize: 13, fontWeight: 400, color: '#9ca3af' }}>/ {currentCigarLimit} {t('visitTimer.cigars')}</Text>
                 </div>
               </div>
@@ -1073,13 +1176,25 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
           />
         </div>
 
+        {!membershipQuote && !membershipQuoteError && <Spin />}
+        {membershipQuoteError && <Alert type="error" message={t('annualPassPayment.unavailable')}
+          action={<Button size="small" icon={<ReloadOutlined />} onClick={() => setMembershipRetry(value => value + 1)}>
+            {t('annualPassPayment.retryStatus')}
+          </Button>}
+        />}
+        {membershipQuote?.renewal && (
+          <Button block type={selectedAccess === 'membership' ? 'primary' : 'default'} onClick={() => setSelectedAccess('membership')}>
+            {t('annualPassPayment.renew')}
+          </Button>
+        )}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: dayPassEnabled ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)',
+          gridTemplateColumns: dayPassEnabled && membershipQuote && !membershipQuote.renewal ? 'repeat(2, minmax(0, 1fr))' : 'minmax(0, 1fr)',
           gap: 12,
           marginTop: 16
         }}>
           {/* Card 1: Membership */}
+          {membershipQuote && !membershipQuote.renewal && (
           <div
             onClick={() => setSelectedAccess('membership')}
             style={{
@@ -1103,6 +1218,8 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
               </div>
               <div style={{ color: 'rgba(255,255,255,0.6)', fontSize: 11, lineHeight: 1.4, whiteSpace: 'pre-line' }} className="benefit-list">
                 {t('visitTimer.benefits.membership')}
+                {'\n'}{t('annualPassPayment.annualFeeBenefit', { fee: membershipQuote.annualFee.toFixed(2) })}
+                {'\n'}{t('annualPassPayment.creditBenefit', { amount: membershipQuote.pending ? membershipReload : 100 })}
               </div>
             </div>
             <div style={{ textAlign: 'right', marginTop: 16 }} className="price-text-container">
@@ -1113,11 +1230,13 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                 WebkitBackgroundClip: 'text',
                 color: 'transparent'
               }}>
-                {annualFeeAmount} {t('visitTimer.points')}
+                {membershipQuote && !membershipQuote.renewal
+                  ? `RM ${(membershipQuote.annualFee + membershipReload).toFixed(2)}`
+                  : <>{annualFeeAmount} {t('visitTimer.points')}</>}
               </div>
-              <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 9, letterSpacing: 1 }}>{t('visitTimer.yearly')}</div>
             </div>
           </div>
+          )}
 
           {/* Card 2: Day Pass */}
           {dayPassEnabled && (
@@ -1167,13 +1286,46 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
           const currentPoints = user?.membership?.points || 0;
           const cost = selectedAccess === 'membership' ? (annualFeeAmount || 0) : (dayPassConfig?.cost || 100);
           const hasEnoughPoints = currentPoints >= cost;
+          const needsMembershipPayment = selectedAccess === 'membership' && (membershipQuote?.pending || !membershipQuote?.renewal || !hasEnoughPoints);
 
           return (
             <div style={{ marginTop: 24 }}>
+              {needsMembershipPayment && (
+                <Space direction="vertical" style={{ width: '100%', marginBottom: 16 }}>
+                  {membershipQuote?.paymentAvailable === false && <Alert type="warning"
+                    message={t('annualPassPayment.configurationIncomplete')}
+                    action={<Button size="small" icon={<ReloadOutlined />} onClick={() => setMembershipRetry(value => value + 1)}>
+                      {t('annualPassPayment.retryStatus')}
+                    </Button>}
+                  />}
+                  {membershipQuote?.paymentMethod === 'manual' && membershipQuote.pending && <Alert type="info"
+                    message={t('annualPassPayment.manualPending')} />}
+                  {membershipQuote?.pending && membershipQuote.paymentMethod !== 'manual' && <Alert type="info" message={t('annualPassPayment.resuming')} />}
+                  {membershipQuote?.renewal && <Select
+                    aria-label={t('annualPassPayment.reloadAmount')}
+                    style={{ width: '100%' }}
+                    loading={!membershipQuote && !membershipQuoteError}
+                    disabled={loading || !membershipQuote || membershipQuote.pending}
+                    value={membershipReload}
+                    onChange={setMembershipReload}
+                    options={[
+                      ...(membershipQuote.pending && ![100, 200, 500].includes(membershipReload) ? [{ value: membershipReload, label: t('annualPassPayment.resuming') }] : []),
+                      ...[100, 200, 500].map(value => ({ value, label: t('annualPassPayment.reloadOnly', { amount: value }) })),
+                    ]}
+                  />}
+                  {membershipQuote && (membershipQuote.pending || membershipQuote.renewal) && <Text>{membershipQuote.pending
+                    ? t(membershipQuote.paymentMethod === 'manual' ? 'annualPassPayment.manualPendingAmount' : 'annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
+                    : t('annualPassPayment.renewalReload', { amount: membershipReload.toFixed(2), fee: membershipQuote.annualFee.toFixed(2) })}</Text>}
+                </Space>
+              )}
               <button
                 type="button"
-                onClick={hasEnoughPoints ? (selectedAccess === 'membership' ? handleActivateMembership : handleBuyDayPass) : () => navigate('/reload')}
-                disabled={loading}
+                onClick={selectedAccess === 'membership' ? (needsMembershipPayment
+                  ? membershipQuote?.pending && membershipQuote.paymentMethod === 'manual' ? () => navigate('/reload') : handleMembershipPayment
+                  : handleActivateMembership) : hasEnoughPoints ? handleBuyDayPass : () => navigate('/reload')}
+                disabled={loading || (selectedAccess === 'membership' && !membershipQuote)
+                  || (needsMembershipPayment && membershipQuote?.paymentAvailable === false)}
+                aria-busy={loading}
                 style={{
                   width: '100%',
                   height: 48,
@@ -1191,11 +1343,19 @@ export const VisitTimerRedemption: React.FC<VisitTimerRedemptionProps> = ({ styl
                   gap: 8
                 }}
               >
-                {loading && <span className="anticon-spin" style={{ display: 'inline-block', width: 14, height: 14, border: '2px solid currentColor', borderTopColor: 'transparent', borderRadius: '50%', animation: 'spin 1s linear infinite' }} />}
-                {!hasEnoughPoints && <WalletOutlined />}
-                {hasEnoughPoints
-                  ? (selectedAccess === 'membership' ? t('visitTimer.confirmActivation') : t('visitTimer.confirmPurchase'))
-                  : `${t('visitTimer.reloadPoints')} (${t('visitTimer.short')}: ${cost - currentPoints})`
+                {loading ? <LoadingOutlined spin /> : (needsMembershipPayment || !hasEnoughPoints) && <WalletOutlined />}
+                {needsMembershipPayment
+                  ? membershipQuote?.paymentMethod === 'manual'
+                    ? t(membershipQuote.pending ? 'annualPassPayment.viewManualRequest' : 'annualPassPayment.submitManualRequest',
+                      { amount: (membershipQuote.total ?? (membershipQuote.renewal ? membershipReload : membershipQuote.annualFee + 100)).toFixed(2) })
+                  : membershipQuote?.pending
+                    ? t('annualPassPayment.pendingAmount', { amount: membershipQuote.total?.toFixed(2) })
+                    : membershipQuote && !membershipQuote.renewal
+                    ? t('annualPassPayment.payFirstPackage', { total: (membershipQuote.annualFee + membershipReload).toFixed(2) })
+                    : t('annualPassPayment.reloadOnly', { amount: membershipReload })
+                  : hasEnoughPoints
+                  ? (selectedAccess === 'membership' ? t('annualPassPayment.renew') : t('visitTimer.confirmPurchase'))
+                  : selectedAccess === 'membership' ? t('annualPassPayment.payAndActivate') : `${t('visitTimer.reloadPoints')} (${t('visitTimer.short')}: ${cost - currentPoints})`
                 }
               </button>
             </div>

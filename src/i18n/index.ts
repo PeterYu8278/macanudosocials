@@ -44,6 +44,15 @@ i18n
     },
   })
 
+if (import.meta.hot) {
+  import.meta.hot.accept(['./locales/zh-CN.json', './locales/en-US.json'], ([zhModule, enModule]) => {
+    if (zhModule) i18n.addResourceBundle('zh-CN', 'translation', zhModule.default, true, true)
+    if (enModule) i18n.addResourceBundle('en-US', 'translation', enModule.default, true, true)
+    // Existing React views must rerender after replacing in-memory translations.
+    void i18n.changeLanguage(i18n.language)
+  })
+}
+
 // 监听语言变化，自动保存到localStorage
 i18n.on('languageChanged', (lng) => {
   try {

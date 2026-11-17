@@ -1,5 +1,5 @@
 import { getAuth } from 'firebase-admin/auth'
-import { getFirestore } from 'firebase-admin/firestore'
+import { getFirestore } from './firestoreMonitoring'
 import { GLOBAL_COLLECTIONS } from '../../../src/config/globalCollections'
 
 export async function sendMemberPasswordSetup(email: string): Promise<'sent' | 'failed'> {

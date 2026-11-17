@@ -1,6 +1,6 @@
 import { toWebFunction } from './_shared/webFunction';
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldValue, Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, Timestamp, getFirestore } from './_shared/firestoreMonitoring';
 import { getMessaging } from 'firebase-admin/messaging';
 import {
   completeNotificationDelivery,

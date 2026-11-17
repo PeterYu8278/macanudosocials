@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore } from './_shared/firestoreMonitoring';
 import { getMessaging } from 'firebase-admin/messaging';
 import {
   completeNotificationDelivery,

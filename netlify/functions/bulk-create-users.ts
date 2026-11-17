@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { Timestamp, getFirestore } from 'firebase-admin/firestore'
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring'
 
 type ImportRow = {
   name?: unknown

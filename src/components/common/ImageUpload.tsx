@@ -1,5 +1,5 @@
 // 图片上传组件
-import React, { useState, useRef } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import { DeleteOutlined, LoadingOutlined, PlusOutlined, UploadOutlined } from '@ant-design/icons'
 import { Button, App, Modal } from 'antd'
 import { useTranslation } from 'react-i18next'
@@ -12,6 +12,8 @@ import ImageCrop from './ImageCrop'
 
 interface ImageUploadProps {
   value?: string // 当前图片URL
+  deleteFromCloudinary?: boolean
+  onUploadingChange?: (uploading: boolean) => void
   onChange?: (url: string | null) => void // 图片变化回调
   folder?: CloudinaryFolderName | string // Cloudinary文件夹名称或自定义路径
   maxSize?: number // 最大文件大小（字节）
@@ -30,6 +32,8 @@ interface ImageUploadProps {
 
 const ImageUpload: React.FC<ImageUploadProps> = ({
   value,
+  deleteFromCloudinary = true,
+  onUploadingChange,
   onChange,
   folder = 'temp',
   maxSize,
@@ -48,6 +52,7 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   const { t } = useTranslation()
   const { message } = App.useApp()
   const { upload, uploading, error } = useCloudinary()
+  useEffect(() => { onUploadingChange?.(uploading) }, [uploading, onUploadingChange])
   const [previewVisible, setPreviewVisible] = useState(false)
   const [cropVisible, setCropVisible] = useState(false)
   const [tempImageUrl, setTempImageUrl] = useState<string>('')
@@ -173,6 +178,10 @@ const ImageUpload: React.FC<ImageUploadProps> = ({
   }
 
   const handleDelete = () => {
+    if (!deleteFromCloudinary) {
+      onChange?.(null)
+      return
+    }
     setDeleteConfirmVisible(true)
   }
 

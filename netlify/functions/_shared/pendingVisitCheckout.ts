@@ -1,5 +1,6 @@
 import { FieldValue, Firestore, Timestamp } from 'firebase-admin/firestore'
 import { GLOBAL_COLLECTIONS } from '../../../src/config/globalCollections'
+import { settleLoungeVisit } from './loungeVisits'
 
 export type PendingCheckoutResult =
   | { status: 'none' | 'insufficient' | 'completed'; sessionId?: string; shortfall?: number }
@@ -115,6 +116,16 @@ export const settlePendingVisitCheckout = async (
   if (!sessionId) return { status: 'none' }
 
   const sessionRef = db.collection(GLOBAL_COLLECTIONS.VISIT_SESSIONS).doc(sessionId)
+  const initialSession = (await sessionRef.get()).data()
+  if (initialSession?.storeId) {
+    const store = (await db.collection(GLOBAL_COLLECTIONS.STORES).doc(initialSession.storeId).get()).data()
+    if (store?.operations?.enabled) {
+      if (process.env.LOUNGE_OPERATIONS_ENABLED !== 'true' || !initialSession.checkoutPending) return { status: 'none' }
+      const result = await settleLoungeVisit(db, sessionId, new Date())
+      return { status: result.status === 'completed' ? 'completed' : 'insufficient', sessionId,
+        ...('shortfall' in result ? { shortfall: result.shortfall } : {}) }
+    }
+  }
   const pointsConfigRef = db.collection('config').doc('points')
   let completedSession: any = null
 

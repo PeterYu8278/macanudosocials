@@ -2,11 +2,12 @@ import { toWebFunction, type EventHandler as Handler } from './_shared/webFuncti
 import { createHash } from 'node:crypto'
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
 import { getAuth } from 'firebase-admin/auth'
-import { Timestamp, getFirestore } from 'firebase-admin/firestore'
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring'
 import { mergeLegacyRedemptionEntries } from '../../src/utils/legacyRedemptionArtifacts'
 import { addUnknownReferralEntries } from '../../src/utils/legacyReferralPlaceholders'
 import { forEachMigrationMember } from '../../src/utils/legacyMigrationConcurrency'
 import { getRedemptionOrderMonth, resolveRedemptionOrderId } from '../../src/utils/redemptionOrderId'
+import { migrationMaintenanceRunning } from './_shared/legacyMigrationMaintenance'
 
 type Stage = 'users' | 'reload' | 'membership' | 'visits'
 type AnyRow = Record<string, any> & { sourceRow?: number; phone?: string }
@@ -285,7 +286,7 @@ const processReloads = async (rows: AnyRow[], batchId: string) => {
       const at = Timestamp.fromDate(occurredAt)
       await ref.set({
         userId: user.id, userName: row.name || user.data.displayName,
-        requestedAmount: amount, pointsEquivalent: Math.round(amount), status: 'completed',
+        requestedAmount: amount, pointsEquivalent: Math.round(amount), pointsEquivalentBasis: 'net', annualFeeAmount: 0, status: 'completed',
         storeId: lounge.id, verifiedAt: at, verifiedBy: 'legacy_migration',
         adminNotes: 'Historical legacy import; wallet balance was restored from the member snapshot.',
         pointsRecordId: id, createdAt: at, updatedAt: Timestamp.now(),
@@ -592,12 +593,13 @@ export const eventHandler: Handler = async event => {
     const operator = (await db.collection('users').doc(identity.uid).get()).data()
     if (operator?.role !== 'developer') return json(403, { error: 'Developer access required' })
 
-    const body = JSON.parse(event.body || '{}') as { stage?: Stage; batchId?: string; rows?: AnyRow[]; redemptions?: AnyRow[] }
+    const body = JSON.parse(event.body || '{}') as { stage?: Stage; batchId?: string; rows?: AnyRow[]; redemptions?: AnyRow[]; fileName?: string }
     if (!body.stage || !['users', 'reload', 'membership', 'visits'].includes(body.stage)) return json(400, { error: 'Invalid migration stage' })
     if (!body.batchId || !/^legacy_[a-f0-9]{24}$/.test(body.batchId)) return json(400, { error: 'Invalid migration batch' })
     const rows = Array.isArray(body.rows) ? body.rows : []
     const batchRef = db.collection('migrationBatches').doc(body.batchId)
-    await batchRef.set({ source: 'legacy_workbook', updatedAt: Timestamp.now(), updatedBy: identity.uid }, { merge: true })
+    if (migrationMaintenanceRunning((await batchRef.get()).data()?.maintenance)) return json(409, { error: 'Migration batch maintenance is running' })
+    await batchRef.set({ source: 'legacy_workbook', ...(body.fileName ? { fileName: String(body.fileName).slice(0, 200) } : {}), updatedAt: Timestamp.now(), updatedBy: identity.uid }, { merge: true })
     let result
     if (body.stage === 'users') result = await processUsers(rows, body.batchId)
     else if (body.stage === 'reload') result = await processReloads(rows, body.batchId)

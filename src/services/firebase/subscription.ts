@@ -4,7 +4,7 @@ import {
   setDoc, 
   updateDoc, 
   Timestamp 
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import type { Subscription } from '../../types';
 import { convertFirestoreTimestamps } from './auth';

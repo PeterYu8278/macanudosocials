@@ -82,10 +82,18 @@ export const cigarTheme: ThemeConfig = {
       darkItemColor: '#c0c0c0',
     },
     Button: {
+      colorPrimary: '#C48D3A',
+      colorPrimaryHover: '#D4A050',
+      colorPrimaryActive: '#B17C30',
       primaryShadow: '0 2px 0 rgba(255, 215, 0, 0.1)',
       defaultShadow: '0 2px 0 rgba(0, 0, 0, 0.02)',
       dangerShadow: '0 2px 0 rgba(255, 77, 79, 0.1)',
       primaryColor: '#000000',
+    },
+    Checkbox: {
+      colorPrimary: '#C48D3A',
+      colorPrimaryHover: '#D4A050',
+      colorPrimaryBorder: '#C48D3A',
     },
     Card: {
       colorBgContainer: '#1a1a1a',
@@ -158,9 +166,12 @@ export const cigarTheme: ThemeConfig = {
     },
     Tabs: {
       colorText: '#c0c0c0',
-      colorTextSecondary: '#ffd700',
+      colorTextSecondary: '#FDE08D',
       colorBorderSecondary: '#333333',
-      inkBarColor: '#ffd700',
+      itemSelectedColor: '#FDE08D',
+      itemHoverColor: '#D4A050',
+      itemActiveColor: '#C48D3A',
+      inkBarColor: '#C48D3A',
     },
     Descriptions: {
       labelBg: 'transparent',
@@ -226,7 +237,7 @@ export const cigarTheme: ThemeConfig = {
     },
     Switch: {
       colorPrimary: '#C48D3A',
-      colorPrimaryHover: '#ffed4e',
+      colorPrimaryHover: '#D4A050',
       handleBg: '#FFFFFF',
     },
     Slider: {

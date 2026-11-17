@@ -1,20 +1,25 @@
 import { getAuth } from 'firebase-admin/auth'
-import { type Firestore, Timestamp } from 'firebase-admin/firestore'
-import { randomBytes, randomInt } from 'node:crypto'
+import { FieldValue, type Firestore, Timestamp } from 'firebase-admin/firestore'
+import { createCipheriv, createDecipheriv, createHash, randomBytes, randomInt } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../../src/config/globalCollections'
 import { normalizePhoneNumber } from '../../../src/utils/phoneNormalization'
 import { MemberIdentityError } from './memberIdentity'
-import { assertUniqueMemberIdentity, lockMemberIdentity } from './memberIdentityLock'
-import { sendMemberPasswordSetup } from './memberPasswordSetup'
+import { lockMemberIdentity } from './memberIdentityLock'
 
-export type RegistrationStep = 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
+export type RegistrationStep = 'awaiting-form' | 'awaiting-confirmation' | 'awaiting-name' | 'awaiting-email' | 'awaiting-final-confirm'
+  | 'completed' | 'cancelled' | 'expired' | 'locked'
 
 export interface WhatsAppRegistrationSession {
+  provider?: 'whapi' | 'whatsmeow'
   phone: string
   chatId: string
   step: RegistrationStep
   displayName?: string
   email?: string
+  referralCode?: string
+  passwordCiphertext?: string
+  registrationTokenHash?: string
+  connectionBinding?: string
   expiresAtMs: number
   attempts: number
   createdAt: Timestamp
@@ -23,6 +28,22 @@ export interface WhatsAppRegistrationSession {
 
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const sessionId = (phone: string) => Buffer.from(phone).toString('base64url')
+export const createRegistrationToken = () => randomBytes(32).toString('hex')
+export const registrationTokenHash = (token: string) => createHash('sha256').update(token).digest('hex')
+const passwordKey = () => createHash('sha256').update(process.env.WHATSAPP_REGISTRATION_ENCRYPTION_KEY || process.env.WHAPI_WEBHOOK_SECRET || '').digest()
+export function encryptRegistrationPassword(password: string) {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv('aes-256-gcm', passwordKey(), iv)
+  const encrypted = Buffer.concat([cipher.update(password, 'utf8'), cipher.final()])
+  return `v1.${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`
+}
+function decryptRegistrationPassword(value: string) {
+  const [version, ivText, tagText, encryptedText] = value.split('.')
+  if (version !== 'v1' || !ivText || !tagText || !encryptedText) throw new MemberIdentityError('invalid-registration', 400)
+  const decipher = createDecipheriv('aes-256-gcm', passwordKey(), Buffer.from(ivText, 'base64url'))
+  decipher.setAuthTag(Buffer.from(tagText, 'base64url'))
+  return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64url')), decipher.final()]).toString('utf8')
+}
 
 export function registrationSessionRef(db: Firestore, phone: string) {
   return db.collection(C.WHATSAPP_REGISTRATION_SESSIONS).doc(sessionId(phone))
@@ -37,13 +58,18 @@ export function normalizeWhatsAppSender(chatId: unknown, from: unknown) {
 
 export function messageText(message: any) {
   const body = message?.text?.body ?? message?.text
-  return typeof body === 'string' ? body.trim().slice(0, 500) : ''
+  if (typeof body === 'string') return body.trim().slice(0, 500)
+  const button = message?.reply?.buttons_reply
+  return typeof button?.title === 'string' ? button.title.trim().slice(0, 100) : ''
 }
 
-export async function startRegistration(db: Firestore, phone: string, chatId: string) {
+export async function startRegistration(db: Firestore, phone: string, chatId: string, displayName?: string, email?: string, tokenHash?: string, referralCode?: string, connectionBinding?: string) {
   const now = Timestamp.now()
   const session: WhatsAppRegistrationSession = {
-    phone, chatId, step: 'awaiting-confirmation', expiresAtMs: Date.now() + 15 * 60_000,
+    phone, chatId, step: displayName && email ? 'awaiting-final-confirm' : tokenHash ? 'awaiting-form' : 'awaiting-confirmation',
+    ...(displayName ? { displayName } : {}), ...(email ? { email } : {}), expiresAtMs: Date.now() + 15 * 60_000,
+    ...(tokenHash ? { registrationTokenHash: tokenHash } : {}), ...(referralCode ? { referralCode } : {}),
+    ...(connectionBinding ? { connectionBinding } : {}),
     attempts: 0, createdAt: now, updatedAt: now,
   }
   await registrationSessionRef(db, phone).set(session)
@@ -51,17 +77,35 @@ export async function startRegistration(db: Firestore, phone: string, chatId: st
 }
 
 export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegistrationSession) {
-  if (!session.displayName || !session.email) throw new MemberIdentityError('invalid-registration', 400)
+  if (!session.displayName || !session.email || !session.passwordCiphertext) throw new MemberIdentityError('invalid-registration', 400)
   const unlock = await lockMemberIdentity(db, [`email:${session.email}`, `phone:${session.phone}`])
   let uid: string | undefined
   try {
-    await assertUniqueMemberIdentity(db, session.email, session.phone)
+    const users = db.collection(C.USERS)
+    const referral = session.referralCode?.trim().toUpperCase() || ''
+    const referrer = referral ? (await users.where('memberId', '==', referral).limit(1).get()).docs[0] : undefined
+    if (referral && !referrer) throw new MemberIdentityError('invalid-referral-code', 400)
+    const [emailProfiles, phoneProfiles, legacyPhoneProfiles] = await Promise.all([
+      users.where('email', '==', session.email).limit(1).get(),
+      users.where('profile.phone', '==', session.phone).limit(1).get(),
+      users.where('phone', '==', session.phone).limit(1).get(),
+    ])
+    let emailInUse = !emailProfiles.empty
+    let phoneInUse = !phoneProfiles.empty || !legacyPhoneProfiles.empty
+    try { await getAuth().getUserByEmail(session.email); emailInUse = true } catch (error) {
+      if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+    }
+    try { await getAuth().getUserByPhoneNumber(session.phone); phoneInUse = true } catch (error) {
+      if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+    }
+    if (emailInUse && phoneInUse) throw new MemberIdentityError('email-and-phone-in-use', 409)
+    if (emailInUse) throw new MemberIdentityError('email-in-use', 409)
+    if (phoneInUse) throw new MemberIdentityError('phone-in-use', 409)
     const account = await getAuth().createUser({
       email: session.email, phoneNumber: session.phone,
-      displayName: session.displayName, password: randomBytes(32).toString('base64url'), emailVerified: false,
+      displayName: session.displayName, password: decryptRegistrationPassword(session.passwordCiphertext), emailVerified: false,
     })
     uid = account.uid
-    const users = db.collection(C.USERS)
     const now = Timestamp.now()
     const memberId = await db.runTransaction(async transaction => {
       let candidate = ''
@@ -70,6 +114,7 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
         if ((await transaction.get(users.where('memberId', '==', next).limit(1))).empty) { candidate = next; break }
       }
       if (!candidate) throw new Error('member-id-unavailable')
+      if (referrer && !(await transaction.get(referrer.ref)).exists) throw new MemberIdentityError('invalid-referral-code', 400)
       transaction.create(users.doc(account.uid), {
         authUid: account.uid, email: session.email, displayName: session.displayName, memberId: candidate,
         role: 'guest', status: 'inactive', registrationSource: 'whatsapp',
@@ -78,14 +123,17 @@ export async function createWhatsAppMember(db: Firestore, session: WhatsAppRegis
         whatsappAuth: { chatId: session.chatId, verifiedAt: now },
         preferences: { locale: 'zh', notifications: true },
         membership: { level: 'bronze', joinDate: now, lastActive: now, points: 0, referralPoints: 0 },
+        referral: { referredBy: referral || null, referredByUserId: referrer?.id || null, referralDate: referrer ? now : null,
+          referrals: [], totalReferred: 0, activeReferrals: 0 },
         createdAt: now, updatedAt: now,
       })
+      if (referrer) transaction.update(referrer.ref, { 'referral.referrals': FieldValue.arrayUnion({ userId: account.uid, userName: session.displayName, memberId: candidate }),
+        'referral.totalReferred': FieldValue.increment(1), updatedAt: now })
       transaction.create(db.collection(C.AUDIT_LOGS).doc(), { action: 'register-member-whatsapp', userId: account.uid, createdAt: now })
       return candidate
     })
-    const passwordSetupEmail = await sendMemberPasswordSetup(session.email)
-    await registrationSessionRef(db, session.phone).set({ step: 'completed', completedAt: now, uid: account.uid, memberId, passwordSetupEmail }, { merge: true })
-    return { uid: account.uid, memberId, passwordSetupEmail }
+    await registrationSessionRef(db, session.phone).set({ step: 'completed', completedAt: now, uid: account.uid, memberId, passwordCiphertext: null }, { merge: true })
+    return { uid: account.uid, memberId }
   } catch (error) {
     if (uid) {
       try {

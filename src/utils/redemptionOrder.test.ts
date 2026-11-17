@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement } from './redemptionOrder'
+import { aggregateCompletedRedemptions, areRedemptionsReadyForSettlement, isVisitRedemptionOrder } from './redemptionOrder'
+
+describe('internal visit redemption order visibility', () => {
+  it.each(['Visit redemption (Session: checkin_member_123)', '驻店兑换订单 (Session: session-123)'])('identifies generated internal order: %s', note => {
+    expect(isVisitRedemptionOrder({ source: { type: 'direct', note } })).toBe(true)
+  })
+  it('keeps ordinary purchases and unlinked zero-value orders visible', () => {
+    expect(isVisitRedemptionOrder({})).toBe(false)
+    expect(isVisitRedemptionOrder({ source: { type: 'direct', note: 'In-store purchase' } })).toBe(false)
+  })
+})
 
 describe('areRedemptionsReadyForSettlement', () => {
   it('requires at least one redemption and no pending choices', () => {

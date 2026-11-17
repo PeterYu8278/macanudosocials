@@ -16,7 +16,7 @@ import {
   Timestamp,
   type QueryDocumentSnapshot,
   type DocumentData
-} from 'firebase/firestore';
+} from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import type { MembershipFeeConfig, MembershipFeeRecord, User } from '../../types';
@@ -377,7 +377,7 @@ export const deductMembershipFee = async (
       await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
         'membership.points': newPoints,
         status: 'active', // 激活 Annual Pass
-        role: userData.role === 'guest' ? 'member' : userData.role,
+        role: ['guest', 'member'].includes(userData.role) ? 'vip' : userData.role,
         updatedAt: Timestamp.fromDate(now)
       });
 
@@ -436,12 +436,9 @@ export const deductMembershipFee = async (
         }
       }
 
-      // 如果是续费，设置首次驻店免扣费到期时间（续费后30天内）
       if (record.renewalType === 'renewal') {
-        const waiverExpiresAt = new Date(now);
-        waiverExpiresAt.setDate(waiverExpiresAt.getDate() + 30);
         await updateDoc(doc(db, GLOBAL_COLLECTIONS.USERS, record.userId), {
-          'membership.nextFirstVisitWaiverExpiresAt': Timestamp.fromDate(waiverExpiresAt),
+          'membership.nextFirstVisitWaiverExpiresAt': null,
           updatedAt: Timestamp.fromDate(now)
         });
       }

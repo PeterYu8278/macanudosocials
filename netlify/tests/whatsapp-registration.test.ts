@@ -10,6 +10,7 @@ describe('WhatsApp registration helpers', () => {
 
   it('normalizes the case-insensitive registration inputs without storing message content', () => {
     expect(messageText({ text: { body: '  /REGISTER  ' } })).toBe('/REGISTER')
+    expect(messageText({ reply: { buttons_reply: { title: 'Confirm' } } })).toBe('Confirm')
     expect(validateRegistrationEmail(' User@Example.com ')).toBe('user@example.com')
     expect(maskEmail('user@example.com')).toBe('u***@example.com')
   })

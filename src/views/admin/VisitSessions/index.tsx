@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
+import { Alert, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip } from 'antd';
 import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -26,6 +26,9 @@ import { useTranslation } from 'react-i18next';
 import { QRScanner } from '../../../components/admin/QRScanner';
 import { OrderSkeleton } from '../../../components/features/admin/OrderSkeleton';
 import { RoomManagement } from '../../../components/admin/RoomManagement';
+import CigarSelect from './CigarSelect';
+import { sortVisitSessions } from '../../../utils/visitSessionSort';
+import { compareRedemptionsPendingFirst } from '../../../utils/redemptionSort';
 
 const { Title, Text } = Typography;
 const { Search } = Input;
@@ -74,9 +77,30 @@ const VisitSessionsPage: React.FC = () => {
   const [forceCheckoutModalVisible, setForceCheckoutModalVisible] = useState(false);
   const { item: selectedSession, openDrawer: openSessionDrawer, closeDrawer: closeSessionDrawer } = useDetailDrawer<VisitSession>();
   const { item: selectedRedemptionRecord, open: editRedemptionModalVisible, openDrawer: openRedemptionDrawer, closeDrawer: closeRedemptionDrawer } = useDetailDrawer<any>();
-  const { data: cigars = [] } = useFirestoreQuery(getCigars);
+  const { data: cigars = [], loading: cigarsLoading, error: cigarsError, refresh: refreshCigars } = useFirestoreQuery(getCigars, [user?.id]);
+  useEffect(() => {
+    if (addRedemptionModalVisible || editRedemptionModalVisible) {
+      void refreshCigars();
+    }
+  }, [addRedemptionModalVisible, editRedemptionModalVisible, refreshCigars]);
+
+  const cigarLoadNotice = cigarsError ? (
+    <Alert
+      type="error"
+      showIcon
+      message={t('visitSessions.loadCigarsFailed')}
+      description={cigarsError}
+      action={<Button size="small" icon={<ReloadOutlined />} loading={cigarsLoading} onClick={() => void refreshCigars()}>{t('common.retry')}</Button>}
+      style={{ marginBottom: 16 }}
+    />
+  ) : null;
+  const cigarSelectState = {
+    loading: cigarsLoading,
+    loadError: !!cigarsError,
+    status: cigarsError ? 'error' as const : undefined,
+  };
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
-  const { data: sessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
+  const { data: fetchedSessions = [], loading, refresh: refreshSessions } = useFirestoreQuery(
     () => {
       if (searchUserId) {
         const storeId = isSuperAdmin ? undefined : user?.storeId;
@@ -87,12 +111,18 @@ const VisitSessionsPage: React.FC = () => {
       if (statusFilter === 'pending') {
         return getAllPendingVisitSessions(isSuperAdmin ? undefined : user?.storeId);
       }
+      if (statusFilter === 'all') {
+        const storeId = isSuperAdmin ? undefined : user?.storeId;
+        return Promise.all([getAllVisitSessions(200, storeId), getAllPendingVisitSessions(storeId)])
+          .then(([recent, pending]) => [...new Map([...pending, ...recent].map(session => [session.id, session])).values()]);
+      }
       return getAllVisitSessions(200, isSuperAdmin ? undefined : user?.storeId).then(allSessions =>
-        statusFilter !== 'all' ? allSessions.filter(s => s.status === statusFilter) : allSessions
+        allSessions.filter(s => s.status === statusFilter)
       );
     },
     [statusFilter, searchUserId, isSuperAdmin, user?.storeId]
   );
+  const sessions = useMemo(() => sortVisitSessions(fetchedSessions), [fetchedSessions]);
   const [addingRedemption, setAddingRedemption] = useState(false);
   const [allRedemptionRecords, setAllRedemptionRecords] = useState<RedemptionRecord[]>([]);
   const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
@@ -196,7 +226,7 @@ const VisitSessionsPage: React.FC = () => {
         record.visitSessionId,
       ].some(value => value.toLowerCase().includes(keyword));
       return matchesStatus && matchesType && matchesSearch;
-    });
+    }).sort(compareRedemptionsPendingFirst);
   }, [allRedemptionRecords, redemptionSearch, redemptionStatus, redemptionType]);
 
   useEffect(() => {
@@ -330,6 +360,14 @@ const VisitSessionsPage: React.FC = () => {
                 : checkoutMessage);
               // 重新加载所有数据
               await refreshSessions();
+            } else if (result.code === 'INSUFFICIENT_POINTS') {
+              modal.warning({
+                title: t('visitSessions.insufficientPointsTitle'),
+                content: result.error || t('visitSessions.checkoutFailed'),
+                okText: t('common.confirm'),
+                centered: true,
+                maskClosable: false,
+              });
             } else {
               message.error(result.error || t('visitSessions.checkoutFailed'));
             }
@@ -621,7 +659,7 @@ const VisitSessionsPage: React.FC = () => {
                           <Button
                             icon={<ReloadOutlined />}
                             onClick={async () => {
-                              await Promise.all([refreshSessions(), loadAllRedemptions()])
+                              await Promise.all([refreshSessions(), loadAllRedemptions(), refreshCigars()])
                             }}
                             loading={loading}
                             style={{
@@ -681,7 +719,7 @@ const VisitSessionsPage: React.FC = () => {
                         <Button
                           icon={<ReloadOutlined />}
                           onClick={async () => {
-                            await Promise.all([refreshSessions(), loadAllRedemptions()])
+                            await Promise.all([refreshSessions(), loadAllRedemptions(), refreshCigars()])
                           }}
                           loading={loading}
                           style={{
@@ -1385,6 +1423,7 @@ const VisitSessionsPage: React.FC = () => {
         confirmLoading={addingRedemption}
         width={600}
       >
+        {cigarLoadNotice}
         <Form form={form} layout="vertical" className="points-config-form">
           <Form.List name="items">
             {(fields, { add, remove }) => (
@@ -1398,12 +1437,9 @@ const VisitSessionsPage: React.FC = () => {
                       rules={[{ required: true, message: t('visitSessions.selectCigar') }]}
                       style={{ flex: 1, marginBottom: 0 }}
                     >
-                      <Select
+                      <CigarSelect
+                        {...cigarSelectState}
                         placeholder={t('visitSessions.selectCigar')}
-                        showSearch
-                        filterOption={(input, option) =>
-                          (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-                        }
                         options={cigars.map(cigar => ({
                           value: cigar.id,
                           label: `${cigar.name} - RM${cigar.price}`
@@ -1538,18 +1574,16 @@ const VisitSessionsPage: React.FC = () => {
         confirmLoading={addingRedemption}
         width={500}
       >
+        {cigarLoadNotice}
         <Form form={form} layout="vertical" className="points-config-form">
           <Form.Item
             name="cigarId"
             label={t('visitSessions.cigarName')}
             rules={[{ required: true, message: t('visitSessions.selectCigar') }]}
           >
-            <Select
+            <CigarSelect
+              {...cigarSelectState}
               placeholder={t('visitSessions.selectCigar')}
-              showSearch
-              filterOption={(input, option) =>
-                (option?.label ?? '').toLowerCase().includes(input.toLowerCase())
-              }
               options={cigars.map(cigar => ({
                 value: cigar.id,
                 label: `${cigar.name} - RM${cigar.price}`

@@ -36,7 +36,7 @@ vi.mock('firebase-admin/firestore', () => {
     const docs = [...m.documents].filter(([path, data]) => path.startsWith(`${name}/`) && field(data, key) === value).slice(0, count).map(([path]) => snapshot(path))
     return { docs, empty: !docs.length }
   } }) })
-  return { Timestamp: { now: () => 'now' }, FieldValue: { arrayUnion: (value: unknown) => ['union', value], increment: (value: number) => ['increment', value] },
+  return { Timestamp: { now: () => 'now', fromMillis: (value: number) => ({ toMillis: () => value }) }, FieldValue: { arrayUnion: (value: unknown) => ['union', value], increment: (value: number) => ['increment', value] },
     initializeFirestore: vi.fn(() => ({ collection: (name: string) => ({ doc: (id = 'audit') => reference(`${name}/${id}`), where: (key: string, _op: string, value: unknown) => query(name, key, value) }),
       runTransaction: async (callback: any) => {
         const writes: Array<() => void> = []
@@ -61,6 +61,15 @@ const invoke = handler as unknown as (event: any) => Promise<{ statusCode: numbe
 const input = { email: 'MEMBER@example.com', password: 'password123', displayName: 'Member', phone: '0123456789' }
 const request = (body: any = input) => invoke({ httpMethod: 'POST', headers: { 'x-nf-client-connection-ip': '127.0.0.1' }, body: JSON.stringify(body) })
 describe('backend member registration', () => {
+  it('stores only allowlisted attribution privately with the successfully created account', async () => {
+    const at = Date.now();
+    expect((await request({ ...input, trafficAttribution: { visitor: crypto.randomUUID(), session: crypto.randomUUID(),
+      capturedAt: at, source: 'instagram', medium: 'social', campaign: 'membership', loungeId: 'default', url: '/?private=secret' } })).statusCode).toBe(200);
+    const attribution = m.documents.get('_websiteAttribution/new-member');
+    expect(attribution).toMatchObject({ source: 'instagram', campaign: 'membership' });
+    expect(attribution).not.toHaveProperty('url');
+    expect(m.documents.get('users/new-member')).not.toHaveProperty('trafficAttribution');
+  })
   beforeEach(() => {
     vi.clearAllMocks(); m.create.mockReset(); m.remove.mockReset()
     m.documents.clear(); m.failWrite = false; m.failRead = false; m.lostAcknowledgement = false

@@ -69,6 +69,9 @@ describe('WhatsApp management gateway', () => {
     m.documents.set(`${C.USERS}/operator`, { role: 'admin' })
     expect((await request('save', { config: config() })).statusCode).toBe(403)
     expect((await request('test', send)).statusCode).toBe(403)
+    expect((await request('candidate-save', { channelId: 'test', token: 'secret' })).statusCode).toBe(403)
+    expect((await request('connection-start', { target: 'active' })).statusCode).toBe(403)
+    expect((await request('candidate-activate', { confirm: true })).statusCode).toBe(403)
   })
   it('does not activate channels whose integration is pending', async () => {
     for (const provider of ['waba', 'whatsmeow']) {
@@ -146,8 +149,13 @@ describe('WhatsApp management gateway', () => {
     m.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: { text: 'QR' } }) })
     expect((await request('health')).statusCode).toBe(503)
     expect(m.documents.get(`${C.WHATSAPP_CONFIG}/settings`).whapiVerified).toBe(false)
-    m.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: { text: 'AUTH' } }) })
+    m.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: { text: 'AUTH' }, channel_id: 'test-channel', user: { id: '60168008000' } }) })
     expect((await request('health')).statusCode).toBe(200)
+  })
+  it('rejects AUTH health responses missing channel or business user identity', async () => {
+    m.fetch.mockResolvedValue({ ok: true, json: async () => ({ status: { text: 'AUTH' } }) })
+    expect((await request('health')).statusCode).toBe(503)
+    expect(m.documents.get(`${C.WHATSAPP_CONFIG}/settings`).whapiVerified).toBe(false)
   })
   it('invalidates verification when server credentials rotate', async () => {
     m.documents.set(`${C.WHATSAPP_CONFIG}/credentials`, { whapiToken: 'rotated-token' })

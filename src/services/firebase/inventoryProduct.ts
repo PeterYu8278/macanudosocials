@@ -1,4 +1,4 @@
-import { collection, doc, getDocs, runTransaction } from 'firebase/firestore'
+import { collection, doc, getDocs, runTransaction } from '@/services/firebase/monitoredFirestore'
 import { db } from '../../config/firebase'
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections'
 import { sanitizeForFirestore } from './core/sanitize'

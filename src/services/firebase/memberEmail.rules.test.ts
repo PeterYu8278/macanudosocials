@@ -81,4 +81,54 @@ describe.runIf(enabled)('member identity Firestore rules (local emulator)', () =
     await expect(setDoc(doc(db, 'users/new-member'), { ...member, profile: { phone: '+60123456789' } })).rejects.toMatchObject({ code: 'permission-denied' })
     await expect(setDoc(doc(db, 'users/new-member'), member)).rejects.toMatchObject({ code: 'permission-denied' })
   })
+  it('denies forged manual packages and completed reload records', async () => {
+    const db = client('member')
+    const pending = { userId: 'member', requestedAmount: 100, pointsEquivalent: 100, status: 'pending', billplzId: 'bill' }
+    await expect(setDoc(doc(db, 'reloadRecords/online'), pending)).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/online-net'), { ...pending, pointsEquivalentBasis: 'net', annualFeeAmount: 0 })).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/forged-fee'), { ...pending, annualFeeAmount: 199 }))
+      .rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/forged-package'), { ...pending, membershipOrderId: 'forged' }))
+      .rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/forged-completed'), { ...pending, status: 'completed' }))
+      .rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, 'reloadRecords/forged-amount'), { ...pending, pointsEquivalent: 500 }))
+      .rejects.toMatchObject({ code: 'permission-denied' })
+  })
+  it('requires server review and preserves pending reload audit records', async () => {
+    const db = client('member')
+    const response = await fetch(`${base}/reloadRecords/pending`, { method: 'PATCH',
+      headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { userId: text('member'), status: text('pending'), billplzId: text('bill') } }) })
+    expect(response.ok).toBe(true)
+    await expect(updateDoc(doc(client('operator'), 'reloadRecords/pending'), { status: 'completed' }))
+      .rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(deleteDoc(doc(db, 'reloadRecords/pending'))).rejects.toMatchObject({ code: 'permission-denied' })
+  })
+  it('allows only the owner to query safe payment statuses and never exposes private orders', async () => {
+    for (const name of ['_membershipPaymentStatuses', '_membershipPayments']) {
+      const response = await fetch(`${base}/${name}/payment`, { method: 'PATCH',
+        headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fields: { userId: text('member'), status: text('pending') } }) })
+      if (!response.ok) throw new Error('Payment seed failed')
+    }
+    const db = client('member')
+    const rows = await getDocs(query(collection(db, '_membershipPaymentStatuses'), where('userId', '==', 'member'), where('status', 'in', ['creating', 'pending'])))
+    expect(rows.size).toBe(1)
+    await expect(getDoc(doc(client('operator'), '_membershipPaymentStatuses/payment'))).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(getDoc(doc(db, '_membershipPayments/payment'))).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(updateDoc(doc(db, '_membershipPaymentStatuses/payment'), { status: 'fulfilled' })).rejects.toMatchObject({ code: 'permission-denied' })
+  })
+  it('allows owners to read trusted counters but never forge them or access checkpoints', async () => {
+    const response = await fetch(`${base}/_redemptionStats/member`, { method: 'PATCH',
+      headers: { Authorization: 'Bearer owner', 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fields: { version: { integerValue: '1' }, completedQuantity: { integerValue: '2' }, pendingQuantity: { integerValue: '1' } } }) })
+    if (!response.ok) throw new Error('Stats seed failed')
+    const db = client('member')
+    expect((await getDoc(doc(db, '_redemptionStats/member'))).data()?.completedQuantity).toBe(2)
+    await expect(getDoc(doc(db, '_redemptionStats/other'))).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(db, '_redemptionStats/member'), { completedQuantity: 0, pendingQuantity: 0 })).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(setDoc(doc(client('operator'), '_redemptionStats/member'), { completedQuantity: 99 })).rejects.toMatchObject({ code: 'permission-denied' })
+    await expect(getDoc(doc(db, '_redemptionStatsSources/session'))).rejects.toMatchObject({ code: 'permission-denied' })
+  })
 })

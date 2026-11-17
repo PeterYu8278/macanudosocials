@@ -1,6 +1,6 @@
 // Common User Profile View Component
 import React, { useMemo, useState, useEffect, useRef } from 'react'
-import { Row, Col, Card, Typography, Tag, Button, Space, Spin, App, Drawer } from 'antd'
+import { Alert, Row, Col, Card, Typography, Tag, Button, Space, Spin, App, Drawer } from 'antd'
 import {
   CalendarOutlined,
   ShoppingOutlined,
@@ -28,6 +28,7 @@ import { useNavigate } from 'react-router-dom'
 import { MemberProfileCard } from './MemberProfileCard'
 import { CigarRedemptionDrawer } from './CigarRedemptionDrawer'
 import { groupCigarRedemptions, type CigarRedemptionGroup } from '../../utils/cigarRedemptionGroups'
+import { isVisitRedemptionOrder } from '../../utils/redemptionOrder'
 import { isFeatureVisible } from '../../services/firebase/featureVisibility'
 import { useAuthStore } from '../../store/modules/auth'
 import { textTransform } from 'html2canvas/dist/types/css/property-descriptors/text-transform'
@@ -457,9 +458,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
       .reduce((total, record) => total + Number(record.quantity || 0), 0)
   ), [userRedemptions])
 
-  const purchaseOrders = useMemo(() => userOrders.filter(order => (
-    !order.source?.note?.startsWith('驻店兑换订单 (Session:')
-  )), [userOrders])
+  const purchaseOrders = useMemo(() => userOrders.filter(order => !isVisitRedemptionOrder(order)), [userOrders])
   const cigarGroups = useMemo(() => groupCigarRedemptions(userRedemptions), [userRedemptions])
 
   const formatHoursMinutes = (hoursValue: unknown, minutesValue?: unknown) => {
@@ -572,6 +571,7 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
   }
 
   const getPointsRecordDescription = (record: PointsRecord, session?: VisitSession): string => {
+    if (record.visitDisplaySummary) return t('profile.visitSessionPoints')
     if (!isVisitDurationRecord(record)) return formatPointsRecordDescription(record, t)
     if (session?.durationMinutes != null || session?.durationHours != null) {
       const naturalDescription = t('profile.visitDurationFeeWithDuration', {
@@ -792,17 +792,21 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                 </div>
               </div>
               <div style={{ color: selectedPointsRecord.type === 'earn' ? '#52c41a' : '#ff4d4f', fontSize: 24, fontWeight: 800, whiteSpace: 'nowrap' }}>
-                {selectedPointsRecord.type === 'earn' ? '+' : '-'}{selectedPointsRecord.amount}
+                {selectedPointsRecord.visitRecordsComplete === false ? t('profile.visitPointsIncomplete')
+                  : `${selectedPointsRecord.amount === 0 ? '' : selectedPointsRecord.type === 'earn' ? '+' : '-'}${selectedPointsRecord.amount}`}
                 <span style={{ fontSize: 11, marginLeft: 4, fontWeight: 500 }}>pts</span>
               </div>
             </div>
+
+            {selectedPointsRecord.visitRecordsComplete === false && <Alert style={{ marginBottom: 16 }}
+              type="warning" showIcon message={t('profile.visitPointsIncompleteNotice')} />}
 
             <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
               {[
                 [t('pointsConfig.records.source'), t(`pointsConfig.records.sources.${selectedPointsRecord.source}`) || selectedPointsRecord.source],
                 [t('pointsConfig.records.balance'), selectedPointsRecord.balance ?? '-'],
                 [
-                  t(selectedPointsRecord.source === 'reload' ? 'profile.approvedBy' : 'profile.processedBy'),
+                  t(selectedPointsRecord.visitDisplaySummary ? 'profile.lastProcessedBy' : selectedPointsRecord.source === 'reload' ? 'profile.approvedBy' : 'profile.processedBy'),
                   pointsRecordReviewer.id === 'system'
                     ? t('profile.systemOperator')
                     : pointsRecordReviewer.name || pointsRecordReviewer.id || '-'
@@ -1466,7 +1470,8 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                           lineHeight: 1,
                           letterSpacing: '-0.5px'
                         }}>
-                          {isEarn ? '+' : '-'}{record.amount}
+                          {record.visitRecordsComplete === false ? t('profile.visitPointsIncomplete')
+                            : `${record.amount === 0 ? '' : isEarn ? '+' : '-'}${record.amount}`}
                         </div>
                         <div style={{
                           fontSize: 10,

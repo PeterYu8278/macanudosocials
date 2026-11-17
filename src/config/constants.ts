@@ -319,7 +319,7 @@ export const PERMISSIONS = {
 export const ROUTES = {
   HOME: '/',
   LOGIN: '/login',
-  REGISTER: '/register',
+  REGISTER: '/?open=register',
   PROFILE: '/profile',
   ADMIN: '/admin',
   ADMIN_USERS: '/admin/users',

@@ -111,6 +111,7 @@ export const ROUTE_PERMISSIONS = {
   '/admin/visit-sessions': ['admin', 'superAdmin', 'developer'],
   '/admin/finance': ['superAdmin', 'developer'], // 财务仅限超级管理员和开发者
   '/admin/points-config': ['storeAdmin', 'admin', 'superAdmin', 'developer'], // 积分配置支持管理员验证充值
+  '/admin/lounge-reports': ['storeAdmin', 'admin', 'superAdmin', 'developer'],
   '/admin/notifications': ['developer'],
   
   // Developer 专属路由

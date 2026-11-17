@@ -1,8 +1,8 @@
 // 积分配置管理页面
 import React, { useState, useEffect } from 'react';
 import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
-import { Card, Form, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal, Segmented, Grid, Alert } from 'antd';
-import { SaveOutlined, ReloadOutlined, HistoryOutlined, SettingOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined } from '@ant-design/icons';
+import { Card, Form, Input, InputNumber, Button, Space, Typography, Row, Col, Divider, App, Spin, Tabs, Table, Tag, DatePicker, Select, Modal, Segmented, Grid, Alert } from 'antd';
+import { SaveOutlined, ReloadOutlined, HistoryOutlined, SettingOutlined, PlusOutlined, DeleteOutlined, PlayCircleOutlined, SearchOutlined } from '@ant-design/icons';
 import { getPointsConfig, updatePointsConfig, getDefaultPointsConfig } from '../../../services/firebase/pointsConfig';
 import { getAllPointsRecords } from '../../../services/firebase/pointsRecords';
 import { getMembershipFeeConfig, updateMembershipFeeConfig, getDefaultMembershipFeeConfig, getAllMembershipFeeRecords, createMembershipFeeRecord } from '../../../services/firebase/membershipFee';
@@ -18,7 +18,7 @@ import { ReloadVerification } from '../../../components/admin/ReloadVerification
 import dayjs from 'dayjs';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { formatPointsRecordDescription } from '../../../utils/pointsRecordDisplay';
-import { getMembershipFeeDisplayStatus, type MembershipFeeDisplayStatus } from '../../../utils/membershipFeeDisplay';
+import { getMembershipFeeDisplayStatus, matchesMembershipFeeSearch, type MembershipFeeDisplayStatus } from '../../../utils/membershipFeeDisplay';
 import { GLOBAL_COLLECTIONS } from '../../../config/globalCollections';
 import { toDateOrNull } from '../../../services/firebase/core/sanitize';
 
@@ -34,6 +34,7 @@ const PointsConfigPage: React.FC = () => {
   const [processingFees, setProcessingFees] = useState(false);
   const [membershipFeeStatusFilter, setMembershipFeeStatusFilter] = useState<MembershipFeeDisplayStatus | 'all'>('all');
   const [membershipFeeView, setMembershipFeeView] = useState<'paid' | 'upcoming' | 'all'>('paid');
+  const [membershipFeeSearch, setMembershipFeeSearch] = useState('');
   const [linkedPointsRecord, setLinkedPointsRecord] = useState<PointsRecord | null>(null);
   const [loadingLinkedRecord, setLoadingLinkedRecord] = useState<string | null>(null);
   const [creatingFeeRecord, setCreatingFeeRecord] = useState(false);
@@ -54,19 +55,23 @@ const PointsConfigPage: React.FC = () => {
     [creatingFeeRecord]
   );
 
-  const { data: memberPhones } = useFirestoreDoc<Record<string, string>>(
+  const { data: memberDetails } = useFirestoreDoc<Record<string, Partial<User>>>(
     async () => {
       if (activeTab === 'reload') return {};
       const records = activeTab === 'records' ? pointsRecords : membershipFeeRecords;
       const ids = [...new Set(records.map(record => record.userId).filter(Boolean))];
       const entries = await Promise.all(ids.map(async id => {
         const member = await getDocument<User>(COLLECTIONS.USERS, id);
-        return [id, member?.profile?.phone || member?.phone || '-'] as const;
+        return [id, {
+          displayName: member?.displayName, memberId: member?.memberId, email: member?.email,
+          phone: member?.phone, profile: member?.profile,
+        }] as const;
       }));
-      return Object.fromEntries(entries) as Record<string, string>;
+      return Object.fromEntries(entries);
     },
     [activeTab, membershipFeeRecords, pointsRecords]
   );
+  const memberPhones = Object.fromEntries(Object.entries(memberDetails || {}).map(([id, member]) => [id, member.profile?.phone || member.phone || '-']));
 
   const { data: stores = [] } = useFirestoreQuery(getAllStores);
   const { t, i18n } = useTranslation();
@@ -76,6 +81,7 @@ const PointsConfigPage: React.FC = () => {
   const visibleMembershipFeeRecords = membershipFeeRecords.filter(record => {
     if (membershipFeeView === 'paid' && record.status !== 'paid') return false;
     if (membershipFeeView === 'upcoming' && record.status !== 'pending') return false;
+    if (!matchesMembershipFeeSearch(record, memberDetails?.[record.userId], membershipFeeSearch)) return false;
     return membershipFeeStatusFilter === 'all' || getMembershipFeeDisplayStatus(record, feeNow) === membershipFeeStatusFilter;
   });
   const feeStatusInfo = (record: MembershipFeeRecord) => {
@@ -957,6 +963,16 @@ const PointsConfigPage: React.FC = () => {
                   { label: t('pointsConfig.membershipFee.cancelled'), value: 'cancelled' }
                 ]}
                 className="points-config-form"
+              />
+              <Input
+                value={membershipFeeSearch}
+                onChange={event => setMembershipFeeSearch(event.target.value)}
+                allowClear
+                prefix={<SearchOutlined />}
+                placeholder={t('pointsConfig.membershipFee.searchRecordsPlaceholder')}
+                aria-label={t('pointsConfig.membershipFee.searchRecordsPlaceholder')}
+                className="points-config-form"
+                style={{ width: isMobile ? '100%' : 320, maxWidth: '100%' }}
               />
               <Button
                   onClick={refreshMembershipFeeRecords}

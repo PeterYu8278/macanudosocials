@@ -1,14 +1,18 @@
 import { cert, getApps, initializeApp } from 'firebase-admin/app'
-import { initializeFirestore, Timestamp } from 'firebase-admin/firestore'
-import { createHash, timingSafeEqual } from 'node:crypto'
+import { getAuth } from 'firebase-admin/auth'
+import { initializeFirestore, Timestamp } from './_shared/firestoreMonitoring'
+import { createHash, randomBytes, timingSafeEqual } from 'node:crypto'
 import { GLOBAL_COLLECTIONS as C } from '../../src/config/globalCollections'
 import { toWebFunction, type EventHandler } from './_shared/webFunction'
 import { receiveReceipt, type DeliveryStatus } from './_shared/whapiReceipts'
-import { loadWhatsApp, submitWhapi } from './_shared/whatsapp'
-import { createWhatsAppMember, maskEmail, messageText, normalizeWhatsAppSender, registrationSessionRef, startRegistration, validateRegistrationEmail, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { loadWhatsApp, submitWhapi, submitWhapiButtons, submitWhapiQuickReply, submitWhapiUrlButton } from './_shared/whatsapp'
+import { createRegistrationToken, createWhatsAppMember, messageText, normalizeWhatsAppSender, registrationSessionRef, registrationTokenHash, startRegistration, type WhatsAppRegistrationSession } from './_shared/whatsappRegistration'
+import { refreshWhapiConnection } from './_shared/whatsappConnection'
 
 const reply = (statusCode: number) => ({ statusCode, headers: { 'Cache-Control': 'no-store' }, body: '' })
-async function handleRegistrationMessage(db: any, payload: any) {
+export async function handleRegistrationMessage(db: any, payload: any, transport?: {
+  binding: string; send: (phone: string, text: string) => Promise<{ status: string; messageId: string }>
+}) {
   if (process.env.WHATSAPP_REGISTRATION_ENABLED !== 'true') {
     console.info('whatsapp-registration', { stage: 'disabled' })
     return
@@ -26,80 +30,157 @@ async function handleRegistrationMessage(db: any, payload: any) {
   const allowlist = (process.env.WHATSAPP_REGISTRATION_ALLOWLIST || '').split(',')
     .map(value => normalizeWhatsAppSender(value.trim(), value.trim()) || value.trim())
     .filter(Boolean)
-  if (!allowlist.includes(phone)) {
+  if (allowlist.length > 0 && !allowlist.includes(phone)) {
     console.info('whatsapp-registration', { stage: 'not-allowlisted' })
     return
   }
   const text = messageText(message)
   const command = text.toLowerCase()
-  const token = (await loadWhatsApp(db)).token
-  if (!token) {
+  const buttonId = typeof message.reply?.buttons_reply?.id === 'string' ? message.reply.buttons_reply.id : ''
+  const restartReferral = /^register_start_([A-Z0-9]{6})$/i.exec(buttonId)?.[1]?.toUpperCase()
+  const registrationCommand = restartReferral
+    ? `/register ${restartReferral}`
+    : command === 'to start again' ? '/register' : text
+  const connection = await loadWhatsApp(db)
+  if (!transport && connection.config?.defaultProvider === 'whatsmeow') return
+  if (!transport && connection.config && connection.config.whapi.channelId !== payload.channel_id) throw new Error('channel-changed')
+  if (!transport && connection.managed && !connection.verified) throw new Error('verification-required')
+  if (transport) { connection.binding = transport.binding; connection.managed = true }
+  const whapiToken = connection.token
+  if (!whapiToken && !transport) {
     console.error('whatsapp-registration', { stage: 'whapi-token-missing' })
-    return
+    throw new Error('whapi-token-missing')
   }
-  const send = async (body: string) => { await submitWhapi(token, phone, body) }
+  const send = async (body: string) => {
+    const result = transport ? await transport.send(phone, body) : await submitWhapi(whapiToken, phone, body)
+    if (!['accepted', 'sent'].includes(result.status)) throw new Error('whatsapp-send-failed')
+  }
+  const urlButton = (body: string, title: string, url: string) => transport
+    ? transport.send(phone, `${body}\n${url}`) : submitWhapiUrlButton(whapiToken, phone, body, title, url)
+  const sendLogin = async () => {
+    const loginUrl = `${(process.env.URL || 'https://macanudosocials.com').replace(/\/$/, '')}/?open=login&phone=${encodeURIComponent(phone)}`
+    const body = 'This WhatsApp number is already registered. Tap Login now to sign in. If you forgot your password, use the password reset option on the website.'
+    const result = await urlButton(body, 'Login now', loginUrl)
+    if (result.status === 'failed') await send(`${body}\n${loginUrl}`)
+  }
+  const sendConfirmation = async (body: string) => {
+    if (transport) { await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`); return }
+    const result = await submitWhapiButtons(whapiToken, phone, body)
+    if (result.status === 'failed') await send(`${body}\n\nReply CONFIRM to continue or CANCEL to cancel.`)
+  }
   const ref = registrationSessionRef(db, phone)
   const existing = (await ref.get()).data() as WhatsAppRegistrationSession | undefined
+  if (existing && connection.managed && existing.connectionBinding !== connection.binding && !/^\/register(?:\s|$)/i.test(registrationCommand)) {
+    await send('The WhatsApp channel has changed. Please send /register to start again.')
+    return
+  }
   const expired = existing && existing.expiresAtMs <= Date.now()
   if (expired) await ref.set({ step: 'expired', expiredAt: Timestamp.now() }, { merge: true })
 
-  if (command === '/register') {
-    if (existing && !expired && existing.step === 'completed') {
-      await send('这个 WhatsApp 号码已经注册过账号。如需恢复账号，请使用网站的密码重置功能。')
+  const registerCommand = /^\/register(?:\s+([A-Z0-9]{6}))?$/i.exec(registrationCommand)
+  if (registerCommand) {
+    // Persist request limits across function instances and allow retries of the same webhook.
+    const requestId = typeof message.id === 'string' ? message.id : ''
+    if (!requestId) throw new Error('message-id-required')
+    const rateRef = db.collection(C.WHATSAPP_INBOX).doc(`registration-rate-${createHash('sha256').update(phone).digest('hex')}`)
+    const allowed = await db.runTransaction(async (transaction: any) => {
+      const rate = (await transaction.get(rateRef)).data()
+      const now = Date.now()
+      if (rate?.requestId === requestId) return true
+      const inWindow = rate && now - rate.windowStartedAtMs < 60 * 60_000
+      if (rate && (now - rate.lastRequestAtMs < 60_000 || (inWindow && rate.count >= 5))) return false
+      transaction.set(rateRef, { requestId, lastRequestAtMs: now,
+        windowStartedAtMs: inWindow ? rate.windowStartedAtMs : now, count: inWindow ? rate.count + 1 : 1 })
+      return true
+    })
+    // Silently drop excess requests to avoid amplification through outbound replies.
+    if (!allowed) return
+    const [phoneProfiles, legacyPhoneProfiles] = await Promise.all([
+      db.collection(C.USERS).where('profile.phone', '==', phone).limit(1).get(),
+      db.collection(C.USERS).where('phone', '==', phone).limit(1).get(),
+    ])
+    let phoneRegistered = !phoneProfiles.empty || !legacyPhoneProfiles.empty
+    if (!phoneRegistered) {
+      try {
+        await getAuth().getUserByPhoneNumber(phone)
+        phoneRegistered = true
+      } catch (error) {
+        if ((error as { code?: string })?.code !== 'auth/user-not-found') throw error
+      }
+    }
+    if (phoneRegistered) {
+      await sendLogin()
       return
     }
-    await startRegistration(db, phone, message.chat_id)
-    await send('欢迎注册 Macanudo Socials。我们将使用此 WhatsApp 号码作为账户电话。回复 1 继续，回复 CANCEL 取消。')
+    const referralCode = registerCommand[1]?.toUpperCase()
+    if (referralCode && (await db.collection(C.USERS).where('memberId', '==', referralCode).limit(1).get()).empty) {
+      await send('This referral code is invalid. Please check the code and send /register REFERRALCODE again.')
+      return
+    }
+    if (existing && !expired && existing.step === 'completed') {
+      await sendLogin()
+      return
+    }
+    if (existing && !expired && (!connection.managed || existing.connectionBinding === connection.binding) && ['awaiting-form', 'awaiting-final-confirm'].includes(existing.step)) {
+      await send(existing.step === 'awaiting-final-confirm'
+        ? 'Your registration details are awaiting confirmation. Please tap Confirm in the previous message or reply CONFIRM.'
+        : 'Your registration link is still valid. Please use Register now in the previous message. To restart, send CANCEL first.')
+      return
+    }
+    const registrationToken = createRegistrationToken()
+    await startRegistration(db, phone, message.chat_id, undefined, undefined, registrationTokenHash(registrationToken), referralCode, connection.binding)
+    if (transport) await ref.set({ provider: 'whatsmeow' }, { merge: true })
+    const baseUrl = process.env.URL || 'https://macanudosocials.com'
+    const referralQuery = referralCode ? `&ref=${encodeURIComponent(referralCode)}` : ''
+    const formUrl = `${baseUrl.replace(/\/$/, '')}/.netlify/functions/whatsapp-registration-form?token=${encodeURIComponent(registrationToken)}${referralQuery}`
+    const formMessage = 'Welcome to Macanudo Socials. Tap Register now to enter your name, email, and password.\n\nThis link expires in 15 minutes.'
+    try {
+      const button = await urlButton(formMessage, 'Register now', formUrl)
+      if (button.status === 'failed') await send(`${formMessage}\n${formUrl}`)
+    } catch (error) {
+      // Failed delivery must not leave the user stuck with an inaccessible valid link.
+      await db.runTransaction(async (transaction: any) => {
+        const current = (await transaction.get(ref)).data()
+        if (current?.registrationTokenHash === registrationTokenHash(registrationToken) && current.step === 'awaiting-form') {
+          transaction.set(ref, { step: 'expired', expiresAtMs: Date.now() }, { merge: true })
+        }
+      })
+      throw error
+    }
+    return
+  }
+  if (command.startsWith('/register')) {
+    await send('Invalid format. Please use /register or /register REFERRALCODE.')
     return
   }
   if (command === 'cancel' || command === '/cancel') {
     if (existing) await ref.set({ step: 'cancelled', cancelledAt: Timestamp.now() }, { merge: true })
-    await send('注册流程已取消。如需重新开始，请发送 /register。')
+    const restartId = existing?.referralCode ? `register_start_${existing.referralCode}` : 'register_start'
+    if (transport) { await send('Registration cancelled.\n\nReply /register to start again.'); return }
+    const result = await submitWhapiQuickReply(whapiToken, phone, 'Registration cancelled.', 'To start again', restartId)
+    if (result.status === 'failed') await send('Registration cancelled.\n\nReply /register to start again.')
     return
   }
-  if (!existing || expired || !['awaiting-confirmation', 'awaiting-name', 'awaiting-email', 'awaiting-final-confirm'].includes(existing.step)) return
+  if (!existing || expired || existing.step !== 'awaiting-final-confirm') return
   const session = { ...existing, attempts: (existing.attempts || 0) + 1, updatedAt: Timestamp.now() } as WhatsAppRegistrationSession
   if (session.attempts > 12) {
     await ref.set({ step: 'locked', updatedAt: Timestamp.now() }, { merge: true })
-    await send('输入次数过多，注册流程已暂停。请稍后重新发送 /register。')
+    await send('Too many attempts. Registration has been paused. Please send /register again later.')
     return
   }
-  if (session.step === 'awaiting-confirmation') {
-    if (text !== '1') { await send('请回复 1 继续，或回复 CANCEL 取消。'); return }
-    session.step = 'awaiting-name'
-    await ref.set(session)
-    await send('请输入您的姓名。')
-    return
-  }
-  if (session.step === 'awaiting-name') {
-    if (text.length < 2 || text.length > 128) { await send('姓名长度需要为 2 至 128 个字符，请重新输入。'); return }
-    session.displayName = text
-    session.step = 'awaiting-email'
-    await ref.set(session)
-    await send('请输入您的 Email。')
-    return
-  }
-  if (session.step === 'awaiting-email') {
-    const email = validateRegistrationEmail(text)
-    if (!email) { await send('Email 格式不正确，请重新输入。'); return }
-    session.email = email
-    session.step = 'awaiting-final-confirm'
-    await ref.set(session)
-    await send(`请确认注册资料：\n姓名：${session.displayName}\n电话：${phone}\nEmail：${maskEmail(email)}\n\n回复 CONFIRM 确认，或 CANCEL 取消。`)
-    return
-  }
-  if (session.step === 'awaiting-final-confirm') {
-    if (command !== 'confirm') { await send('请回复 CONFIRM 确认，或 CANCEL 取消。'); return }
-    try {
-      const result = await createWhatsAppMember(db, session)
-      await send(result.passwordSetupEmail === 'sent'
-        ? '注册成功。请检查 Email 并使用安全链接设置登录密码。'
-        : '账号已创建，但设置密码邮件暂时发送失败，请联系管理员。')
-    } catch (error) {
-      const code = (error as { code?: string })?.code
-      if (code === 'email-in-use' || code === 'phone-in-use') await send('该 Email 或电话号码已经注册，请使用其他资料。')
-      else await send('注册暂时无法完成，请稍后再试或联系管理员。')
-    }
+  if (command !== 'confirm') { await send('Please tap Confirm or reply CONFIRM to continue. You can also tap Cancel to cancel.'); return }
+  try {
+    const result = await createWhatsAppMember(db, session)
+    const successText = '注册成功。请点击 Open App 打开 Macanudo Socials。'
+    const button = await urlButton(successText, 'Open App', process.env.URL || 'https://macanudosocials.com')
+    if (button.status === 'failed') await send(successText)
+  } catch (error) {
+    const code = (error as { code?: string })?.code
+    if (code === 'email-and-phone-in-use') await send('Both this email and phone number are already registered. Please use a different email and phone number.')
+    else if (code === 'email-in-use') await send('This email is already registered. Please use a different email address.')
+    else if (code === 'phone-in-use') await send('This phone number is already registered. Please use a different phone number.')
+    else if (code === 'invalid-referral-code') await send('This referral code is invalid. Please start again with /register or /register REFERRALCODE.')
+    else await send('Registration could not be completed. Please try again later or contact an administrator.')
   }
 }
 export const eventHandler: EventHandler = async event => {
@@ -121,21 +202,55 @@ export const eventHandler: EventHandler = async event => {
     }
     const db = initializeFirestore(getApps()[0], { preferRest: true })
     const settings = db.collection(C.WHATSAPP_CONFIG).doc('settings')
-    const channelId = (await settings.get()).data()?.config?.whapi?.channelId
-    if (!channelId || payload.channel_id !== channelId) return reply(403)
+    const config = (await settings.get()).data()
+    const activeChannel = config?.config?.whapi?.channelId
+    const channelId = payload.channel_id
+    if (typeof channelId !== 'string' || !channelId || channelId.length > 200) return reply(403)
+    const active = channelId === activeChannel
+    const retired = active ? null : (await db.collection(C.WHATSAPP_CONFIG).doc(`retired-${createHash('sha256').update(channelId).digest('hex')}`).get()).data()
+    if (!active && retired?.channelId !== channelId) return reply(403)
     const rawEvent = payload.event || {}
     const method = rawEvent.method || rawEvent.event
     const eventType = rawEvent.type || (typeof rawEvent.event === 'string' ? rawEvent.event.split('.')[0] : '')
     const eventMethod = typeof method === 'string' ? method.split('.').at(-1) : method
+    if (['channel', 'channels', 'users'].includes(eventType)) {
+      if (active) await refreshWhapiConnection(db, channelId)
+      return reply(200)
+    }
     if (eventType === 'messages' && ['post', 'put'].includes(eventMethod)) {
+      if (!active) return reply(200)
       const message = Array.isArray(payload.messages) ? payload.messages[0] : null
       const messageId = typeof message?.id === 'string' ? message.id : ''
-      if (messageId) {
-        const inboxRef = db.collection(C.WHATSAPP_INBOX).doc(createHash('sha256').update(`${channelId}:${messageId}`).digest('hex'))
-        if ((await inboxRef.get()).exists) return reply(200)
-        await inboxRef.set({ messageId, channelId, receivedAt: Timestamp.now() })
+      const owner = randomBytes(16).toString('hex')
+      const inboxRef = messageId ? db.collection(C.WHATSAPP_INBOX).doc(createHash('sha256').update(`${channelId}:${messageId}`).digest('hex')) : null
+      if (inboxRef) {
+        const claim = await db.runTransaction(async (transaction: any) => {
+          const snapshot = await transaction.get(inboxRef)
+          const entry = snapshot.data()
+          if (snapshot.exists && (!entry.status || entry.status === 'completed')) return 'completed'
+          if (entry?.status === 'processing' && entry.leaseUntilMs > Date.now()) return 'busy'
+          transaction.set(inboxRef, { messageId, channelId, status: 'processing', owner,
+            leaseUntilMs: Date.now() + 120_000, receivedAt: Timestamp.now() }, { merge: true })
+          return 'claimed'
+        })
+        if (claim === 'completed') return reply(200)
+        if (claim === 'busy') return reply(503)
       }
-      await handleRegistrationMessage(db, payload)
+      const finish = async (status: string) => {
+        if (!inboxRef) return
+        await db.runTransaction(async (transaction: any) => {
+          if ((await transaction.get(inboxRef)).data()?.owner === owner) {
+            transaction.set(inboxRef, { status, leaseUntilMs: 0, updatedAt: Timestamp.now() }, { merge: true })
+          }
+        })
+      }
+      try {
+        await handleRegistrationMessage(db, payload)
+        await finish('completed')
+      } catch (error) {
+        await finish('failed')
+        throw error
+      }
       await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
       return reply(200)
     }
@@ -152,9 +267,9 @@ export const eventHandler: EventHandler = async event => {
       receipts.push({ id: status.id, status: status.status === 'played' ? 'read' : status.status, statusAtMs: seconds * 1000 })
     }
     for (let index = 0; index < receipts.length; index += 5) {
-      await Promise.all(receipts.slice(index, index + 5).map(receipt => receiveReceipt(db, channelId, receipt.id, receipt)))
+      await Promise.all(receipts.slice(index, index + 5).map(receipt => receiveReceipt(db, channelId, receipt.id, receipt, config?.credentialMode !== 'managed')))
     }
-    await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
+    if (active) await settings.set({ whapiWebhookAt: Timestamp.now() }, { merge: true })
     return reply(200)
   } catch { return reply(503) }
 }

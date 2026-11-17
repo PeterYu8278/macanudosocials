@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { Store } from '../../types';
 import dayjs from 'dayjs';
 import { calculateBookingBalance, calculateBookingPayment } from '../../utils/roomBookingFees';
+import { RoomBookingBanner } from './RoomBookingBanner';
 
 interface RoomBookingSectionProps {
   style?: React.CSSProperties;
@@ -649,47 +650,7 @@ export const RoomBookingSection: React.FC<RoomBookingSectionProps> = ({ style })
 
           return (
             <div style={{ display: 'flex', flexDirection: 'column', height: '100%', maxHeight: 'calc(95vh - 24px)', overflow: 'hidden' }}>
-              {/* Image Banner with Title Overlay */}
-              <div style={{
-                width: 'calc(100%)',
-                height: 110,
-                overflow: 'hidden',
-                position: 'relative',
-                flexShrink: 0,
-              }}>
-                <img
-                  src="https://images.unsplash.com/photo-1508739773434-c26b3d09e071?auto=format&fit=crop&w=600&q=80"
-                  alt="Cigar Lounge"
-                  style={{
-                    width: '100%',
-                    height: '100%',
-                    objectFit: 'cover',
-                    borderTopLeftRadius: 12,
-                    borderTopRightRadius: 12,
-                  }}
-                />
-                <div style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: 'linear-gradient(180deg, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.4) 60%, rgba(21,19,15,1) 100%)',
-                }} />
-                <div style={{
-                  position: 'absolute',
-                  bottom: 8,
-                  left: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                  zIndex: 2
-                }}>
-                  <span style={{ color: '#fff', fontSize: 15, fontWeight: 700, textShadow: '0 2px 4px rgba(0,0,0,0.8)' }}>
-                    {t('roomBooking.unifiedTitle')}
-                  </span>
-                </div>
-              </div>
+              <RoomBookingBanner imageUrl={selectedRoom?.imageUrl} roomName={selectedRoom?.name} title={t('roomBooking.unifiedTitle')} />
 
               {/* Scrollable Container */}
               <div style={{

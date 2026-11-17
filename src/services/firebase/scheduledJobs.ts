@@ -1,5 +1,5 @@
 // 定时任务函数（可在客户端调用或后端 Cloud Functions 使用）
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc } from '@/services/firebase/monitoredFirestore';
 import { db } from '../../config/firebase';
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { getExpiredVisitSessions, completeVisitSession } from './visitSessions';

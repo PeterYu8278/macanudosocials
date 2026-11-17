@@ -1,4 +1,13 @@
 .whatsapp-management { min-width: 0; padding-bottom: 24px; }
+.whatsapp-connection-panel { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.18); }
+.whatsapp-connection-panel .ant-alert { margin: 12px 0; }
+.whatsapp-connection-panel .whatsapp-settings-grid { margin: 12px 0; }
+.whatsapp-connection-panel label { min-width: 0; overflow-wrap: anywhere; }
+.whatsapp-candidate { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.15); }
+.whatsapp-candidate .ant-typography { overflow-wrap: anywhere; }
+.whatsapp-qr-frame { width: min(280px, 100%); aspect-ratio: 1; margin: 20px auto 0; display: flex; align-items: center; justify-content: center; }
+.whatsapp-qr-frame img { display: block; width: 100%; height: 100%; object-fit: contain; background: #fff; padding: 12px; box-sizing: border-box; }
+.whatsapp-connected-icon { color: #52c41a; font-size: 48px; }
 .whatsapp-management-heading, .whatsapp-channel-heading, .whatsapp-rule { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .whatsapp-management-heading .ant-form-item { margin-bottom: 0; }
 .whatsapp-management .ant-tabs-nav-list { flex-wrap: nowrap; }

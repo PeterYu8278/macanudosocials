@@ -1,0 +1,106 @@
+import { describe, expect, it } from 'vitest';
+import { reconcileLoungeDebt, type DebtBaseline } from './loungeDebt';
+describe('shared-wallet debt attribution', () => {
+  it('keeps chronological calculated balances visible across conflicting recorded checkpoints', () => {
+    const result = reconcileLoungeDebt([
+      { id: 'history', at: 1, amount: 123 },
+      { id: 'reload', at: 2, amount: 300, after: 300 },
+      { id: 'day-pass', at: 3, amount: -100, after: 200 },
+      { id: 'annual', at: 4, amount: -199, after: 1 },
+    ], 0, 5, 1, undefined, 'zero');
+    expect(result).toMatchObject({ reliable: false, expectedBalance: 124, difference: -123 });
+    expect(result.reasons).toEqual(expect.arrayContaining(['balance-gap', 'entry-mismatch', 'wallet-mismatch']));
+    expect(result.calculatedBalances).toMatchObject({ reload: { before: 123, after: 423 },
+      'day-pass': { before: 423, after: 323 }, annual: { before: 323, after: 124 } });
+  });
+  it('does not invent row balances after an ambiguous chronological boundary', () => {
+    const result = reconcileLoungeDebt([{ id: 'a', at: 1, amount: 100 }, { id: 'b', at: 1, amount: -10 },
+      { id: 'later', at: 2, amount: 5 }], 0, 3, 95, undefined, 'zero');
+    expect(result.calculatedBalances).toEqual({});
+    expect(result.reliable).toBe(false);
+  });
+  it('reconciles imported history from the owner-confirmed zero opening balance without writing balances', () => {
+    const history = [{ id: 'reload', at: 1, amount: 100 }, { id: 'v1', at: 2, amount: -18 },
+      { id: 'v2', at: 3, amount: -27 }, { id: 'v3', at: 4, amount: -36 }];
+    expect(reconcileLoungeDebt(history, 5, 6, 19, undefined, 'zero'))
+      .toMatchObject({ reliable: true, expectedBalance: 19, difference: 0, reasons: [] });
+    expect(reconcileLoungeDebt(history, 5, 6, 19, undefined, 'zero').calculatedBalances)
+      .toEqual({ reload: { before: 0, after: 100 }, v1: { before: 100, after: 82 },
+        v2: { before: 82, after: 55 }, v3: { before: 55, after: 19 } });
+    expect(reconcileLoungeDebt(history, 5, 6, 20, undefined, 'zero'))
+      .toMatchObject({ reliable: false, expectedBalance: 19, difference: 1, reasons: ['wallet-mismatch'] });
+  });
+  it('checks first recorded checkpoints against zero rather than inferring an arbitrary starting balance', () => {
+    const result = reconcileLoungeDebt([{ id: 'fee', at: 3, amount: -18, before: 100, after: 82 }], 2, 5, 82, undefined, 'zero');
+    expect(result.reliable).toBe(false); expect(result.reasons).toContain('balance-gap');
+    expect(result.expectedBalance).toBe(-18); expect(result.difference).toBe(100);
+  });
+  it('preserves a computable net total even when same-time debt attribution is ambiguous', () => {
+    const result = reconcileLoungeDebt([{ id: 'a', at: 3, amount: 100 }, { id: 'b', at: 3, amount: -18 }], 2, 5, 82, undefined, 'zero');
+    expect(result).toMatchObject({ reliable: false, expectedBalance: 82, difference: 0 });
+    expect(result.reasons).toContain('ambiguous-order');
+  });
+  it('reconciles an empty zero wallet but flags unexplained positive or negative balances', () => {
+    expect(reconcileLoungeDebt([], 2, 5, 0, undefined, 'zero')).toMatchObject({ reliable: true, expectedBalance: 0 });
+    expect(reconcileLoungeDebt([], 2, 5, 19, undefined, 'zero')).toMatchObject({ reliable: false, expectedBalance: 0, difference: 19 });
+  });
+  const baseline = (balance = 156): DebtBaseline => ({ version: 1, at: 1, balance, boundary: 'through_timestamp',
+    evidenceReference: 'verified-archive', note: 'Reviewed independent historical source', reviewedBy: 'reviewer', approvedAt: 2 });
+  it('does not label absence of usable history as an established wallet discrepancy', () => {
+    expect(reconcileLoungeDebt([], 2, 5, 156)).toMatchObject({ reliable: false, reasons: ['missing-checkpoint'], expectedBalance: null, difference: null });
+  });
+  it('starts from an approved historical balance and never applies records covered by its boundary again', () => {
+    const result = reconcileLoungeDebt([
+      { id: 'covered', at: 1, amount: 999, after: 999 },
+      { id: 'new', at: 3, amount: -160, before: 156, after: -4, storeId: 'A' },
+    ], 2, 5, -4, baseline());
+    expect(result).toMatchObject({ reliable: true, expectedBalance: -4, difference: 0, added: { A: 4 }, closing: { A: 4 } });
+  });
+  it('retains negative historical baseline debt as unallocated and applies FIFO repayments', () => {
+    const result = reconcileLoungeDebt([{ id: 'reload', at: 3, amount: 10, before: -20, after: -10, storeId: 'B' }], 2, 5, -10, baseline(-20));
+    expect(result).toMatchObject({ reliable: true, opening: { unallocated: 20 }, repaid: { unallocated: 10 }, closing: { unallocated: 10 } });
+    expect(result.closing.A).toBeUndefined();
+  });
+  it('orders same-time membership fees and credits by their balance chain, not document ID', () => {
+    const result = reconcileLoungeDebt([
+      { id: 'a-fee', at: 3, amount: -199, before: 299, after: 100 },
+      { id: 'z-credit', at: 3, amount: 299, before: 0, after: 299 },
+    ], 2, 5, 100);
+    expect(result).toMatchObject({ reliable: true, expectedBalance: 100, reasons: [] });
+  });
+  it('does not guess the order of ambiguous same-time transactions', () => {
+    const result = reconcileLoungeDebt([{ id: 'a', at: 3, amount: -10 }, { id: 'b', at: 3, amount: -20 }], 2, 5, -30);
+    expect(result.reliable).toBe(false); expect(result.reasons).toContain('ambiguous-order');
+  });
+  it('does not claim a complete period when the baseline is later than its opening', () => {
+    expect(reconcileLoungeDebt([], 0, 5, 156, baseline()).reasons).toContain('baseline-after-opening');
+  });
+  it('refuses a baseline without independent evidence', () => {
+    expect(reconcileLoungeDebt([], 2, 5, 156, { ...baseline(), evidenceReference: '' }).reasons).toContain('invalid-baseline');
+  });
+  it('flags invalid dates instead of dropping the transaction silently', () => {
+    expect(reconcileLoungeDebt([{ id: 'bad', at: NaN, amount: 10 }], 2, 5, 156, baseline()).reasons).toContain('invalid-entry');
+  });
+  it('separates historical opening debt, new debt and FIFO repayments across stores', () => {
+    const result = reconcileLoungeDebt([
+      { id: '1', at: 1, amount: -30, before: 10, after: -20, storeId: 'A' },
+      { id: '2', at: 3, amount: -10, before: -20, after: -30, storeId: 'B' },
+      { id: '3', at: 4, amount: 25, before: -30, after: -5 },
+    ], 2, 5, -5);
+    expect(result).toMatchObject({ reliable: true, opening: { A: 20 }, added: { B: 10 }, repaid: { A: 20, B: 5 }, closing: { B: 5 } });
+  });
+  it('keeps pre-checkpoint negative balances unallocated', () => {
+    expect(reconcileLoungeDebt([{ id: '1', at: 3, amount: -10, before: -20, after: -30, storeId: 'A' }], 2, 5, -30))
+      .toMatchObject({ reliable: true, opening: { unallocated: 20 }, added: { A: 10 }, closing: { unallocated: 20, A: 10 } });
+  });
+  it('does not fabricate zero debt when checkpoints or ledger entries are missing', () => {
+    expect(reconcileLoungeDebt([], 2, 5, -20).reliable).toBe(false);
+    expect(reconcileLoungeDebt([{ id: '1', at: 3, amount: -10, before: 20, after: 10 }], 2, 5, -50).reliable).toBe(false);
+  });
+  it('flags balance gaps instead of attributing them to a lounge', () => {
+    expect(reconcileLoungeDebt([
+      { id: '1', at: 1, amount: -5, before: 0, after: -5, storeId: 'A' },
+      { id: '2', at: 3, amount: -5, before: -50, after: -55, storeId: 'B' },
+    ], 2, 5, -55).reliable).toBe(false);
+  });
+});

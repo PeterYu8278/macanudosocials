@@ -1,7 +1,8 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { Timestamp, getFirestore } from 'firebase-admin/firestore';
+import { Timestamp, getFirestore } from './_shared/firestoreMonitoring';
+import { hasAnnualHistory } from './_shared/membershipPayment';
 
 const headers = {
   'Content-Type': 'application/json',
@@ -20,8 +21,14 @@ const initializeAdmin = () => {
   if (getApps().length) return;
 
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT is not configured');
-  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+  if (!serviceAccount) throw new Error('SERVICE_UNAVAILABLE');
+
+  try {
+    initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+  } catch (error) {
+    console.error('[activate-membership] Firebase Admin initialization failed', error);
+    throw new Error('SERVICE_UNAVAILABLE');
+  }
 };
 
 const toDate = (value: unknown): Date | null => {
@@ -54,7 +61,12 @@ const getAuthenticatedUser = async (authorization?: string) => {
   if (!token) throw new Error('UNAUTHENTICATED');
 
   initializeAdmin();
-  const decoded = await getAuth().verifyIdToken(token);
+  let decoded;
+  try {
+    decoded = await getAuth().verifyIdToken(token);
+  } catch {
+    throw new Error('UNAUTHENTICATED');
+  }
   const db = getFirestore();
   let userSnapshot = await db.collection('users').doc(decoded.uid).get();
 
@@ -78,7 +90,15 @@ export const eventHandler: Handler = async event => {
   try {
     const userSnapshot = await getAuthenticatedUser(event.headers.authorization);
     const db = getFirestore();
-    const body = event.body ? JSON.parse(event.body) : {};
+    const annualHistory = await hasAnnualHistory(db, userSnapshot.id);
+    let body: Record<string, unknown> = {};
+    if (event.body) {
+      try {
+        body = JSON.parse(event.body);
+      } catch {
+        throw new Error('INVALID_REQUEST');
+      }
+    }
     const storeId = typeof body.storeId === 'string' && body.storeId.trim()
       ? body.storeId.trim()
       : null;
@@ -99,19 +119,26 @@ export const eventHandler: Handler = async event => {
     const activationDate = new Date().toISOString().slice(0, 10);
     const recordRef = pendingRecord?.ref
       || db.collection('membershipFeeRecords').doc(`activation_${userSnapshot.id}_${activationDate}`);
+    const nextRecordRef = db.doc(`membershipFeeRecords/${recordRef.id}_renewal`);
     const configRef = db.doc('config/membershipFee');
 
     const result = await db.runTransaction(async transaction => {
-      const [freshUserSnapshot, configSnapshot, recordSnapshot] = await Promise.all([
+      const [freshUserSnapshot, configSnapshot, recordSnapshot, nextRecordSnapshot] = await Promise.all([
         transaction.get(userSnapshot.ref),
         transaction.get(configRef),
         transaction.get(recordRef),
+        transaction.get(nextRecordRef),
       ]);
 
       if (!freshUserSnapshot.exists) throw new Error('USER_NOT_FOUND');
       const user = freshUserSnapshot.data()!;
       if (user.status === 'active') throw new Error('ALREADY_ACTIVE');
       if (user.status === 'suspended') throw new Error('ACCOUNT_SUSPENDED');
+      const existingUntil = toDate(user.membership?.activeUntil);
+      if (existingUntil && existingUntil > new Date()) throw new Error('MEMBERSHIP_STATUS_UNVERIFIED');
+      if (!annualHistory) {
+        throw new Error('FIRST_PAYMENT_REQUIRED');
+      }
 
       const now = new Date();
       const nowTimestamp = Timestamp.fromDate(now);
@@ -128,29 +155,23 @@ export const eventHandler: Handler = async event => {
         throw new Error('MEMBERSHIP_RECORD_ALREADY_PROCESSED');
       }
 
-      const renewalType = recordSnapshot.data()?.renewalType === 'renewal'
-        ? 'renewal'
-        : user.role === 'guest' ? 'initial' : 'renewal';
+      const renewalType: 'initial' | 'renewal' = 'renewal';
       const newPoints = currentPoints - amount;
       const activeUntil = new Date(now);
       activeUntil.setFullYear(activeUntil.getFullYear() + 1);
       const pointsRecordRef = db.collection('pointsRecords').doc();
-      const nextRecordRef = db.doc(`membershipFeeRecords/${recordRef.id}_renewal`);
-      const nextRecordSnapshot = await transaction.get(nextRecordRef);
 
       const userUpdate: Record<string, unknown> = {
         'membership.points': newPoints,
         'membership.activeFrom': nowTimestamp,
         'membership.activeUntil': Timestamp.fromDate(activeUntil),
         status: 'active',
-        role: user.role === 'guest' ? 'member' : user.role,
+        role: ['guest', 'member'].includes(user.role) ? 'vip' : user.role,
         updatedAt: nowTimestamp,
       };
 
       if (renewalType === 'renewal') {
-        const waiverExpiresAt = new Date(now);
-        waiverExpiresAt.setDate(waiverExpiresAt.getDate() + 30);
-        userUpdate['membership.nextFirstVisitWaiverExpiresAt'] = Timestamp.fromDate(waiverExpiresAt);
+        userUpdate['membership.nextFirstVisitWaiverExpiresAt'] = null;
       }
 
       transaction.update(freshUserSnapshot.ref, userUpdate);
@@ -196,31 +217,27 @@ export const eventHandler: Handler = async event => {
         });
       }
 
-      if (renewalType === 'initial' && user.referral?.referredByUserId) {
-        const referralRef = db.doc(`users/${user.referral.referredByUserId}/referrals/${freshUserSnapshot.id}`);
-        transaction.set(referralRef, {
-          referredUserId: freshUserSnapshot.id,
-          referredUserName: user.displayName || '',
-          referredUserMemberId: user.memberId || null,
-          membershipActivatedAt: nowTimestamp,
-          createdAt: user.referral.referralDate || nowTimestamp,
-          updatedAt: nowTimestamp,
-        }, { merge: true });
-      }
-
       return { amount, balance: newPoints, activeUntil: activeUntil.toISOString() };
     });
 
     return reply(200, { success: true, ...result });
   } catch (error: any) {
     const code = error?.message || 'ACTIVATION_FAILED';
+    if (error?.code === 8 || String(code).includes('RESOURCE_EXHAUSTED')) {
+      console.error('[activate-membership] Firestore quota exceeded', error);
+      return reply(503, { success: false, code: 'FIRESTORE_QUOTA_EXCEEDED' });
+    }
     if (code === 'UNAUTHENTICATED') return reply(401, { success: false, code });
     if (code === 'USER_NOT_FOUND') return reply(404, { success: false, code });
-    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED') {
+    if (code === 'ALREADY_ACTIVE' || code === 'ACCOUNT_SUSPENDED' || code === 'MEMBERSHIP_RECORD_ALREADY_PROCESSED' || code === 'FIRST_PAYMENT_REQUIRED' || code === 'MEMBERSHIP_STATUS_UNVERIFIED') {
       return reply(409, { success: false, code });
     }
     if (code === 'INSUFFICIENT_POINTS') {
       return reply(400, { success: false, code, ...error.details });
+    }
+    if (code === 'INVALID_REQUEST') return reply(400, { success: false, code });
+    if (code === 'SERVICE_UNAVAILABLE' || code === 'INVALID_MEMBERSHIP_FEE') {
+      return reply(503, { success: false, code: 'SERVICE_UNAVAILABLE' });
     }
     console.error('[activate-membership]', error);
     return reply(500, { success: false, code: 'ACTIVATION_FAILED' });

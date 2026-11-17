@@ -8,6 +8,7 @@ import MobileBottomNav from './components/layout/MobileBottomNav'
 import ProtectedRoute from './components/common/ProtectedRoute'
 import RoleSimulator from './components/common/RoleSimulator'
 import { useAuthStore } from './store/modules/auth'
+import { useAutomaticMembershipRenewal } from './hooks/useAutomaticMembershipRenewal'
 import { getAppConfig } from './services/firebase/appConfig'
 import { applyDynamicIcons } from './utils/dynamicManifest'
 import { saveAppConfigToIndexedDB } from './utils/indexedDB'
@@ -15,8 +16,11 @@ import { PageLoading } from './components/common/LoadingSpinner'
 import OneSignalIntegration from './components/common/OneSignalIntegration'
 import NotificationOpenTracker from './components/common/NotificationOpenTracker'
 import AppMessageBridge from './components/common/AppMessageBridge'
+import SystemUpdateBanner from './components/common/SystemUpdateBanner'
 import { isFeatureVisible } from './services/firebase/featureVisibility'
 import { getLoginLandingPath } from './utils/loginLanding'
+import { guestMetadata, guestPageConfig } from './config/guestPage'
+import WebsiteTrafficTracker from './components/common/WebsiteTrafficTracker'
 
 // --- 前端页面 (Lazy Loaded) ---
 const Home = lazy(() => import('./views/frontend/Home'))
@@ -50,16 +54,24 @@ const InvoiceTemplateEditor = lazy(() => import('./views/admin/InvoiceTemplate')
 const SubscriptionSettings = lazy(() => import('./views/admin/SubscriptionSettings').then(m => ({ default: m.SubscriptionSettings })))
 const StoreManagement = lazy(() => import('./views/admin/StoreManagement'))
 const SystemConfig = lazy(() => import('./views/admin/SystemConfig'))
+const LoungeReports = lazy(() => import('./views/admin/LoungeReports'))
 const AdminReports = lazy(() => import('./views/admin/Reports'))
 
 // --- 认证页面 (Lazy Loaded) ---
-const Register = lazy(() => import('./views/auth/Register'))
 const CompleteProfile = lazy(() => import('./views/auth/CompleteProfile'))
 
 const { Content } = Layout
 
+const RegisterRedirect: React.FC = () => {
+  const location = useLocation()
+  const params = new URLSearchParams(location.search)
+  params.set('open', 'register')
+  return <Navigate to={`/?${params.toString()}`} replace />
+}
+
 const AppContent: React.FC = () => {
   const { user, isAdmin, loading: authLoading, initializeAuth } = useAuthStore()
+  useAutomaticMembershipRenewal()
   const location = useLocation()
   const previousUserId = useRef<string | null>(null)
   const loginLandingPath = getLoginLandingPath(user?.role)
@@ -108,11 +120,11 @@ const AppContent: React.FC = () => {
   }, [])
 
   // 无需 padding 的页面（基础认证页面 + 商城页面 + 未登录首页 Landing）
-  const noPaddingPages = ['/register', '/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
+  const noPaddingPages = ['/auth/complete-profile', '/shop', ...(user ? [] : ['/'])]
   const needsPadding = !noPaddingPages.includes(location.pathname)
 
   // 认证页面（不显示 footer/navigation，且需要居中显示）
-  const authPages = ['/register', '/auth/complete-profile']
+  const authPages = ['/auth/complete-profile']
   const isAuthPage = authPages.includes(location.pathname)
   const shouldCenter = isAuthPage
   const isLandingPage = !authLoading && !user && location.pathname === '/'
@@ -197,7 +209,10 @@ const AppContent: React.FC = () => {
         }
 
         // Update document.title
-        document.title = `${appName} - Premium Cigar Community`
+        const publicSeo = !useAuthStore.getState().user && window.location.pathname === '/' ? guestMetadata(guestPageConfig(config?.guestPage)) : null
+        const seoTitle = publicSeo?.title || `${appName} - Premium Cigar Community`
+        const seoDescription = publicSeo?.description || `${appName} - Premium Cigar Community`
+        document.title = seoTitle
 
         // 更新 meta 标签
         const updateMetaTag = (name: string, content: string, attribute: string = 'name') => {
@@ -211,7 +226,7 @@ const AppContent: React.FC = () => {
         }
 
         // Update description
-        updateMetaTag('description', `${appName} - Premium Cigar Community`)
+        updateMetaTag('description', seoDescription)
 
         // Update author
         updateMetaTag('author', appName)
@@ -220,12 +235,12 @@ const AppContent: React.FC = () => {
         updateMetaTag('apple-mobile-web-app-title', appName)
 
         // Update Open Graph
-        updateMetaTag('og:title', `${appName} - Premium Cigar Community`, 'property')
-        updateMetaTag('og:description', 'Premium membership platform for cigar lovers.', 'property')
+        updateMetaTag('og:title', seoTitle, 'property')
+        updateMetaTag('og:description', seoDescription, 'property')
 
         // Update Twitter Card
-        updateMetaTag('twitter:title', `${appName} - Premium Cigar Community`)
-        updateMetaTag('twitter:description', 'Premium membership platform for cigar lovers.')
+        updateMetaTag('twitter:title', seoTitle)
+        updateMetaTag('twitter:description', seoDescription)
 
         // 应用动态图标更新（包括 manifest、favicon、apple-touch-icon）
         // 注意：manifest 现在由 Service Worker 动态生成，这里只更新图标
@@ -335,11 +350,12 @@ const AppContent: React.FC = () => {
             }} />
 
             <div style={{ position: 'relative', zIndex: 1, width: '100%', minWidth: 0 }}>
+              {user && location.pathname === '/admin' && <SystemUpdateBanner />}
               <Suspense fallback={<PageLoading />}>
                 <Routes>
                   {/* 认证路由 */}
                   <Route path="/login" element={<Navigate to="/" replace />} />
-                  <Route path="/register" element={<Register />} />
+                  <Route path="/register" element={<RegisterRedirect />} />
                   <Route path="/auth/complete-profile" element={<CompleteProfile />} />
 
                   {/* 前端路由 */}
@@ -364,6 +380,7 @@ const AppContent: React.FC = () => {
                   <Route path="/admin/visit-sessions" element={<ProtectedRoute roles={['admin', 'superAdmin', 'developer']}><VisitSessionsPage /></ProtectedRoute>} />
                   <Route path="/admin/stores" element={<ProtectedRoute roles={['superAdmin', 'developer']}><StoreManagement /></ProtectedRoute>} />
                   <Route path="/admin/system-config" element={<ProtectedRoute roles={['superAdmin', 'developer']}><SystemConfig /></ProtectedRoute>} />
+                  <Route path="/admin/lounge-reports" element={<ProtectedRoute roles={['storeAdmin', 'admin', 'superAdmin', 'developer']}><LoungeReports /></ProtectedRoute>} />
                   <Route path="/admin/notifications" element={<ProtectedRoute roles={['developer']}><Navigate to="/developer/feature-management?tab=notifications" replace /></ProtectedRoute>} />
                   <Route path="/developer/orphaned-users" element={<ProtectedRoute roles={['developer']}><OrphanedUserCleanup /></ProtectedRoute>} />
                   <Route path="/developer/performance" element={<ProtectedRoute roles={['developer']}><PerformanceMonitor /></ProtectedRoute>} />
@@ -379,6 +396,7 @@ const AppContent: React.FC = () => {
                   {/* 默认重定向 */}
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
+                <WebsiteTrafficTracker guestVisible={guestPageVisible === true} />
               </Suspense>
             </div>
           </Content>

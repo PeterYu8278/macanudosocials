@@ -5,21 +5,28 @@
  * 拦截 manifest.json 请求并动态生成
  */
 
-import { precacheAndRoute } from 'workbox-precaching'
-import { registerRoute } from 'workbox-routing'
+import { PrecacheController, PrecacheRoute } from 'workbox-precaching'
+import { Route, Router } from 'workbox-routing'
 import { CacheFirst, StaleWhileRevalidate } from 'workbox-strategies'
 import { ExpirationPlugin } from 'workbox-expiration'
 
 declare const self: ServiceWorkerGlobalScope
 
-// 预缓存资源（由 Workbox 自动注入）
-precacheAndRoute(self.__WB_MANIFEST)
-
+// Register lifecycle handlers before Workbox starts its asynchronous setup.
 self.addEventListener('message', (event: ExtendableMessageEvent) => {
   if (event.data?.type === 'SKIP_WAITING') {
-    void self.skipWaiting()
+    event.waitUntil(self.skipWaiting())
   }
 })
+
+// Own the router so all fetch/message listeners are registered during evaluation,
+// never when a handler first accesses a lazily created Workbox default router.
+const router = new Router()
+router.addFetchListener()
+router.addCacheListener()
+const precacheController = new PrecacheController()
+precacheController.precache(self.__WB_MANIFEST)
+router.registerRoute(new PrecacheRoute(precacheController))
 
 // Handle FCM web push in the same worker that powers the PWA. A site can only
 // have one active worker for the root scope, so keeping this here avoids the
@@ -72,7 +79,7 @@ self.addEventListener('notificationclick', (event: NotificationEvent) => {
 })
 
 // 拦截 manifest.json 请求
-registerRoute(
+router.registerRoute(new Route(
   ({ url }) => url.pathname === '/manifest.json',
   async () => {
     try {
@@ -100,10 +107,10 @@ registerRoute(
       })
     }
   }
-)
+))
 
 // 缓存字体文件（Cache First）
-registerRoute(
+router.registerRoute(new Route(
   ({ request }) => request.destination === 'font',
   new CacheFirst({
     cacheName: 'google-fonts-stylesheets',
@@ -114,10 +121,10 @@ registerRoute(
       }),
     ],
   })
-)
+))
 
 // 缓存图片（Cache First）
-registerRoute(
+router.registerRoute(new Route(
   ({ request }) => request.destination === 'image',
   new CacheFirst({
     cacheName: 'images',
@@ -128,17 +135,17 @@ registerRoute(
       }),
     ],
   })
-)
+))
 
 // 静态资源（Stale While Revalidate）
-registerRoute(
+router.registerRoute(new Route(
   ({ request, url }) =>
     url.origin === self.location.origin &&
     ['script', 'style'].includes(request.destination),
   new StaleWhileRevalidate({
     cacheName: 'static-resources',
   })
-)
+))
 
 /**
  * 从 IndexedDB 读取 appConfig（Service Worker 环境）

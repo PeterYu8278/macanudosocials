@@ -20,7 +20,8 @@ export interface User {
   } | null;
   displayName: string;
   role: UserRole;
-  storeId?: string; // 所属门店 ID (仅针对 admin 角色)
+  storeId?: string; // Primary lounge, retained for compatibility.
+  storeIds?: string[]; // Lounges assigned to admin/storeAdmin accounts.
   // 个人折扣，仅管理员/开发者可见
   discount?: {
     rate?: number;      // 折扣百分比，例如 10 表示 10%
@@ -54,6 +55,7 @@ export interface User {
     nextFirstVisitWaiverExpiresAt?: Date; // 续费后首次驻店免扣费到期时间
     activeFrom?: Date;              // Annual Pass 生效时间
     activeUntil?: Date;             // Annual Pass 到期时间
+    firstActivatedAt?: Date;
   };
   
   // AI 功能使用统计
@@ -488,6 +490,7 @@ export interface FeatureVisibilityConfig {
 
 // 应用配置类型
 export interface AppConfig {
+  guestPage?: import('../config/guestPage').GuestPageConfig;
   id: string; // 'default'
   logoUrl?: string;        // Logo URL
   appName?: string;        // 应用名称（例如：Cigar Club）
@@ -667,10 +670,20 @@ export interface PointsRecord {
   balance?: number;         // 操作后余额
   createdAt: Date;
   createdBy?: string;       // 创建人（管理员手动调整时）
+  balanceBefore?: number;
+  // Read-only presentation fields; never persist a consolidated card as a ledger entry.
+  visitDisplaySummary?: boolean;
+  visitGrossSpend?: number;
+  visitCredits?: number;
+  visitRecordsComplete?: boolean;
+  visitBreakdown?: Array<{ id: string; type: 'earn' | 'spend'; amount: number; description: string;
+    createdAt: Date; includedInTotal: boolean; historical: boolean; summary: boolean }>;
 }
 
 // 驻店记录类型（Check-in/Check-out）
 export interface VisitSession {
+  managedClosing?: boolean;
+  scheduledCheckOutAt?: Date;
   id: string;
   userId: string;
   userName?: string;
@@ -801,13 +814,19 @@ export interface MembershipFeeRecord {
 
 // 充值记录
 export interface ReloadRecord {
+  membershipOrderId?: string;
+  paymentMethod?: 'manual' | 'billplz';
+  paymentPurpose?: 'initial_package' | 'renewal_reload' | 'annual_pass';
+  walletAmount?: number;
+  annualFeeAmount?: number;
   id: string;
   userId: string;
   userName?: string;
   
   // 充值信息
   requestedAmount: number;    // 用户请求的金额（RM）
-  pointsEquivalent: number;   // 对应的积分（基于汇率）
+  pointsEquivalent: number;   // Net reload points after this payment's annual fee, excluding rewards; pending values are estimates.
+  pointsEquivalentBasis?: 'net'; // Absent on legacy gross-point records.
   
   // 状态
   status: 'pending' | 'completed' | 'rejected';
@@ -915,6 +934,7 @@ export interface ReferralRecord {
 }
 
 export interface Store {
+  operations?: import('../utils/loungeOperations').LoungeOperations;
   id: string;
   name: string;
   address: string;

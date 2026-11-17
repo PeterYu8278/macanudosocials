@@ -10,7 +10,7 @@ import {
   QueryDocumentSnapshot,
   getDocs,
   Timestamp
-} from 'firebase/firestore'
+} from '@/services/firebase/monitoredFirestore'
 import { db } from '../../config/firebase'
 import { COLLECTIONS } from './firestore'
 import { GLOBAL_COLLECTIONS } from '../../config/globalCollections'
@@ -431,4 +431,3 @@ export const getOutboundOrdersPaginated = async (
     return { data: [], lastDoc: null, hasMore: false }
   }
 }
-

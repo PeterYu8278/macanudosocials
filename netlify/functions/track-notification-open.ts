@@ -1,6 +1,6 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from './_shared/firestoreMonitoring';
 import { getAuth } from 'firebase-admin/auth';
 
 const headers = {

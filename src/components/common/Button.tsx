@@ -82,7 +82,7 @@ const Button: React.FC<ButtonProps> = ({
     if (gradient && variant === 'primary') {
       return {
         ...baseStyle,
-        background: 'linear-gradient(135deg, #ffd700 0%, #ffed4e 100%)',
+        background: 'var(--cigar-gradient-gold, linear-gradient(to right, #FDE08D, #C48D3A))',
         border: 'none'
       }
     }
@@ -160,7 +160,7 @@ const Button: React.FC<ButtonProps> = ({
       loading={loading}
       danger={variant === 'danger'}
       style={getButtonStyle()}
-      className={className}
+      className={[className, variant === 'success' || variant === 'warning' ? `cigar-button-${variant}` : ''].filter(Boolean).join(' ')}
       onClick={handleClick}
     >
       {renderContent()}

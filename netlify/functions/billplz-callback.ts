@@ -4,10 +4,11 @@
  */
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { createHmac } from 'crypto';
+import { getFirestore, FieldValue } from './_shared/firestoreMonitoring';
+import { createHmac, timingSafeEqual } from 'crypto';
 import { GLOBAL_COLLECTIONS } from '../../src/config/globalCollections';
 import { settlePendingVisitCheckout } from './_shared/pendingVisitCheckout';
+import { handleMembershipBill } from './_shared/membershipPayment';
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -29,23 +30,23 @@ const db = getFirestore();
 
 /**
  * Verify Billplz X-Signature
- * Spec: HMAC-SHA256 of alphabetically-sorted key=value pairs (excluding x_signature itself)
+ * Spec: HMAC-SHA256 of case-insensitively sorted key+value pairs (excluding x_signature itself)
  * joined by "|", using the X-Signature Key as secret.
  */
-function verifyXSignature(params: URLSearchParams, xSignatureKey: string): boolean {
+export function verifyXSignature(params: URLSearchParams, xSignatureKey: string): boolean {
   const receivedSig = params.get('x_signature');
-  if (!receivedSig) return false;
+  if (!receivedSig || !/^[a-f0-9]{64}$/i.test(receivedSig)) return false;
 
   // Collect all params except x_signature, sort alphabetically by key
-  const entries: [string, string][] = [];
+  const entries: string[] = [];
   params.forEach((value, key) => {
-    if (key !== 'x_signature') entries.push([key, value]);
+    if (key !== 'x_signature') entries.push(`${key}${value}`);
   });
-  entries.sort(([a], [b]) => a.localeCompare(b));
+  entries.sort((a, b) => a.toLowerCase() < b.toLowerCase() ? -1 : a.toLowerCase() > b.toLowerCase() ? 1 : 0);
 
-  const source = entries.map(([, v]) => v).join('|');
+  const source = entries.join('|');
   const computed = createHmac('sha256', xSignatureKey).update(source).digest('hex');
-  return computed === receivedSig;
+  return timingSafeEqual(Buffer.from(computed, 'hex'), Buffer.from(receivedSig, 'hex'));
 }
 
 export const eventHandler: Handler = async (event) => {
@@ -80,6 +81,9 @@ export const eventHandler: Handler = async (event) => {
     console.log(`[billplz-callback] Received callback for Bill ID: ${billId}, Paid: ${paid}, Status: ${status}`);
 
     if (paid === 'true') {
+      if (await handleMembershipBill(db, billId || '', Number(params.get('paid_amount')), clientValid, event.queryStringParameters?.membershipOrder, event.queryStringParameters?.membershipProof)) {
+        return { statusCode: 200, body: 'OK (Annual Pass processed)' };
+      }
       // 1. Try to find a Reload Record
       const reloadSnapshot = await db.collection(GLOBAL_COLLECTIONS.RELOAD_RECORDS)
         .where('billplzId', '==', billId)
@@ -96,7 +100,11 @@ export const eventHandler: Handler = async (event) => {
 
         const userId = recordData.userId;
         const amount = recordData.requestedAmount;
-        const points = recordData.pointsEquivalent;
+        // Ordinary reload callbacks credit the payment, never a net field from a membership record.
+        const points = Math.round(Number(amount));
+        if (!Number.isFinite(points) || points <= 0 || recordData.membershipOrderId || recordData.paymentPurpose) {
+          throw new Error('INVALID_RELOAD_AMOUNT');
+        }
 
         await db.runTransaction(async (transaction) => {
           const userRef = db.collection(GLOBAL_COLLECTIONS.USERS).doc(userId);
@@ -106,12 +114,16 @@ export const eventHandler: Handler = async (event) => {
           // Update Points
           transaction.update(userRef, {
             'membership.points': FieldValue.increment(points),
+            ...(userDoc.data()?.role === 'guest' && { role: 'member' }),
             updatedAt: FieldValue.serverTimestamp()
           });
 
           // Update Reload Record
           transaction.update(recordDoc.ref, {
             status: 'completed',
+            pointsEquivalent: points,
+            pointsEquivalentBasis: 'net',
+            annualFeeAmount: 0,
             verifiedAt: FieldValue.serverTimestamp(),
             verifiedBy: 'system_billplz',
             adminNotes: `Auto-verified via Billplz (ID: ${billId}, Paid: ${params.get('paid_at')})`,

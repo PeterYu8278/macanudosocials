@@ -4,7 +4,6 @@ import { useTranslation } from 'react-i18next';
 import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App, Tooltip } from 'antd';
 import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
 import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
-import { processPendingMembershipFees } from '../../services/firebase/scheduledJobs';
 import dayjs from 'dayjs';
 import { uploadFile } from '../../services/cloudinary/create';
 import { getAllStores } from '../../services/firebase/stores';
@@ -13,6 +12,7 @@ import { GLOBAL_COLLECTIONS } from '../../config/globalCollections';
 import { useAuthStore } from '../../store/modules';
 import type { ReloadRecord, Store, User } from '../../types';
 import StoreSelect from '../common/StoreSelect';
+import { netReloadPoints } from '../../utils/reloadPoints';
 
 interface ReloadVerificationProps {
   onRefresh?: () => void;
@@ -131,8 +131,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       let finalProofUrl = proofUrl;
       
       // 如果有上传的文件，先上传到Cloudinary
-      if (values.proof && values.proof.fileList && values.proof.fileList.length > 0) {
-        const file = values.proof.fileList[0].originFileObj;
+      if (values.proof?.length > 0) {
+        const file = values.proof[0].originFileObj;
         if (file) {
           const uploadResult = await uploadFile(file, { 
             folder: 'jep-cigar/reload-proofs',
@@ -160,16 +160,6 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
         loadRecords();
         onRefresh?.();
         
-        // 充值验证成功后，自动检查并扣除年费
-        try {
-          const deductionResult = await processPendingMembershipFees();
-          if (deductionResult.success && deductionResult.processed > 0) {
-            // 静默执行，不显示消息
-          }
-        } catch (error: any) {
-          console.error('[ReloadVerification] 充值后自动扣除年费失败:', error);
-          // 静默失败，不显示错误消息
-        }
       } else {
         message.error(result.error || t('pointsConfig.reloadVerification.verifyFailed'));
       }
@@ -302,8 +292,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       render: (amount: number, record: ReloadRecord) => (
         <div>
           <div>{amount} RM</div>
+          {record.membershipOrderId && <Tag color="gold">{t(`annualPassPayment.${record.paymentPurpose === 'initial_package' ? 'initialPackageLabel' : 'renewalReloadLabel'}`)}</Tag>}
+          {record.membershipOrderId && <div>{t('annualPassPayment.reviewBreakdown', {
+            reload: record.walletAmount, fee: record.annualFeeAmount,
+          })}</div>}
           <div style={{ fontSize: 12, color: '#999' }}>
-            {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
+            {t(record.status === 'completed' ? 'pointsConfig.reloadVerification.pointsEquivalent' : 'pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(record) })}
           </div>
         </div>
       )
@@ -544,8 +538,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                       <div style={{ fontSize: 18, fontWeight: 700, color: '#f4af25', marginBottom: 4 }}>
                         {record.requestedAmount} RM
                       </div>
+                      {record.membershipOrderId && <div style={{ marginBottom: 6 }}>
+                        <Tag color="gold">{t(`annualPassPayment.${record.paymentPurpose === 'initial_package' ? 'initialPackageLabel' : 'renewalReloadLabel'}`)}</Tag>
+                        {t('annualPassPayment.reviewBreakdown', { reload: record.walletAmount, fee: record.annualFeeAmount })}
+                      </div>}
                       <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.6)', marginBottom: 6 }}>
-                        {t('pointsConfig.reloadVerification.pointsEquivalent', { points: record.pointsEquivalent })}
+                        {t(record.status === 'completed' ? 'pointsConfig.reloadVerification.pointsEquivalent' : 'pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(record) })}
                       </div>
                       <div style={{
                         fontSize: 11,
@@ -713,7 +711,7 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
             <div style={{ marginBottom: 16, color: 'rgba(255, 255, 255, 0.85)' }}>
               <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.user')}: {currentRecord.userName || currentRecord.userId}</div>
               <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.amount')}: {currentRecord.requestedAmount} RM</div>
-              <div>{t('pointsConfig.reloadVerification.pointsEquivalent', { points: currentRecord.pointsEquivalent })}</div>
+              <div>{t('pointsConfig.reloadVerification.estimatedPointsEquivalent', { points: netReloadPoints(currentRecord) })}</div>
             </div>
 
             <Form.Item

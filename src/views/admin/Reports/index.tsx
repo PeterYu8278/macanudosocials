@@ -8,7 +8,8 @@ import {
   CalendarOutlined,
   DownloadOutlined,
   BarChartOutlined,
-  HistoryOutlined
+  HistoryOutlined,
+  WalletOutlined
 } from '@ant-design/icons'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
@@ -21,12 +22,19 @@ import {
   getAllInboundOrders,
   getAllOutboundOrders
 } from '../../../services/firebase/firestore'
-import { getAllReloadRecords } from '../../../services/firebase/reload'
+import { getAllMembershipFeeRecords } from '../../../services/firebase/membershipFee'
 import { getAllVisitSessions } from '../../../services/firebase/visitSessions'
 import { getAllRedemptionRecords } from '../../../services/firebase/redemption'
 import { useAuthStore } from '../../../store/modules/auth'
 import { aggregateMemberReportMetrics } from '../../../utils/memberReport'
+import { annualMembershipReportRows } from '../../../utils/annualMembershipReport'
+import { inventoryCustomerFields, mysteryGiftReportRows, reportOrderType } from '../../../utils/operationReports'
 import AuditLogTab from './AuditLogTab'
+import { visibleReportRows } from '../../../utils/reportExport'
+import { getReportRecords } from '../../../services/firebase/reportRecords'
+import { GLOBAL_COLLECTIONS as C } from '../../../config/globalCollections'
+import type { MembershipFeeRecord, PointsRecord, ReloadRecord, User, VisitSession } from '../../../types'
+import { balanceReportRows, membershipFeeReportRows, pointsReportRows, reloadReportRows, visitReportRows, type ReportRecord } from '../../../utils/walletReports'
 
 const { Title, Text, Paragraph } = Typography
 const { RangePicker } = DatePicker
@@ -42,9 +50,11 @@ const AdminReports: React.FC = () => {
   const [orderRange, setOrderRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
   const [eventRange, setEventRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
   const [inventoryRange, setInventoryRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
+  const [annualMembershipRange, setAnnualMembershipRange] = useState<[dayjs.Dayjs, dayjs.Dayjs] | null>(null)
 
   const downloadExcel = async (data: any[], fileName: string, sheetName: string) => {
     const XLSX = await import('xlsx')
+    data = visibleReportRows(data)
     const worksheet = XLSX.utils.json_to_sheet(data)
     if (data.length > 0 && worksheet['!ref']) {
       const headers = Object.keys(data[0])
@@ -65,7 +75,14 @@ const AdminReports: React.FC = () => {
     const XLSX = await import('xlsx')
     const workbook = XLSX.utils.book_new()
     for (const sheet of sheets) {
-      const worksheet = XLSX.utils.json_to_sheet(sheet.data)
+      const data = visibleReportRows(sheet.data)
+      const worksheet = XLSX.utils.json_to_sheet(data)
+      if (data.length && worksheet['!ref']) {
+        worksheet['!autofilter'] = { ref: worksheet['!ref'] }
+        worksheet['!cols'] = Object.keys(data[0]).map(header => ({
+          wch: data.reduce((width, row) => Math.min(40, Math.max(width, String(row[header] ?? '').length + 2)), Math.min(40, header.length + 2))
+        }))
+      }
       XLSX.utils.book_append_sheet(workbook, worksheet, sheet.name)
     }
     XLSX.writeFile(workbook, `${fileName}_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`)
@@ -74,12 +91,14 @@ const AdminReports: React.FC = () => {
   const exportMembers = async () => {
     setExporting('members')
     try {
-      const [users, reloads, sessions, redemptions] = await Promise.all([
-        getUsers(),
-        getAllReloadRecords('completed'),
-        getAllVisitSessions(),
+      const [users, allReloads, sessions, redemptions, fees] = await Promise.all([
+        getReportRecords<User>(C.USERS),
+        getReportRecords<ReloadRecord>(C.RELOAD_RECORDS),
+        getReportRecords<ReportRecord<VisitSession>>(C.VISIT_SESSIONS),
         getAllRedemptionRecords(),
+        getReportRecords<ReportRecord<MembershipFeeRecord>>(C.MEMBERSHIP_FEE_RECORDS),
       ])
+      const reloads = allReloads.filter(record => record.status === 'completed')
 
       const metricsByUser = aggregateMemberReportMetrics(users, reloads, sessions, redemptions)
       const exportUsers = [...users].sort((a, b) => {
@@ -110,7 +129,11 @@ const AdminReports: React.FC = () => {
           'Created At': u.createdAt ? dayjs((u.createdAt as any)?.toDate?.() || u.createdAt).format('YYYY-MM-DD HH:mm:ss') : '-'
         }
       })
-      await downloadExcel(exportData, 'Members_Report', 'Members')
+      await downloadMultiSheetExcel([
+        { data: exportData, name: 'Members' },
+        { data: membershipFeeReportRows(fees, users), name: 'Annual Fees and Renewals' },
+        { data: visitReportRows(sessions, users), name: 'Visit Sessions' },
+      ], 'Members_Report')
       message.success(t('messages.operationSuccess'))
     } catch (error) {
       console.error('Export members error:', error)
@@ -120,21 +143,67 @@ const AdminReports: React.FC = () => {
     }
   }
 
+  const exportAnnualMemberships = async () => {
+    setExporting('annualMemberships')
+    try {
+      const [users, records] = await Promise.all([getUsers(), getAllMembershipFeeRecords('paid')])
+      const data = annualMembershipReportRows(users, records,
+        annualMembershipRange?.[0]?.startOf('day').toDate(),
+        annualMembershipRange?.[1]?.endOf('day').toDate(), new Date(), {
+          missingPayment: t('reports.annualMembershipMissingPayment'),
+          recordedPayment: t('reports.annualMembershipRecordedPayment'),
+          missingPaymentDate: t('reports.annualMembershipMissingPaymentDate'),
+        })
+      await downloadExcel(data, 'Annual_Membership_Report', 'Annual Memberships')
+      message.success(t('messages.operationSuccess'))
+    } catch (error) {
+      console.error('Export annual memberships error:', error)
+      message.error(t('messages.operationFailed'))
+    } finally {
+      setExporting(null)
+    }
+  }
+
+  const exportWallet = async () => {
+    setExporting('wallet')
+    try {
+      const [users, reloads, points] = await Promise.all([
+        getReportRecords<User>(C.USERS),
+        getReportRecords<ReportRecord<ReloadRecord>>(C.RELOAD_RECORDS),
+        getReportRecords<ReportRecord<PointsRecord>>(C.POINTS_RECORDS),
+      ])
+      await downloadMultiSheetExcel([
+        { data: reloadReportRows(reloads, users), name: 'Reload Details' },
+        { data: pointsReportRows(points, users), name: 'Points Ledger' },
+        { data: balanceReportRows(users, points), name: 'Balance Reconciliation' },
+      ], 'Reload_and_Wallet_Report')
+      message.success(t('messages.operationSuccess'))
+    } catch (error) {
+      console.error('Export wallet error:', error)
+      message.error(t('messages.operationFailed'))
+    } finally { setExporting(null) }
+  }
+
   const exportInventory = async () => {
     setExporting('inventory')
     try {
       const [startDate, endDate] = inventoryRange
-        ? [inventoryRange[0]?.toDate(), inventoryRange[1]?.toDate()]
+        ? [inventoryRange[0]?.startOf('day').toDate(), inventoryRange[1]?.endOf('day').toDate()]
         : [null, null]
 
-      const [cigars, movements, inOrders, outOrders] = await Promise.all([
+      const [cigars, movements, inOrders, outOrders, orders, users] = await Promise.all([
         getCigars({ limit: 2000 }),
         getAllInventoryMovements(undefined, { startDate, endDate, limit: 5000 }),
         getAllInboundOrders(undefined, { startDate, endDate, limit: 2000 }),
-        getAllOutboundOrders(undefined, { startDate, endDate, limit: 2000 })
+        getAllOutboundOrders(undefined, { limit: 5000 }),
+        getAllOrders(undefined, { limit: 5000 }),
+        getUsers()
       ])
 
       const cigarMap = new Map(cigars.map(c => [c.id, c]))
+      const outboundMap = new Map(outOrders.flatMap(order => [[order.referenceNo, order], [order.id, order]] as const))
+      const orderMap = new Map(orders.map(order => [order.id, order]))
+      const customerMap = new Map(users.map(customer => [customer.id, customer]))
 
       // --- Sheet 1: Movements (filtered by date range if set) ---
       let filteredMovements = movements
@@ -142,7 +211,7 @@ const AdminReports: React.FC = () => {
         const [start, end] = inventoryRange
         filteredMovements = movements.filter(m => {
           const date = dayjs((m.createdAt as any)?.toDate?.() || m.createdAt)
-          return date.isAfter(start.startOf('day')) && date.isBefore(end.endOf('day'))
+          return !date.isBefore(start.startOf('day')) && !date.isAfter(end.endOf('day'))
         })
       }
 
@@ -170,7 +239,8 @@ const AdminReports: React.FC = () => {
             'Quantity': m.type === 'in' ? m.quantity : -m.quantity,
             'Unit Price': m.unitPrice ?? 0,
             'Reason': m.reason || '-',
-            'Order Status': orderStatus
+            'Order Status': orderStatus,
+            ...inventoryCustomerFields(m, outboundMap, orderMap, customerMap)
           }
         })
 
@@ -264,13 +334,15 @@ const AdminReports: React.FC = () => {
     setExporting('orders')
     try {
       const [startDate, endDate] = orderRange
-        ? [orderRange[0]?.toDate(), orderRange[1]?.toDate()]
+        ? [orderRange[0]?.startOf('day').toDate(), orderRange[1]?.endOf('day').toDate()]
         : [null, null]
 
-      const [orders, cigars, users] = await Promise.all([
+      const [orders, cigars, users, redemptions, sessions] = await Promise.all([
         getAllOrders(undefined, { startDate, endDate, limit: 5000 }),
         getCigars({ limit: 2000 }),
-        getUsers({ limit: 500 })
+        getUsers(),
+        getAllRedemptionRecords(),
+        getAllVisitSessions()
       ])
       
       const cigarMap = new Map(cigars.map(c => [c.id, c.name]))
@@ -282,7 +354,7 @@ const AdminReports: React.FC = () => {
         const [start, end] = orderRange
         filteredOrders = orders.filter(o => {
           const date = dayjs((o.createdAt as any)?.toDate?.() || o.createdAt)
-          return date.isAfter(start.startOf('day')) && date.isBefore(end.endOf('day'))
+          return !date.isBefore(start.startOf('day')) && !date.isAfter(end.endOf('day'))
         })
       }
 
@@ -295,6 +367,7 @@ const AdminReports: React.FC = () => {
           exportData.push({
             'Order No': o.orderNo || '-',
             'Order ID': o.id,
+            'Order Type': reportOrderType(o),
             'Created At': orderDate,
             'Customer': customerName,
             'Customer ID': o.userId,
@@ -312,6 +385,7 @@ const AdminReports: React.FC = () => {
             exportData.push({
               'Order No': o.orderNo || '-',
               'Order ID': o.id,
+              'Order Type': reportOrderType(o),
               'Created At': orderDate,
               'Customer': customerName,
               'Customer ID': o.userId,
@@ -327,7 +401,12 @@ const AdminReports: React.FC = () => {
         }
       })
 
-      downloadExcel(exportData, 'Orders_Report', 'Orders')
+      const sessionMap = new Map(sessions.map(session => [session.id, session]))
+      const mysteryGiftData = mysteryGiftReportRows(redemptions, userMap, cigarMap, sessionMap, startDate, endDate)
+      await downloadMultiSheetExcel([
+        { data: exportData, name: 'Orders' },
+        { data: mysteryGiftData, name: 'Mystery Gifts' },
+      ], 'Orders_Report')
       message.success(t('messages.operationSuccess'))
     } catch (error) {
       console.error('Export orders error:', error)
@@ -373,6 +452,22 @@ const AdminReports: React.FC = () => {
   }
 
   const reportCards = [
+    {
+      key: 'wallet', title: t('reports.walletReportTitle'),
+      icon: <WalletOutlined style={{ fontSize: 32, color: '#1890ff' }} />,
+      description: t('reports.walletReportDesc'), action: exportWallet, color: '#1890ff'
+    },
+    {
+      key: 'annualMemberships',
+      title: t('reports.annualMembershipTitle'),
+      icon: <TeamOutlined style={{ fontSize: 32, color: '#f4af25' }} />,
+      description: t('reports.annualMembershipExportDesc'),
+      action: exportAnnualMemberships,
+      hasFilter: true,
+      range: annualMembershipRange,
+      setRange: setAnnualMembershipRange,
+      color: '#f4af25'
+    },
     {
       key: 'members',
       title: t('navigation.users'),
@@ -428,7 +523,7 @@ const AdminReports: React.FC = () => {
       children: (
         <Row gutter={[24, 24]} style={{ marginTop: 16 }}>
           {reportCards.map(card => (
-            <Col xs={24} sm={12} key={card.key}>
+            <Col xs={24} sm={12} lg={8} key={card.key}>
               <Card
                 hoverable
                 style={{

@@ -96,16 +96,62 @@ describe('formatPointsRecordDescription', () => {
 })
 
 describe('consolidateVisitPointsRecords', () => {
+  it('combines modern first-hour and final settlement into one 99-point card without changing raw records', () => {
+    const records = [
+      record({ id: 'closing', relatedId: 'session', amount: 81, description: 'Visit final settlement', createdAt: new Date('2026-10-23T15:00:00Z') }),
+      record({ id: 'initial', relatedId: 'session', amount: 18, description: 'Visit first-hour charge', createdAt: new Date('2026-10-23T09:35:00Z') }),
+    ]
+    const before = JSON.stringify(records)
+    const result = consolidateVisitPointsRecords(records, new Set())
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ type: 'spend', amount: 99, visitGrossSpend: 99, visitCredits: 0, visitDisplaySummary: true })
+    expect(result[0].visitBreakdown?.map(entry => entry.id)).toEqual(['closing', 'initial'])
+    expect(JSON.stringify(records)).toBe(before)
+  })
+  it('keeps zero final settlement inside the session card instead of a separate minus-zero card', () => {
+    const result = consolidateVisitPointsRecords([
+      record({ id: 'zero', relatedId: 'session', amount: 0, description: 'Visit final settlement' }),
+      record({ id: 'initial', relatedId: 'session', amount: 18, description: 'Visit first-hour charge' }),
+    ], new Set())
+    expect(result).toHaveLength(1); expect(result[0].amount).toBe(18)
+    expect(result[0].visitBreakdown).toHaveLength(2)
+  })
+  it('nets interval charges, refunds and rebates, including a positive net refund', () => {
+    const result = consolidateVisitPointsRecords([
+      record({ id: 'rebate', relatedId: 'session', type: 'earn', amount: 1, description: 'Visit rebate' }),
+      record({ id: 'closing', relatedId: 'session', type: 'earn', amount: 30, description: 'Visit final settlement' }),
+      record({ id: 'interval', relatedId: 'session', amount: 9, description: 'Visit interval charge' }),
+      record({ id: 'initial', relatedId: 'session', amount: 18, description: 'Visit first-hour charge' }),
+    ], new Set())
+    expect(result).toHaveLength(1)
+    expect(result[0]).toMatchObject({ type: 'earn', amount: 4, visitGrossSpend: 27, visitCredits: 31 })
+  })
+  it('does not count historical duplicate evidence alongside actual wallet entries', () => {
+    const result = consolidateVisitPointsRecords([
+      record({ id: 'real', relatedId: 'session', amount: 18, description: 'Visit first-hour charge' }),
+      record({ id: 'history', relatedId: 'session', amount: 18, description: 'Historical visit fee import', createdBy: 'legacy_migration' }),
+    ], new Set())
+    expect(result[0].amount).toBe(18)
+    expect(result[0].visitBreakdown?.find(entry => entry.id === 'history')?.includedInTotal).toBe(false)
+  })
+  it('does not merge different users when a related ID is reused', () => {
+    expect(consolidateVisitPointsRecords([
+      record({ id: 'a', userId: 'a', relatedId: 'shared' }),
+      record({ id: 'b', userId: 'b', relatedId: 'shared' }),
+    ], new Set())).toHaveLength(2)
+  })
   it('shows visit deductions while their check-in session is pending', () => {
     const records = [record({ relatedId: 'pending-session' })]
 
-    expect(consolidateVisitPointsRecords(records, new Set(['pending-session']))).toEqual(records)
+    expect(consolidateVisitPointsRecords(records, new Set(['pending-session']))).toEqual([
+      expect.objectContaining({ amount: 10, relatedId: 'pending-session', visitDisplaySummary: true, visitRecordsComplete: true })
+    ])
   })
 
   it('combines legacy deductions from the same completed session', () => {
     const records = [
       record({ id: 'latest', relatedId: 'session-1', amount: 13, balance: 617 }),
-      record({ id: 'older', relatedId: 'session-1', amount: 13, balance: 630 })
+      record({ id: 'older', relatedId: 'session-1', amount: 13, balance: 630, createdAt: new Date('2026-09-22T09:00:00Z') })
     ]
 
     expect(consolidateVisitPointsRecords(records, new Set())).toEqual([
@@ -160,7 +206,8 @@ describe('consolidateVisitPointsRecords', () => {
         relatedId: 'day-pass-session',
         amount: 100,
         balance: 480,
-        description: '购买 Day Pass'
+        description: '购买 Day Pass',
+        createdAt: new Date('2026-09-22T09:00:00Z')
       })
     ]
 
@@ -174,7 +221,7 @@ describe('consolidateVisitPointsRecords', () => {
     ])
   })
 
-  it('keeps the visit rebate separate from the combined Day Pass spend', () => {
+  it('includes a visit rebate in one net session card while retaining all original details', () => {
     const rebate = record({
       id: 'rebate',
       relatedId: 'day-pass-session',
@@ -199,9 +246,9 @@ describe('consolidateVisitPointsRecords', () => {
     ]
 
     const consolidated = consolidateVisitPointsRecords(records, new Set())
-    expect(consolidated).toHaveLength(2)
-    expect(consolidated[0]).toBe(rebate)
-    expect(consolidated[1]).toEqual(expect.objectContaining({ amount: 160 }))
+    expect(consolidated).toHaveLength(1)
+    expect(consolidated[0]).toEqual(expect.objectContaining({ amount: 142, type: 'spend', visitGrossSpend: 160, visitCredits: 18 }))
+    expect(consolidated[0].visitBreakdown).toHaveLength(3)
   })
 
   it('does not merge unrelated visit charges that share a related id', () => {

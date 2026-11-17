@@ -2,7 +2,7 @@
 import { getMessaging, getToken, onMessage, isSupported, Messaging } from 'firebase/messaging';
 import { getAuth } from 'firebase/auth';
 import { auth, db } from '../../config/firebase';
-import { collection, doc, setDoc, getDocs, query, where, deleteDoc } from 'firebase/firestore';
+import { collection, doc, setDoc, getDocs, query, where, deleteDoc } from '@/services/firebase/monitoredFirestore';
 import type { User } from '../../types';
 
 // VAPID 公钥（从环境变量读取）

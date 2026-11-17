@@ -10,12 +10,28 @@ export interface WhatsAppSettings {
   testPhones: string[]
 }
 export interface WhatsAppManagementState {
+  meowGateways?: string[]
   config: WhatsAppSettings
   whapiCredentials: boolean
   whapiVerified: boolean
   webhookConfigured?: boolean
   webhookLastReceivedAt?: string | null
   webhookUrl?: string | null
+  whapiUserId?: string | null
+  credentialSource?: string
+  managed?: boolean
+  encryptionReady?: boolean
+  credentialsInvalid?: boolean
+  connectionStatus?: string
+  verifiedAt?: string | null
+  connectionBusy?: boolean
+  candidate?: WhatsAppCandidate | null
+}
+export interface WhatsAppCandidate {
+  id: string; channelId: string; expiresAtMs: number; verified: boolean; account: string | null
+}
+export interface WhatsAppConnectionSession {
+  id: string; target: 'active' | 'candidate'; channelId: string; expiresAtMs: number; status: string
 }
 export const defaultWhatsAppSettings: WhatsAppSettings = {
   enabled: false, defaultProvider: 'manual',

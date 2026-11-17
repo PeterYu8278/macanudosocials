@@ -1,7 +1,7 @@
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { cert, getApps, initializeApp } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
+import { getFirestore, Timestamp } from './_shared/firestoreMonitoring';
 import { executeDayPass } from './_shared/dayPass';
 
 const reply = (statusCode: number, code: string, extra = {}) => ({
@@ -35,6 +35,7 @@ export const eventHandler: Handler = async event => {
       'invalid-request': 400, forbidden: 403, 'member-not-found': 404, 'lounge-not-found': 404,
       disabled: 409, 'invalid-config': 409, 'insufficient-points': 409, 'invalid-session': 409,
       'account-suspended': 403,
+      'outside-hours': 409,
     };
     return reply(statuses[code] || 503, statuses[code] ? code : 'service-unavailable');
   }

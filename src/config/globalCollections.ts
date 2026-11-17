@@ -4,9 +4,27 @@
  */
 
 export const GLOBAL_COLLECTIONS = {
+  WEBSITE_EVENTS: '_websiteEvents',
+  WEBSITE_HOURS: '_websiteHours',
+  WEBSITE_ATTRIBUTION: '_websiteAttribution',
+  WEBSITE_JOBS: '_websiteJobs',
+  MIGRATION_BATCHES: 'migrationBatches',
+  MEMBERSHIP_PAYMENTS: '_membershipPayments',
+  MEMBERSHIP_ACTIVATIONS: '_membershipActivations',
+  MEMBERSHIP_PAYMENT_STATUSES: '_membershipPaymentStatuses',
+  MEMBERSHIP_PAYMENT_LOCKS: '_membershipPaymentLocks',
+  FIRESTORE_METRICS: '_firestoreMetrics',
+  FIRESTORE_HOURLY_METRICS: '_firestoreMetricsHourly',
+  FIRESTORE_METRIC_INGRESS: '_firestoreMetricIngress',
   /** 用户集合 */
   USERS: 'users',
   STORES: 'stores',
+  LOUNGE_BATCHES: '_loungeClosingBatches',
+  LOUNGE_REPORTS: '_loungeDailyReports',
+  LOUNGE_TEST_REPORTS: '_loungeTestReports',
+  LOUNGE_SNAPSHOT_BACKUPS: '_loungeReportSnapshotBackups',
+  WALLET_DEBT_BASELINES: '_walletDebtBaselines',
+  WALLET_DEBT_BASELINE_VERSIONS: '_walletDebtBaselineVersions',
   MEMBER_IDENTITY_LOCKS: '_memberIdentityLocks',
   REGISTRATION_ATTEMPTS: '_registrationAttempts',
   /** 品牌集合 */
@@ -36,6 +54,13 @@ export const GLOBAL_COLLECTIONS = {
   POINTS_RECORDS: 'pointsRecords',
   /** 驻店记录集合 */
   VISIT_SESSIONS: 'visitSessions',
+  DASHBOARD_VISIT_STATS: '_dashboardVisitStats',
+  DASHBOARD_VISIT_STATS_META: '_dashboardVisitStatsMeta',
+  DASHBOARD_REDEMPTION_STATS: '_dashboardRedemptionStats',
+  DASHBOARD_REDEMPTION_STATS_META: '_dashboardRedemptionStatsMeta',
+  VISIT_MEMBER_STATS: '_visitMemberStats',
+  VISIT_MEMBER_STATS_META: '_visitMemberStatsMeta',
+  ADMIN_VISIT_PAGINATION_META: '_adminVisitPaginationMeta',
   /** 会员年费记录集合 */
   MEMBERSHIP_FEE_RECORDS: 'membershipFeeRecords',
   /** 充值记录集合 */
@@ -44,6 +69,8 @@ export const GLOBAL_COLLECTIONS = {
   REDEMPTION_CONFIG: 'redemptionConfig',
   /** 兑换记录集合 */
   REDEMPTION_RECORDS: 'redemptionRecords',
+  REDEMPTION_STATS: '_redemptionStats',
+  REDEMPTION_STATS_META: '_redemptionStatsMeta',
   /** 功能可见性配置集合 */
   FEATURE_VISIBILITY: 'feature_visibility',
   /** 应用配置集合 */

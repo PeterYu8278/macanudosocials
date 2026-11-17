@@ -6,6 +6,7 @@ import { getAllStores } from '../../services/firebase/stores';
 import { useTranslation } from 'react-i18next';
 import { Store } from '../../types';
 import dayjs from 'dayjs';
+import ImageUpload from '../common/ImageUpload';
 
 const { Title, Text } = Typography;
 
@@ -38,6 +39,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [editingRoom, setEditingRoom] = useState<Room | null>(null);
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -146,6 +148,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
     form.setFieldsValue({
       storeId: room.storeId,
       name: room.name,
+      imageUrl: room.imageUrl || null,
       status: room.status,
       bookingStart: room.bookingStart || '10:00',
       bookingEnd: room.bookingEnd || '22:00',
@@ -171,6 +174,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
   };
 
   const handleSave = async () => {
+    if (uploadingPhoto) return;
     try {
       const values = await form.validateFields();
       setLoading(true);
@@ -178,6 +182,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
       const roomData = {
         storeId: values.storeId,
         name: values.name,
+        imageUrl: values.imageUrl || null,
         status: values.status,
         bookingStart: values.bookingStart,
         bookingEnd: values.bookingEnd,
@@ -790,10 +795,13 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
       <Modal
         title={<span style={{ color: '#FFFFFF' }}>{editingRoom ? t('roomManagement.editRoom') : t('roomManagement.addRoom')}</span>}
         open={modalVisible}
-        onCancel={() => setModalVisible(false)}
+        onCancel={() => { if (!uploadingPhoto) setModalVisible(false); }}
+        closable={!uploadingPhoto}
+        maskClosable={!uploadingPhoto}
         onOk={handleSave}
         confirmLoading={loading}
         okButtonProps={{
+          disabled: uploadingPhoto,
           style: {
             background: 'linear-gradient(to right, #FDE08D, #C48D3A)',
             border: 'none',
@@ -802,6 +810,7 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
           }
         }}
         cancelButtonProps={{
+          disabled: uploadingPhoto,
           style: {
             background: 'rgba(255, 255, 255, 0.1)',
             border: '1px solid rgba(255, 255, 255, 0.2)',
@@ -849,6 +858,12 @@ export const RoomManagement: React.FC<RoomManagementProps> = ({
             rules={[{ required: true, message: t('roomManagement.roomNameRequired') }]}
           >
             <Input placeholder={t('roomManagement.roomNamePlaceholder')} />
+          </Form.Item>
+
+          <Form.Item name="imageUrl" label={t('roomManagement.roomPhoto')}>
+            <ImageUpload folder="macanudo_socials/rooms" width={240} height={140}
+              maxSize={5 * 1024 * 1024} deleteFromCloudinary={false}
+              onUploadingChange={setUploadingPhoto} disabled={loading} />
           </Form.Item>
 
           <Form.Item
