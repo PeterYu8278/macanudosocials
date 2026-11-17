@@ -222,6 +222,7 @@ const AdminUsers: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | undefined>()
   const [statusMap, setStatusMap] = useState<Record<string, 'active' | 'inactive'>>({})
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([])
+  const [tablePageSize, setTablePageSize] = useState(20)
   const [isMobile, setIsMobile] = useState<boolean>(() => {
     if (typeof window === 'undefined') return false
     return window.innerWidth < 768
@@ -1160,9 +1161,11 @@ const AdminUsers: React.FC = () => {
                     scroll={tableScroll}
                     tableLayout="fixed"
                     pagination={{
-                      pageSize: isMobile ? 10 : 20,
+                      pageSize: tablePageSize,
                       total: filteredUsers.length,
                       showSizeChanger: true,
+                      pageSizeOptions: ['20', '50', '100'],
+                      onShowSizeChange: (_current, size) => setTablePageSize(size),
                       showTotal: (total, range) => t('common.paginationTotal', {
                         start: range[0], end: range[1], total,
                       }),

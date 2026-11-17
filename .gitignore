@@ -27,6 +27,7 @@ dist-ssr
 # Firebase Admin SDK service account key
 serviceAccountKey.json
 service-account-formatted.txt
+firebase-service-account.json
 
 # Local Netlify folder
 .netlify
