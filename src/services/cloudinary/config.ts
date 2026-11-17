@@ -18,7 +18,6 @@ declare global {
 export interface CloudinaryConfig {
   cloudName: string
   apiKey: string
-  apiSecret: string
   uploadPreset: string
   baseFolder: string
   secure: boolean
@@ -30,19 +29,17 @@ export interface CloudinaryConfig {
 export const getCloudinaryConfig = (): CloudinaryConfig => {
   const cloudName = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME
   const apiKey = import.meta.env.VITE_CLOUDINARY_API_KEY
-  const apiSecret = import.meta.env.VITE_CLOUDINARY_API_SECRET
   const uploadPreset = import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET
   const baseFolder = import.meta.env.VITE_CLOUDINARY_BASE_FOLDER
   const secure = true
 
-  if (!cloudName || !apiKey || !apiSecret) {
-    console.warn('Cloudinary 配置不完整。请检查环境变量 VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_API_KEY, VITE_CLOUDINARY_API_SECRET')
+  if (!cloudName || !apiKey) {
+    console.warn('Cloudinary 配置不完整。请检查环境变量 VITE_CLOUDINARY_CLOUD_NAME, VITE_CLOUDINARY_API_KEY')
   }
 
   return {
     cloudName: cloudName || '',
     apiKey: apiKey || '',
-    apiSecret: apiSecret || '',
     uploadPreset: uploadPreset || '',
     baseFolder: baseFolder || '',
     secure
@@ -116,11 +113,10 @@ export const formatFileSize = (bytes: number): string => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i]
 }
 
-// Cloudinary 配置
+// Cloudinary 配置（仅用于上传 widget，不含 api_secret）
 const cloudinaryConfig = {
   cloud_name: import.meta.env.VITE_CLOUDINARY_CLOUD_NAME,
   api_key: import.meta.env.VITE_CLOUDINARY_API_KEY,
-  api_secret: import.meta.env.VITE_CLOUDINARY_API_SECRET,
   secure: true
 }
 

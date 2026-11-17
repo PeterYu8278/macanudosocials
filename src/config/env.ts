@@ -31,11 +31,10 @@ export interface AppConfig {
     appId: string
   }
   
-  // Cloudinary 配置
+  // Cloudinary 配置（api_secret 仅在服务端使用，不暴露给浏览器）
   cloudinary: {
     cloudName: string
     apiKey: string
-    apiSecret: string
   }
   
   // 应用信息
@@ -96,7 +95,6 @@ const defaultConfig: AppConfig = {
   cloudinary: {
     cloudName: '',
     apiKey: '',
-    apiSecret: ''
   },
   
   app: {
@@ -149,7 +147,6 @@ const envVarMap: Record<string, string> = {
   // Cloudinary
   'VITE_CLOUDINARY_CLOUD_NAME': 'cloudinary.cloudName',
   'VITE_CLOUDINARY_API_KEY': 'cloudinary.apiKey',
-  'VITE_CLOUDINARY_API_SECRET': 'cloudinary.apiSecret',
   
   // 应用信息
   'VITE_APP_NAME': 'app.name',

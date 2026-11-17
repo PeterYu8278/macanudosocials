@@ -54,8 +54,7 @@ export {
 export {
   deleteResource,
   deleteResources,
-  deleteFolder,
-  deleteResourceServerSide
+  deleteFolder
 } from './delete'
 
 // URL 生成服务

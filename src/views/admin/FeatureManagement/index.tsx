@@ -611,7 +611,7 @@ VITE_FIREBASE_APP_ID=${values.firebaseAppId}${measurementIdLine ? '\n' + measure
 # Cloudinary配置
 VITE_CLOUDINARY_CLOUD_NAME=${values.cloudinaryCloudName}
 VITE_CLOUDINARY_API_KEY=${values.cloudinaryApiKey}
-VITE_CLOUDINARY_API_SECRET=${values.cloudinaryApiSecret}
+CLOUDINARY_API_SECRET=${values.cloudinaryApiSecret}
 VITE_CLOUDINARY_UPLOAD_PRESET=${values.cloudinaryUploadPreset}
 VITE_CLOUDINARY_BASE_FOLDER=${values.cloudinaryBaseFolder}
 
@@ -643,7 +643,7 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
         { key: 'VITE_FIREBASE_APP_ID', value: values.firebaseAppId, scopes: ['all'] },
         { key: 'VITE_CLOUDINARY_CLOUD_NAME', value: values.cloudinaryCloudName, scopes: ['all'] },
         { key: 'VITE_CLOUDINARY_API_KEY', value: values.cloudinaryApiKey, scopes: ['all'] },
-        { key: 'VITE_CLOUDINARY_API_SECRET', value: values.cloudinaryApiSecret, scopes: ['all'] },
+        { key: 'CLOUDINARY_API_SECRET', value: values.cloudinaryApiSecret, scopes: ['all'] },
         { key: 'VITE_CLOUDINARY_UPLOAD_PRESET', value: values.cloudinaryUploadPreset, scopes: ['all'] },
         { key: 'VITE_CLOUDINARY_BASE_FOLDER', value: values.cloudinaryBaseFolder, scopes: ['all'] },
         { key: 'VITE_APP_NAME', value: values.appName, scopes: ['all'] },
