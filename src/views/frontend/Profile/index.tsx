@@ -26,7 +26,6 @@ import { auth } from '../../../config/firebase'
 import { updatePassword, EmailAuthProvider, reauthenticateWithCredential } from 'firebase/auth'
 import { getResponsiveModalConfig, getModalTheme } from '../../../config/modalTheme'
 import LanguageSelect from '../../../components/common/LanguageSelect'
-import WebsiteTrafficPrivacy from '../../../components/common/WebsiteTrafficPrivacy'
 import { usePushNotificationStore } from '../../../store/modules/pushNotifications'
 import {
   disablePushSubscription,
@@ -566,7 +565,6 @@ const Profile: React.FC = () => {
 
   const renderPreferencesSection = () => (
     <div className="profile-preferences">
-      <WebsiteTrafficPrivacy />
       <Form
         className="profile-inline-form"
         colon={false}
