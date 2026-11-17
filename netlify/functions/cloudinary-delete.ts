@@ -59,7 +59,7 @@ export const eventHandler: Handler = async (event) => {
 
   const cloudName = process.env.VITE_CLOUDINARY_CLOUD_NAME
   const apiKey = process.env.VITE_CLOUDINARY_API_KEY
-  const apiSecret = process.env.CLOUDINARY_API_SECRET
+  const apiSecret = process.env.VITE_CLOUDINARY_API_SECRET
 
   if (!cloudName || !apiKey || !apiSecret) {
     return response(500, { success: false, error: 'Cloudinary configuration missing on server' })
