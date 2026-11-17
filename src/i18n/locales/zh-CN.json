@@ -2933,6 +2933,15 @@
       "manualCreateAutoVerify": "立即自动验证",
       "manualCreateSubmit": "创建",
   "statusWithdrawed": "已撤回",
+  "statusRevoked": "已撤销",
+  "revoke": "撤销充值",
+  "revokeModalTitle": "撤销充值记录",
+  "revokeReasonLabel": "撤销原因",
+  "revokeReasonRequired": "请输入撤销原因",
+  "revokeReasonPlaceholder": "请输入撤销原因...",
+  "revokeWarning": "此操作将从会员余额中扣除 {{amount}} 积分，不可撤销。",
+  "revokeSuccess": "充值已成功撤销",
+  "revokeFailed": "撤销失败",
   "mobileReload": "充值",
   "mobileAnnualFee": "年费"
 }

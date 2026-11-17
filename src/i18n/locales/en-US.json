@@ -2935,6 +2935,15 @@
       "manualCreateAutoVerify": "Auto-verify immediately",
       "manualCreateSubmit": "Create",
   "statusWithdrawed": "Withdrawed",
+  "statusRevoked": "Revoked",
+  "revoke": "Revoke",
+  "revokeModalTitle": "Revoke Reload",
+  "revokeReasonLabel": "Reason",
+  "revokeReasonRequired": "Please enter a reason",
+  "revokeReasonPlaceholder": "Enter reason for revoking...",
+  "revokeWarning": "This will deduct {{amount}} points from the member's balance. This action cannot be undone.",
+  "revokeSuccess": "Reload revoked successfully",
+  "revokeFailed": "Failed to revoke reload",
   "mobileReload": "Reload",
   "mobileAnnualFee": "Annual fee"
 }

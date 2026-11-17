@@ -7,7 +7,7 @@ import { writeMembershipPaymentStatus } from './membershipPaymentStatus';
 import { verifiedHistoricalActivationAt } from './historicalMembership';
 
 export interface ReloadReview {
-  action: 'approve' | 'reject' | 'cancel';
+  action: 'approve' | 'reject' | 'cancel' | 'revoke';
   recordId: string;
   actorId: string;
   actualAmount?: number;
@@ -30,6 +30,30 @@ export async function reviewManualReload(db: Firestore, input: ReloadReview) {
     const actorSnapshot = await tx.get(db.collection(C.USERS).doc(input.actorId));
     if (!recordSnapshot.exists || !actorSnapshot.exists) throw new Error('RECORD_NOT_FOUND');
     const record = recordSnapshot.data()!, actor = actorSnapshot.data()!;
+    if (input.action === 'revoke') {
+      if (!['superAdmin', 'developer'].includes(actor.role) || actor.status === 'suspended') throw new Error('FORBIDDEN');
+      if (record.status !== 'completed') throw new Error('RECORD_ALREADY_PROCESSED');
+      const userRef = db.collection(C.USERS).doc(record.userId);
+      const userSnapshot = await tx.get(userRef);
+      if (!userSnapshot.exists) throw new Error('USER_NOT_FOUND');
+      const user = userSnapshot.data()!;
+      const points = Number(user.membership?.points || 0);
+      const deduction = Math.round(Number(record.actualAmount));
+      if (!Number.isFinite(deduction) || deduction <= 0) throw new Error('INVALID_AMOUNT');
+      const timestamp = Timestamp.now();
+      const newBalance = Math.round((points - deduction) * 100) / 100;
+      tx.update(userRef, { 'membership.points': newBalance, updatedAt: timestamp });
+      tx.set(db.collection(C.POINTS_RECORDS).doc(`manual_${input.recordId}_revoke`), {
+        userId: record.userId, userName: user.displayName || '', relatedId: input.recordId,
+        createdBy: input.actorId, createdAt: timestamp, type: 'spend', amount: deduction,
+        source: 'reload_revoked', description: input.notes || 'Reload revoked', balance: newBalance,
+      });
+      tx.update(recordRef, {
+        status: 'revoked', revokedBy: input.actorId, revokedByName: actor.displayName || '',
+        adminNotes: input.notes || null, revokedAt: timestamp, updatedAt: timestamp,
+      });
+      return { status: 'revoked' };
+    }
     if (input.action === 'cancel') {
       if (record.userId !== input.actorId) throw new Error('FORBIDDEN');
     } else requireReloadOperator(actor, record.storeId);

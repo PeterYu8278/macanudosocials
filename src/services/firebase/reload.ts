@@ -53,7 +53,7 @@ export const createReloadRecord = async (
 /**
  * 验证充值记录（管理员操作）
  */
-async function reviewReload(recordId: string, action: 'approve' | 'reject' | 'cancel', proof?: string, notes?: string, actualAmount?: number, creditOnly?: boolean): Promise<{ success: boolean; error?: string }> {
+async function reviewReload(recordId: string, action: 'approve' | 'reject' | 'cancel' | 'revoke', proof?: string, notes?: string, actualAmount?: number, creditOnly?: boolean): Promise<{ success: boolean; error?: string }> {
   try {
     const currentUser = auth.currentUser;
     if (!currentUser) return { success: false, error: 'UNAUTHENTICATED' };
@@ -79,6 +79,9 @@ export const cancelReloadRecord = async (recordId: string, _userId: string) =>
 export const rejectReloadRecord = async (
   recordId: string, _rejectedBy: string, adminNotes?: string, _verifiedByName?: string
 ) => reviewReload(recordId, 'reject', undefined, adminNotes);
+
+export const revokeReloadRecord = async (recordId: string, adminNotes?: string) =>
+  reviewReload(recordId, 'revoke', undefined, adminNotes);
 
 /**
  * 获取用户的充值记录
@@ -220,7 +223,7 @@ export const getUserPendingReloadRecord = async (
  * 获取所有充值记录（支持状态筛选）
  */
 export const getAllReloadRecords = async (
-  statusFilter?: 'pending' | 'completed' | 'rejected',
+  statusFilter?: 'pending' | 'completed' | 'rejected' | 'revoked',
   limitCount?: number
 ): Promise<ReloadRecord[]> => {
   try {

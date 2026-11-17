@@ -830,7 +830,7 @@ export interface ReloadRecord {
   pointsEquivalentBasis?: 'net'; // Absent on legacy gross-point records.
   
   // 状态
-  status: 'pending' | 'completed' | 'rejected';
+  status: 'pending' | 'completed' | 'rejected' | 'revoked';
   
   // 管理员验证
   verifiedAt?: Date;

@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Table, Button, Space, Tag, Modal, Form, Input, InputNumber, Upload, Image, Select, Spin, Checkbox, App, Tooltip } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, createReloadRecord } from '../../services/firebase/reload';
+import { CheckOutlined, CloseOutlined, UploadOutlined, EyeOutlined, PlusOutlined, ReloadOutlined, RollbackOutlined } from '@ant-design/icons';
+import { getAllReloadRecords, verifyReloadRecord, rejectReloadRecord, revokeReloadRecord, createReloadRecord } from '../../services/firebase/reload';
 import dayjs from 'dayjs';
 import { uploadFile } from '../../services/cloudinary/create';
 import { getAllStores } from '../../services/firebase/stores';
@@ -27,10 +27,12 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
   const [statusFilter, setStatusFilter] = useState<ReloadStatusFilter>('all');
   const [verifyModalVisible, setVerifyModalVisible] = useState(false);
   const [rejectModalVisible, setRejectModalVisible] = useState(false);
+  const [revokeModalVisible, setRevokeModalVisible] = useState(false);
   const [manualCreateVisible, setManualCreateVisible] = useState(false);
   const [currentRecord, setCurrentRecord] = useState<ReloadRecord | null>(null);
   const [form] = Form.useForm();
   const [rejectForm] = Form.useForm();
+  const [revokeForm] = Form.useForm();
   const [manualForm] = Form.useForm();
   const [uploading, setUploading] = useState(false);
   const [manualSubmitting, setManualSubmitting] = useState(false);
@@ -122,6 +124,30 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
     setCurrentRecord(record);
     setRejectModalVisible(true);
     rejectForm.resetFields();
+  };
+
+  const handleRevoke = (record: ReloadRecord) => {
+    setCurrentRecord(record);
+    setRevokeModalVisible(true);
+    revokeForm.resetFields();
+  };
+
+  const onRevokeSubmit = async (values: any) => {
+    if (!currentRecord) return;
+    try {
+      const result = await revokeReloadRecord(currentRecord.id, values.notes);
+      if (result.success) {
+        message.success(t('pointsConfig.reloadVerification.revokeSuccess'));
+        setRevokeModalVisible(false);
+        revokeForm.resetFields();
+        loadRecords();
+        onRefresh?.();
+      } else {
+        message.error(result.error || t('pointsConfig.reloadVerification.revokeFailed'));
+      }
+    } catch (error: any) {
+      message.error(error.message || t('pointsConfig.reloadVerification.revokeFailed'));
+    }
   };
 
   const onVerifySubmit = async (values: any) => {
@@ -249,7 +275,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       pending: { color: 'orange', text: t('pointsConfig.reloadVerification.statusPending') },
       completed: { color: 'green', text: t('pointsConfig.reloadVerification.statusCompleted') },
       rejected: { color: 'red', text: t('pointsConfig.reloadVerification.statusRejected') },
-      withdrawn: { color: 'default', text: t('pointsConfig.reloadVerification.statusWithdrawed') }
+      withdrawn: { color: 'default', text: t('pointsConfig.reloadVerification.statusWithdrawed') },
+      revoked: { color: 'purple', text: t('pointsConfig.reloadVerification.statusRevoked') }
     };
     const statusInfo = statusMap[status] || { color: 'default', text: status };
     return <Tag color={statusInfo.color}>{statusInfo.text}</Tag>;
@@ -389,28 +416,44 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
       key: 'action',
       width: 96,
       fixed: 'right',
-      render: (_: unknown, record: ReloadRecord) => record.status === 'pending' ? (
-        <Space size={8} className="reload-verification-desktop-actions">
-          <Tooltip title={t('pointsConfig.reloadVerification.verify')}>
-          <Button
-            type="primary"
-            size="small"
-            icon={<CheckOutlined />}
-            aria-label={t('pointsConfig.reloadVerification.verify')}
-            onClick={() => handleVerify(record)}
-          />
-          </Tooltip>
-          <Tooltip title={t('pointsConfig.reloadVerification.reject')}>
-          <Button
-            danger
-            size="small"
-            icon={<CloseOutlined />}
-            aria-label={t('pointsConfig.reloadVerification.reject')}
-            onClick={() => handleReject(record)}
-          />
-          </Tooltip>
-        </Space>
-      ) : <span className="reload-verification-desktop-secondary">-</span>
+      render: (_: unknown, record: ReloadRecord) => {
+        if (record.status === 'pending') return (
+          <Space size={8} className="reload-verification-desktop-actions">
+            <Tooltip title={t('pointsConfig.reloadVerification.verify')}>
+            <Button
+              type="primary"
+              size="small"
+              icon={<CheckOutlined />}
+              aria-label={t('pointsConfig.reloadVerification.verify')}
+              onClick={() => handleVerify(record)}
+            />
+            </Tooltip>
+            <Tooltip title={t('pointsConfig.reloadVerification.reject')}>
+            <Button
+              danger
+              size="small"
+              icon={<CloseOutlined />}
+              aria-label={t('pointsConfig.reloadVerification.reject')}
+              onClick={() => handleReject(record)}
+            />
+            </Tooltip>
+          </Space>
+        );
+        if (record.status === 'completed' && isSuperAdmin) return (
+          <Space size={8} className="reload-verification-desktop-actions">
+            <Tooltip title={t('pointsConfig.reloadVerification.revoke')}>
+            <Button
+              size="small"
+              icon={<RollbackOutlined />}
+              aria-label={t('pointsConfig.reloadVerification.revoke')}
+              onClick={() => handleRevoke(record)}
+              style={{ color: '#faad14', borderColor: '#faad14' }}
+            />
+            </Tooltip>
+          </Space>
+        );
+        return <span className="reload-verification-desktop-secondary">-</span>;
+      }
     }
   ];
 
@@ -426,7 +469,8 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
             { label: t('pointsConfig.reloadVerification.statusPending'), value: 'pending' },
             { label: t('pointsConfig.reloadVerification.statusCompleted'), value: 'completed' },
             { label: t('pointsConfig.reloadVerification.statusRejected'), value: 'rejected' },
-            { label: t('pointsConfig.reloadVerification.statusWithdrawed'), value: 'withdrawn' }
+            { label: t('pointsConfig.reloadVerification.statusWithdrawed'), value: 'withdrawn' },
+            { label: t('pointsConfig.reloadVerification.statusRevoked'), value: 'revoked' }
           ]}
           className="points-config-form reload-verification-filter"
         />
@@ -623,6 +667,24 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
                       </Button>
                     </div>
                   )}
+                  {record.status === 'completed' && isSuperAdmin && (
+                    <div className="reload-verification-mobile-review-actions">
+                      <Button
+                        size="small"
+                        icon={<RollbackOutlined />}
+                        onClick={() => handleRevoke(record)}
+                        style={{
+                          flex: 1,
+                          background: 'rgba(250, 173, 20, 0.15)',
+                          border: '1px solid #faad14',
+                          color: '#faad14',
+                          fontWeight: 700
+                        }}
+                      >
+                        {t('pointsConfig.reloadVerification.revoke')}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })
@@ -805,6 +867,80 @@ export const ReloadVerification: React.FC<ReloadVerificationProps> = ({ onRefres
               <Input.TextArea 
                 rows={4} 
                 placeholder={t('pointsConfig.reloadVerification.rejectReasonPlaceholder')} 
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#FFFFFF'
+                }}
+              />
+            </Form.Item>
+          </Form>
+        )}
+      </Modal>
+
+      {/* 撤销充值 Modal（仅 superAdmin/developer） */}
+      <Modal
+        title={<span style={{ color: '#FFFFFF' }}>{t('pointsConfig.reloadVerification.revokeModalTitle')}</span>}
+        open={revokeModalVisible}
+        onCancel={() => {
+          setRevokeModalVisible(false);
+          revokeForm.resetFields();
+        }}
+        onOk={() => revokeForm.submit()}
+        okButtonProps={{
+          style: {
+            background: '#faad14',
+            border: 'none',
+            color: '#111',
+            fontWeight: 700
+          }
+        }}
+        cancelButtonProps={{
+          style: {
+            background: 'rgba(255, 255, 255, 0.1)',
+            border: '1px solid rgba(255, 255, 255, 0.2)',
+            color: '#FFFFFF'
+          }
+        }}
+        width={500}
+        styles={{
+          content: {
+            background: 'linear-gradient(180deg, #221c10 0%, #181611 100%)',
+            border: '1px solid rgba(244, 175, 37, 0.6)'
+          },
+          header: {
+            background: 'transparent',
+            borderBottom: '1px solid rgba(244, 175, 37, 0.6)'
+          },
+          body: {
+            background: 'transparent'
+          },
+          footer: {
+            background: 'transparent',
+            borderTop: '1px solid rgba(244, 175, 37, 0.6)'
+          }
+        }}
+      >
+        {currentRecord && (
+          <Form
+            form={revokeForm}
+            layout="vertical"
+            onFinish={onRevokeSubmit}
+            className="points-config-form"
+          >
+            <div style={{ marginBottom: 16, color: 'rgba(255, 255, 255, 0.85)' }}>
+              <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.user')}: {currentRecord.userName || currentRecord.userId}</div>
+              <div style={{ marginBottom: 8 }}>{t('pointsConfig.reloadVerification.amount')}: {currentRecord.requestedAmount} RM</div>
+              <div style={{ color: '#faad14', fontSize: 12 }}>{t('pointsConfig.reloadVerification.revokeWarning', { amount: Math.round(currentRecord.requestedAmount) })}</div>
+            </div>
+            <Form.Item
+              name="notes"
+              label={<span style={{ color: 'rgba(255, 255, 255, 0.85)' }}>{t('pointsConfig.reloadVerification.revokeReasonLabel')}</span>}
+              rules={[{ required: true, message: t('pointsConfig.reloadVerification.revokeReasonRequired') }]}
+            >
+              <Input.TextArea
+                rows={4}
+                placeholder={t('pointsConfig.reloadVerification.revokeReasonPlaceholder')}
                 style={{
                   background: 'rgba(255, 255, 255, 0.1)',
                   border: '1px solid rgba(255, 255, 255, 0.2)',

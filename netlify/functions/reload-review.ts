@@ -65,7 +65,7 @@ export const eventHandler: EventHandler = async event => {
       });
       return reply(200, { success: true, recordId: newRecord.id });
     }
-    if (!['approve', 'reject', 'cancel'].includes(body.action)
+    if (!['approve', 'reject', 'cancel', 'revoke'].includes(body.action)
       || typeof body.recordId !== 'string' || !body.recordId || body.recordId.includes('/')
       || (body.proof !== undefined && (typeof body.proof !== 'string' || body.proof.length > 4096))
       || (body.notes !== undefined && (typeof body.notes !== 'string' || body.notes.length > 4000))) {
