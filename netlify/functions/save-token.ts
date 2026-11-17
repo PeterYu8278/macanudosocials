@@ -1,6 +1,7 @@
 // Netlify Function: 保存 FCM Token
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from './_shared/firestoreMonitoring';
 
 const headers = {
@@ -14,22 +15,19 @@ const reply = (statusCode: number, body: Record<string, unknown>) => ({
   body: JSON.stringify(body),
 });
 
-const initializeAdmin = (): boolean => {
-  if (getApps().length) return true;
-
+const initializeAdmin = () => {
+  if (getApps().length) return;
   const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-  if (!serviceAccount) {
-    console.error('[save-token] FIREBASE_SERVICE_ACCOUNT not configured');
-    return false;
-  }
+  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT not configured');
+  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+};
 
-  try {
-    initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
-    return true;
-  } catch (error) {
-    console.error('[save-token] Failed to initialize Firebase Admin:', error);
-    return false;
-  }
+const verifyOwner = async (authorization: string | undefined, userId: string): Promise<void> => {
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) throw new Error('UNAUTHENTICATED');
+  initializeAdmin();
+  const decoded = await getAuth().verifyIdToken(token);
+  if (decoded.uid !== userId) throw new Error('FORBIDDEN');
 };
 
 export const eventHandler: Handler = async (event) => {
@@ -38,21 +36,28 @@ export const eventHandler: Handler = async (event) => {
     return reply(405, { error: 'Method not allowed' });
   }
 
+  let input: any;
   try {
-    if (!initializeAdmin()) return reply(503, { success: false, code: 'SERVICE_UNAVAILABLE' });
+    input = JSON.parse(event.body || '{}');
+  } catch {
+    return reply(400, { success: false, code: 'INVALID_REQUEST' });
+  }
 
-    let input: any;
-    try {
-      input = JSON.parse(event.body || '{}');
-    } catch {
-      return reply(400, { success: false, code: 'INVALID_REQUEST' });
-    }
+  const { token, userId, deviceId, deviceInfo } = input;
 
-    const { token, userId, deviceId, deviceInfo } = input;
+  if (!token || !userId) {
+    return reply(400, { success: false, code: 'MISSING_REQUIRED_FIELDS' });
+  }
 
-    if (!token || !userId) {
-      return reply(400, { success: false, code: 'MISSING_REQUIRED_FIELDS' });
-    }
+  try {
+    await verifyOwner(event.headers['authorization'], userId);
+  } catch (err: any) {
+    const code = err?.message === 'FORBIDDEN' ? 'FORBIDDEN' : 'UNAUTHENTICATED';
+    return reply(err?.message === 'FORBIDDEN' ? 403 : 401, { success: false, code });
+  }
+
+  try {
+    initializeAdmin();
 
     const db = getFirestore();
     const tokensRef = db.collection('users').doc(userId).collection('fcmTokens');

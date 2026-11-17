@@ -5,6 +5,7 @@ import { Card, Switch, Button, Space, Typography, App, Spin, Tabs, Input, Checkb
 const { TextArea } = Input;
 import { SaveOutlined, ReloadOutlined, EyeOutlined, EyeInvisibleOutlined, SearchOutlined, SettingOutlined, CopyOutlined, DownloadOutlined, FileTextOutlined, RocketOutlined, CheckCircleOutlined, LoadingOutlined, DatabaseOutlined } from '@ant-design/icons';
 import { useAuthStore } from '../../../store/modules/auth';
+import { getAuth } from 'firebase/auth';
 import { useTranslation } from 'react-i18next';
 import {
   getFeatureVisibilityConfig,
@@ -688,10 +689,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       }
 
       // 调用 Netlify Function
+      const idToken = await getAuth().currentUser?.getIdToken() ?? '';
       const response = await fetch('/.netlify/functions/update-netlify-env', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           accessToken: netlifyAccessToken,
@@ -756,10 +759,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
       setIndexDeployStatus({ state: 'deploying', message: t('featureManagement.deployingIndexes') });
 
       // 调用 Netlify Function 部署索引（Function 会读取 firestore.indexes.json）
+      const deployIdToken = await getAuth().currentUser?.getIdToken() ?? '';
       const deployResponse = await fetch(`/.netlify/functions/deploy-firestore-indexes`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          'Authorization': `Bearer ${deployIdToken}`,
         },
         body: JSON.stringify({
           projectId: firebaseProjectId,
@@ -817,10 +822,12 @@ VITE_APP_NAME=${values.appName}${fcmVapidKeyLine ? '\n\n' + fcmVapidKeyLine : ''
 
     const poll = async () => {
       try {
+        const pollIdToken = await getAuth().currentUser?.getIdToken() ?? '';
         const response = await fetch(`/.netlify/functions/update-netlify-env`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${pollIdToken}`,
           },
           body: JSON.stringify({
             accessToken,

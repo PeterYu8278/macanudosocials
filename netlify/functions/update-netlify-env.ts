@@ -1,5 +1,32 @@
 // Netlify Function: 更新 Netlify 环境变量并触发部署
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
+import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
+import { getFirestore } from './_shared/firestoreMonitoring';
+
+const ADMIN_ROLES = new Set(['developer', 'superAdmin']);
+
+const initializeAdmin = () => {
+  if (getApps().length) return;
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT not configured');
+  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+};
+
+const verifyAdminCaller = async (authorization: string | undefined): Promise<void> => {
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) throw new Error('UNAUTHENTICATED');
+  initializeAdmin();
+  const decoded = await getAuth().verifyIdToken(token);
+  const db = getFirestore();
+  let snap = await db.collection('users').doc(decoded.uid).get();
+  if (!snap.exists && decoded.email) {
+    const q = await db.collection('users').where('email', '==', decoded.email.toLowerCase()).limit(1).get();
+    snap = q.docs[0] || snap;
+  }
+  const role = (decoded.role as string | undefined) || snap.data()?.role;
+  if (!role || !ADMIN_ROLES.has(role)) throw new Error('FORBIDDEN');
+};
 
 interface EnvVar {
   key: string;
@@ -117,6 +144,12 @@ export const eventHandler: Handler = async (event) => {
       headers: corsHeaders,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
+  }
+
+  try {
+    await verifyAdminCaller(event.headers['authorization']);
+  } catch {
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
   try {

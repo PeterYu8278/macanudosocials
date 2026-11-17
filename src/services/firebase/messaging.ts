@@ -560,10 +560,12 @@ export const initializePushNotifications = async (user: User): Promise<boolean> 
     if (!import.meta.env.DEV) {
       try {
         const deviceId = getOrCreateDeviceId();
+        const idToken = await currentUser.getIdToken();
         const response = await fetch('/.netlify/functions/save-token', {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
+            'Authorization': `Bearer ${idToken}`,
           },
           body: JSON.stringify({
             token,
@@ -719,10 +721,12 @@ export const testFCMToken = async (options?: {
     }
 
     // 调用测试函数
+    const idToken = await auth.currentUser!.getIdToken();
     const response = await fetch('/.netlify/functions/test-token', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
       },
       body: JSON.stringify({
         token: token,
@@ -860,14 +864,19 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
  */
 export const subscribeToTopic = async (topic: string): Promise<boolean> => {
   try {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
     const token = await getFCMToken();
     if (!token) return false;
+    const idToken = await currentUser.getIdToken();
 
     // 调用 Netlify Function 订阅主题
     const response = await fetch('/.netlify/functions/subscribe-topic', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
       },
       body: JSON.stringify({
         token,
@@ -888,14 +897,19 @@ export const subscribeToTopic = async (topic: string): Promise<boolean> => {
  */
 export const unsubscribeFromTopic = async (topic: string): Promise<boolean> => {
   try {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) return false;
     const token = await getFCMToken();
     if (!token) return false;
+    const idToken = await currentUser.getIdToken();
 
     // 调用 Netlify Function 取消订阅
     const response = await fetch('/.netlify/functions/subscribe-topic', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${idToken}`,
       },
       body: JSON.stringify({
         token,

@@ -2,62 +2,62 @@
 // 用于诊断推送通知问题
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
+import { getFirestore } from './_shared/firestoreMonitoring';
 
-// 初始化 Firebase Admin（如果尚未初始化）
-if (!getApps().length) {
-  try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(JSON.parse(serviceAccount))
-      });
-    } else {
-      console.error('[test-token] FIREBASE_SERVICE_ACCOUNT not configured');
-    }
-  } catch (error) {
-    console.error('[test-token] Failed to initialize Firebase Admin:', error);
+const ADMIN_ROLES = new Set(['admin', 'superAdmin', 'developer']);
+
+const corsHeaders = {
+  'Content-Type': 'application/json',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+};
+
+const initializeAdmin = () => {
+  if (getApps().length) return;
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT not configured');
+  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+};
+
+const verifyAdminCaller = async (authorization: string | undefined): Promise<void> => {
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) throw new Error('UNAUTHENTICATED');
+  initializeAdmin();
+  const decoded = await getAuth().verifyIdToken(token);
+  const db = getFirestore();
+  let snap = await db.collection('users').doc(decoded.uid).get();
+  if (!snap.exists && decoded.email) {
+    const q = await db.collection('users').where('email', '==', decoded.email.toLowerCase()).limit(1).get();
+    snap = q.docs[0] || snap;
   }
-}
+  const role = (decoded.role as string | undefined) || snap.data()?.role;
+  if (!role || !ADMIN_ROLES.has(role)) throw new Error('FORBIDDEN');
+};
 
 export const eventHandler: Handler = async (event) => {
   // 处理 OPTIONS 请求（CORS 预检）
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 200,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      },
-      body: ''
-    };
+    return { statusCode: 200, headers: corsHeaders, body: '' };
   }
 
   // 只允许 POST 请求
   if (event.httpMethod !== 'POST') {
-    return {
-      statusCode: 405,
-      headers: {
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      },
-      body: JSON.stringify({ error: 'Method not allowed' })
-    };
+    return { statusCode: 405, headers: corsHeaders, body: JSON.stringify({ error: 'Method not allowed' }) };
+  }
+
+  try {
+    await verifyAdminCaller(event.headers['authorization']);
+  } catch {
+    return { statusCode: 401, headers: corsHeaders, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
   try {
     const { token, title = '测试通知', body = '这是一条测试推送通知' } = JSON.parse(event.body || '{}');
 
-    const corsHeaders = {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    };
+    initializeAdmin();
 
     if (!token) {
       return {
@@ -167,17 +167,10 @@ export const eventHandler: Handler = async (event) => {
     }
   } catch (error: any) {
     console.error('[test-token] ❌ 处理请求时出错:', error);
-    const corsHeaders = {
-      'Content-Type': 'application/json',
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    };
-
     return {
       statusCode: 500,
       headers: corsHeaders,
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         error: 'Internal server error',
         message: error.message || '服务器内部错误',
         details: error.stack

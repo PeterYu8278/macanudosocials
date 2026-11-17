@@ -1,23 +1,22 @@
 // Netlify Function: 订阅/取消订阅主题
 import { toWebFunction, type EventHandler as Handler } from './_shared/webFunction'
 import { initializeApp, cert, getApps } from 'firebase-admin/app';
+import { getAuth } from 'firebase-admin/auth';
 import { getMessaging } from 'firebase-admin/messaging';
 
-// 初始化 Firebase Admin（如果尚未初始化）
-if (!getApps().length) {
-  try {
-    const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
-    if (serviceAccount) {
-      initializeApp({
-        credential: cert(JSON.parse(serviceAccount))
-      });
-    } else {
-      console.error('[subscribe-topic] FIREBASE_SERVICE_ACCOUNT not configured');
-    }
-  } catch (error) {
-    console.error('[subscribe-topic] Failed to initialize Firebase Admin:', error);
-  }
-}
+const initializeAdmin = () => {
+  if (getApps().length) return;
+  const serviceAccount = process.env.FIREBASE_SERVICE_ACCOUNT;
+  if (!serviceAccount) throw new Error('FIREBASE_SERVICE_ACCOUNT not configured');
+  initializeApp({ credential: cert(JSON.parse(serviceAccount)) });
+};
+
+const verifyAuthenticatedCaller = async (authorization: string | undefined): Promise<void> => {
+  const token = authorization?.startsWith('Bearer ') ? authorization.slice(7) : '';
+  if (!token) throw new Error('UNAUTHENTICATED');
+  initializeAdmin();
+  await getAuth().verifyIdToken(token);
+};
 
 export const eventHandler: Handler = async (event) => {
   // 只允许 POST 请求
@@ -26,6 +25,12 @@ export const eventHandler: Handler = async (event) => {
       statusCode: 405,
       body: JSON.stringify({ error: 'Method not allowed' })
     };
+  }
+
+  try {
+    await verifyAuthenticatedCaller(event.headers['authorization']);
+  } catch {
+    return { statusCode: 401, body: JSON.stringify({ error: 'Unauthorized' }) };
   }
 
   try {
@@ -45,6 +50,7 @@ export const eventHandler: Handler = async (event) => {
       };
     }
 
+    initializeAdmin();
     const messaging = getMessaging();
 
     if (action === 'subscribe') {
