@@ -99,4 +99,4 @@ export const eventHandler: Handler = async (event) => {
   }
 }
 
-export const handler = toWebFunction(eventHandler)
+export default toWebFunction(eventHandler)
