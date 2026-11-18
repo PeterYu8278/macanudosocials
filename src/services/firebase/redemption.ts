@@ -350,7 +350,8 @@ export const createRedemptionRecord = async (
   cigarName: string,
   quantity: number,
   redeemedBy: string,
-  targetDate?: Date
+  targetDate?: Date,
+  options?: { backfill?: boolean }
 ): Promise<{ success: boolean; recordId?: string; error?: string }> => {
   try {
     // 检查用户是否存在
@@ -360,17 +361,19 @@ export const createRedemptionRecord = async (
     }
 
     const userData = userDoc.data() as User;
-    
+
     // 检查会员状态（管理员添加时也需要检查）
     if (userData.status !== 'active') {
       return { success: false, error: '会员状态不活跃，无法兑换' };
     }
 
-    // 检查是否有pending的visit session（管理员添加时也需要检查）
-    const { getPendingVisitSession } = await import('./visitSessions');
-    const pendingSession = await getPendingVisitSession(userId);
-    if (!pendingSession) {
-      return { success: false, error: '请先check-in才能兑换' };
+    // backfill 模式下跳过 pending session 检查，直接补录到指定 session
+    if (!options?.backfill) {
+      const { getPendingVisitSession } = await import('./visitSessions');
+      const pendingSession = await getPendingVisitSession(userId);
+      if (!pendingSession) {
+        return { success: false, error: '请先check-in才能兑换' };
+      }
     }
 
     // 管理员手动添加时，跳过限额检查（每日限额、总限额、每小时限额）
@@ -454,7 +457,7 @@ export const createRedemptionRecord = async (
       cigarName,
       quantity,
       redeemedBy
-    });
+    }, options?.backfill ? { backfill: true } : undefined);
 
     return { success: true, recordId: recordItemId };
   } catch (error: any) {

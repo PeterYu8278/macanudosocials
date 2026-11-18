@@ -1443,7 +1443,8 @@ export const addRedemptionToSession = async (
     cigarName: string;
     quantity: number;
     redeemedBy: string;
-  }
+  },
+  options?: { backfill?: boolean }
 ): Promise<{ success: boolean; error?: string }> => {
   try {
     const now = Timestamp.fromDate(new Date());
@@ -1462,7 +1463,7 @@ export const addRedemptionToSession = async (
     }
 
     const sessionData = sessionDoc.data();
-    if (sessionData.status !== 'pending') {
+    if (!options?.backfill && sessionData.status !== 'pending') {
         throw new Error('只能在待处理的驻店记录中添加兑换');
     }
 

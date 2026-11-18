@@ -765,7 +765,7 @@ const VisitSessionsPage: React.FC = () => {
                                       <GiftOutlined style={{ marginRight: 8 }} />
                                       {t('visitSessions.redemptionRecords')} ({allRedemptionRecords.length})
                                     </div>
-                                    {record.status === 'pending' && (
+                                    {(record.status === 'pending' || isSuperAdmin) && (
                                       <Button
                                         size="small"
                                         icon={<PlusOutlined />}
@@ -1030,7 +1030,7 @@ const VisitSessionsPage: React.FC = () => {
                                       <GiftOutlined style={{ marginRight: 4 }} />
                                       {t('visitSessions.redemptionRecords')} {allRedemptionRecords.length > 0 && `(${allRedemptionRecords.length})`}
                                     </div>
-                                    {record.status === 'pending' && (
+                                    {(record.status === 'pending' || isSuperAdmin) && (
                                       <Button
                                         size="small"
                                         icon={<PlusOutlined />}
@@ -1375,7 +1375,9 @@ const VisitSessionsPage: React.FC = () => {
                 cigar.id,
                 cigar.name,
                 item.quantity,
-                user.id
+                user.id,
+                undefined,
+                selectedSession.status !== 'pending' ? { backfill: true } : undefined
               );
 
               if (!result.success) {
