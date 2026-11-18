@@ -1,6 +1,6 @@
 // 驻店记录管理页面
 import React, { useCallback, useEffect, useState, useMemo } from 'react';
-import { Alert, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip, DatePicker } from 'antd';
+import { Alert, Table, Button, Space, Tag, Modal, Input, Typography, App, Form, Select, InputNumber, Spin, Tabs, Empty, Pagination, Grid, Tooltip, DatePicker, Popconfirm } from 'antd';
 import { useFirestoreQuery, useFirestoreDoc } from '../../../hooks/useFirestoreQuery';
 import { ReloadOutlined, CheckOutlined, ClockCircleOutlined, QrcodeOutlined, GiftOutlined, PlusOutlined, DeleteOutlined, EditOutlined } from '@ant-design/icons';
 import {
@@ -13,7 +13,7 @@ import { getCigars, getDocument, COLLECTIONS } from '../../../services/firebase/
 import { getUserDisplayNames } from '../../../services/firebase/userDisplayNames';
 import { useVirtualTableScroll } from '../../../hooks/useVirtualTableScroll';
 import { getAllStores } from '../../../services/firebase/stores';
-import { createRedemptionRecord, updateRedemptionRecord, getRedemptionRecordsBySession, getRedemptionRecordsPage } from '../../../services/firebase/redemption';
+import { createRedemptionRecord, updateRedemptionRecord, revokeRedemptionRecord, getRedemptionRecordsBySession, getRedemptionRecordsPage } from '../../../services/firebase/redemption';
 import { useAuthStore } from '../../../store/modules/auth';
 import { isFeatureVisible } from '../../../services/firebase/featureVisibility';
 import { useDetailDrawer } from '../../../hooks/useDetailDrawer';
@@ -241,7 +241,9 @@ const VisitSessionsPage: React.FC = () => {
       key: 'cigarName',
       render: (value: string, record: RedemptionRecord) => record.status === 'pending'
         ? <Tag color="orange">{t('visitSessions.statusToSelect')}</Tag>
-        : value || '-'
+        : record.status === 'revoked'
+          ? <><Tag color="red">{t('visitSessions.statusRevoked')}</Tag>{value ? ` ${value}` : ''}</>
+          : value || '-'
     },
     {
       title: t('visitSessions.redemptionType'),
@@ -264,31 +266,55 @@ const VisitSessionsPage: React.FC = () => {
       title: t('visitSessions.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: RedemptionRecord['status']) => (
-        <Tag color={status === 'completed' ? 'green' : 'orange'}>
-          {status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
-        </Tag>
-      )
+      render: (status: RedemptionRecord['status']) => {
+        const color = status === 'completed' ? 'green' : status === 'revoked' ? 'red' : 'orange';
+        const label = status === 'completed' ? t('visitSessions.completed') : status === 'revoked' ? t('visitSessions.statusRevoked') : t('visitSessions.statusToSelect');
+        return <Tag color={color}>{label}</Tag>;
+      }
     },
     {
       title: t('visitSessions.actions'),
       key: 'actions',
-      render: (_: unknown, record: RedemptionRecord) => record.status === 'pending' ? (
-        <Button
-          size="small"
-          icon={<EditOutlined />}
-          onClick={() => {
-            const session = sessions.find(item => item.id === record.visitSessionId);
-            if (session) openSessionDrawer(session);
-            openRedemptionDrawer(record);
-            form.setFieldsValue({ cigarId: record.cigarId || undefined, quantity: record.quantity || 1 });
-          }}
-        >
-          {t('common.edit')}
-        </Button>
-      ) : null
+      render: (_: unknown, record: RedemptionRecord) => (
+        <Space size="small">
+          {record.status === 'pending' && (
+            <Button
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => {
+                const session = sessions.find(item => item.id === record.visitSessionId);
+                if (session) openSessionDrawer(session);
+                openRedemptionDrawer(record);
+                form.setFieldsValue({ cigarId: record.cigarId || undefined, quantity: record.quantity || 1 });
+              }}
+            >
+              {t('common.edit')}
+            </Button>
+          )}
+          {isSuperAdmin && record.status !== 'revoked' && (
+            <Popconfirm
+              title={t('visitSessions.revokeRedemptionConfirm')}
+              onConfirm={async () => {
+                const result = await revokeRedemptionRecord(record.visitSessionId, record.id, user!.id);
+                if (result.success) {
+                  message.success(t('visitSessions.revokeRedemptionSuccess'));
+                } else {
+                  message.error(t('visitSessions.revokeRedemptionFailed', { error: result.error }));
+                }
+              }}
+              okText={t('common.confirm')}
+              cancelText={t('common.cancel')}
+              okButtonProps={{ danger: true }}
+            >
+              <Button size="small" danger>
+                {t('visitSessions.revokeRedemption')}
+              </Button>
+            </Popconfirm>
+          )}
+        </Space>
+      )
     }
-  ], [form, memberPhones, openRedemptionDrawer, openSessionDrawer, sessions, t]);
+  ], [form, isSuperAdmin, memberPhones, message, openRedemptionDrawer, openSessionDrawer, sessions, t, user]);
 
   // 加载指定 session 的所有兑换记录（包括待处理和已完成）
   const loadRedemptionRecords = async (sessionId: string) => {
@@ -790,7 +816,7 @@ const VisitSessionsPage: React.FC = () => {
                                     <Text style={{ color: 'rgba(255, 255, 255, 0.6)' }}>{t('visitSessions.noRedemptionRecords')}</Text>
                                   ) : (
                                     <div className="visit-session-redemption-list">
-                                      {allRedemptionRecords.map((redemptionRecord: RedemptionRecord) => {
+                                      {[...allRedemptionRecords].sort(compareRedemptionsPendingFirst).map((redemptionRecord: RedemptionRecord) => {
                                         const pending = redemptionRecord.status === 'pending';
                                         const canEdit = record.status === 'pending' || pending;
                                         const date = redemptionRecord.redeemedAt;
@@ -800,8 +826,8 @@ const VisitSessionsPage: React.FC = () => {
                                             <div className="visit-session-redemption-summary">
                                               <strong>{pending ? t('visitSessions.statusToSelect') : redemptionRecord.cigarName || '-'}</strong>
                                               <span className="visit-session-redemption-quantity">x{redemptionRecord.quantity}</span>
-                                              <Tag color={pending ? 'orange' : 'green'} style={{ margin: 0 }}>
-                                                {pending ? t('visitSessions.statusToSelect') : t('visitSessions.statusCompleted')}
+                                              <Tag color={pending ? 'orange' : redemptionRecord.status === 'revoked' ? 'red' : 'green'} style={{ margin: 0 }}>
+                                                {pending ? t('visitSessions.statusToSelect') : redemptionRecord.status === 'revoked' ? t('visitSessions.statusRevoked') : t('visitSessions.statusCompleted')}
                                               </Tag>
                                             </div>
                                             <div className="visit-session-redemption-meta">
@@ -1063,7 +1089,7 @@ const VisitSessionsPage: React.FC = () => {
                                       {t('visitSessions.noRedemptionRecords')}
                                     </div>
                                   ) : (
-                                    allRedemptionRecords.map((redemptionRecord) => {
+                                    [...allRedemptionRecords].sort(compareRedemptionsPendingFirst).map((redemptionRecord) => {
                                       const redeemedAt = redemptionRecord.redeemedAt
                                         ? (redemptionRecord.redeemedAt instanceof Date
                                           ? redemptionRecord.redeemedAt
@@ -1090,8 +1116,8 @@ const VisitSessionsPage: React.FC = () => {
                                                 <Tag color="blue" style={{ fontSize: 10, margin: 0 }}>
                                                   {redemptionRecord.quantity || 1} {t('visitSessions.sticks')}
                                                 </Tag>
-                                                <Tag color={redemptionRecord.status === 'pending' ? 'orange' : 'green'} style={{ fontSize: 10, margin: 0 }}>
-                                                  {redemptionRecord.status === 'pending' ? t('visitSessions.statusToSelect') : t('visitSessions.statusCompleted')}
+                                                <Tag color={redemptionRecord.status === 'pending' ? 'orange' : redemptionRecord.status === 'revoked' ? 'red' : 'green'} style={{ fontSize: 10, margin: 0 }}>
+                                                  {redemptionRecord.status === 'pending' ? t('visitSessions.statusToSelect') : redemptionRecord.status === 'revoked' ? t('visitSessions.statusRevoked') : t('visitSessions.statusCompleted')}
                                                 </Tag>
                                               </div>
                                               {redeemedAt && (
@@ -1224,8 +1250,8 @@ const VisitSessionsPage: React.FC = () => {
                                   ? t('visitSessions.referralReward')
                                   : t('visitSessions.mysteryGift')}
                               </Tag>
-                              <Tag color={record.status === 'completed' ? 'green' : 'orange'}>
-                                {record.status === 'completed' ? t('visitSessions.completed') : t('visitSessions.statusToSelect')}
+                              <Tag color={record.status === 'completed' ? 'green' : record.status === 'revoked' ? 'red' : 'orange'}>
+                                {record.status === 'completed' ? t('visitSessions.completed') : record.status === 'revoked' ? t('visitSessions.statusRevoked') : t('visitSessions.statusToSelect')}
                               </Tag>
                             </div>
                           </div>
@@ -1254,7 +1280,7 @@ const VisitSessionsPage: React.FC = () => {
                             <div>
                               <span className="redemption-field-label">{t('visitSessions.cigarName')}</span>
                               <strong>
-                                {record.status === 'pending' ? t('visitSessions.statusToSelect') : record.cigarName || '-'}
+                                {record.status === 'pending' ? t('visitSessions.statusToSelect') : record.status === 'revoked' ? `[${t('visitSessions.statusRevoked')}] ${record.cigarName || '-'}` : record.cigarName || '-'}
                               </strong>
                             </div>
                             <div>

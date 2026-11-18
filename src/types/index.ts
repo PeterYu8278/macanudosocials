@@ -882,7 +882,7 @@ export interface RedemptionRecordItem {
   quantity: number;
   
   // 状态
-  status: 'pending' | 'completed';  // pending: 用户发起，等待管理员选择雪茄；completed: 管理员已确认
+  status: 'pending' | 'completed' | 'revoked';  // pending: 用户发起，等待管理员选择雪茄；completed: 管理员已确认；revoked: 管理员手动撤销
   
   // 限额追踪
   dayKey: string;            // "2025-10-28" (YYYY-MM-DD)

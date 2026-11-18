@@ -600,6 +600,54 @@ export const updateRedemptionRecord = async (
 };
 
 /**
+ * 撤销兑换记录（仅 superAdmin / developer）
+ * 将指定记录项的 status 改为 'revoked'，同步更新 visitSessions 文档
+ */
+export const revokeRedemptionRecord = async (
+  visitSessionId: string,
+  recordId: string,
+  revokedBy: string
+): Promise<{ success: boolean; error?: string }> => {
+  try {
+    const docRef = doc(db, GLOBAL_COLLECTIONS.REDEMPTION_RECORDS, visitSessionId);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return { success: false, error: '兑换记录不存在' };
+
+    const data = docSnap.data() as RedemptionRecordDocument;
+    const index = data.redemptions?.findIndex((item: RedemptionRecordItem) => item.id === recordId) ?? -1;
+    if (index < 0) return { success: false, error: '兑换记录不存在' };
+
+    const now = new Date();
+    const updatedRedemptions = [...data.redemptions];
+    updatedRedemptions[index] = { ...updatedRedemptions[index], status: 'revoked', redeemedBy: revokedBy, updatedAt: now };
+
+    await updateDoc(docRef, {
+      redemptions: updatedRedemptions,
+      adminStatuses: adminStatuses(updatedRedemptions),
+      updatedAt: Timestamp.fromDate(now)
+    });
+
+    // 同步更新 visitSessions 文档
+    try {
+      const visitSessionRef = doc(db, GLOBAL_COLLECTIONS.VISIT_SESSIONS, visitSessionId);
+      const visitSessionDoc = await getDoc(visitSessionRef);
+      if (visitSessionDoc.exists()) {
+        const sessionRedemptions = (visitSessionDoc.data().redemptions || []).map((r: any) =>
+          r.recordId === recordId ? { ...r, status: 'revoked' } : r
+        );
+        await updateDoc(visitSessionRef, { redemptions: sessionRedemptions, updatedAt: Timestamp.fromDate(now) });
+      }
+    } catch (e) {
+      console.warn('[revokeRedemptionRecord] 更新 visitSessions 失败:', e);
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message || '撤销兑换记录失败' };
+  }
+};
+
+/**
  * 获取指定驻店记录的兑换记录（包括待处理和已完成的）
  * 文档ID = visitSessionId，直接读取文档并返回 redemptions 数组
  */
