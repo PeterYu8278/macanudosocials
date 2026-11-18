@@ -1359,10 +1359,12 @@ const VisitSessionsPage: React.FC = () => {
             setAddingRedemption(true);
 
             // 为每个项目创建兑换记录
+            let anyFailed = false;
             for (const item of items) {
               const cigar = cigars.find(c => c.id === item.cigarId);
               if (!cigar) {
                 message.error(t('visitSessions.cigarNotFound', { id: item.cigarId }));
+                anyFailed = true;
                 continue;
               }
 
@@ -1378,11 +1380,12 @@ const VisitSessionsPage: React.FC = () => {
 
               if (!result.success) {
                 message.error(t('visitSessions.addRedemptionFailed', { error: result.error }));
+                anyFailed = true;
                 continue;
               }
             }
 
-            message.success(t('visitSessions.saveSuccess'));
+            if (!anyFailed) message.success(t('visitSessions.saveSuccess'));
             setAddRedemptionModalVisible(false);
             closeSessionDrawer();
             form.resetFields();

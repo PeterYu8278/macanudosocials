@@ -378,8 +378,6 @@ export const createRedemptionRecord = async (
     
     const now = targetDate || new Date();
     
-    // 获取限额（用于计算 redemptionIndex）
-    const limits = await getUserRedemptionLimits(userId);
     const dayKey = now.toISOString().split('T')[0]; // YYYY-MM-DD
     // 始终设置hourKey（即使没有配置hourlyLimit，也需要记录以便检查每小时限制）
     const hourKey = now.toISOString().split(':')[0]; // YYYY-MM-DDTHH
