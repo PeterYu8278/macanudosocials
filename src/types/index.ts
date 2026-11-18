@@ -711,6 +711,7 @@ export interface VisitSession {
     quantity: number;
     redeemedAt: Date;
     redeemedBy: string; // 管理员ID或用户ID（用户发起时）
+    status?: 'pending' | 'completed' | 'revoked';
   }>;
   
   // 费用结算

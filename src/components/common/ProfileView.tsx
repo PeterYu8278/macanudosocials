@@ -48,15 +48,18 @@ interface ProfileViewProps {
 }
 
 const summarizeVisitRedemptions = (session: VisitSession | null) => {
-  const totals = new Map<string, { cigarId: string; cigarName: string; quantity: number }>()
+  const totals = new Map<string, { cigarId: string; cigarName: string; quantity: number; status?: string }>()
 
   for (const redemption of session?.redemptions || []) {
-    const key = redemption.cigarId || redemption.cigarName
+    const isRevoked = redemption.status === 'revoked'
+    // revoked items keep their own bucket so they don't merge with active counts
+    const key = isRevoked ? `revoked:${redemption.recordId || redemption.cigarId || redemption.cigarName}` : (redemption.cigarId || redemption.cigarName)
     const existing = totals.get(key)
     totals.set(key, {
       cigarId: redemption.cigarId,
       cigarName: redemption.cigarName,
       quantity: (existing?.quantity || 0) + Number(redemption.quantity || 0),
+      status: isRevoked ? 'revoked' : undefined,
     })
   }
 
@@ -851,9 +854,10 @@ export const ProfileView: React.FC<ProfileViewProps> = ({
                     </div>
                     <div style={{ display: 'grid', gap: 1, overflow: 'hidden', border: '1px solid rgba(244,175,37,0.18)', borderRadius: 8, background: 'rgba(244,175,37,0.12)' }}>
                       {selectedVisitRedemptions.map(redemption => (
-                        <div key={redemption.cigarId || redemption.cigarName} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14' }}>
+                        <div key={redemption.cigarId || redemption.cigarName || redemption.status} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '10px 12px', background: '#1d1a14', opacity: redemption.status === 'revoked' ? 0.5 : 1 }}>
                           <span style={{ color: 'rgba(255,255,255,0.85)', fontSize: 12, fontWeight: 600, overflowWrap: 'anywhere' }}>
                             {redemption.cigarName || t('profile.unknownCigar')}
+                            {redemption.status === 'revoked' && <span style={{ color: 'rgba(255,100,100,0.9)', marginLeft: 6, fontWeight: 400 }}>({t('visitSessions.statusRevoked')})</span>}
                           </span>
                           <span style={{ color: '#FDE08D', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap' }}>
                             x{redemption.quantity}
