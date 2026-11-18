@@ -4,7 +4,7 @@ function deriveRedemptionAdminMetadata(source, session) {
   if (typeof session?.storeId !== 'string' || !session.storeId.trim()) throw new Error('SESSION_STORE_REQUIRED');
   if (!Array.isArray(source.redemptions)) throw new Error('INVALID_REDEMPTIONS');
   const statuses = source.redemptions.map(item => {
-    if (!item || !['pending', 'completed'].includes(item.status || 'completed')) throw new Error('INVALID_REDEMPTION_STATUS');
+    if (!item || !['pending', 'completed', 'revoked'].includes(item.status || 'completed')) throw new Error('INVALID_REDEMPTION_STATUS');
     return item.status || 'completed';
   });
   return { storeId: session.storeId, adminStatuses: [...new Set(statuses)].sort() };

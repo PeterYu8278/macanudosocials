@@ -7,6 +7,8 @@ describe('trusted grouped redemption metadata', () => {
   it('derives scope from the historical session, preserves legacy completed items and rejects orphans', () => {
     expect(deriveRedemptionAdminMetadata({ storeId: 'wrong', redemptions: [{ status: 'pending' }, {}] }, { storeId: 'historical' }))
       .toEqual({ storeId: 'historical', adminStatuses: ['completed', 'pending'] });
+    expect(deriveRedemptionAdminMetadata({ redemptions: [{ status: 'revoked' }, { status: 'completed' }] }, { storeId: 's' }))
+      .toEqual({ storeId: 's', adminStatuses: ['completed', 'revoked'] });
     expect(() => deriveRedemptionAdminMetadata({ redemptions: [] }, {})).toThrow('SESSION_STORE_REQUIRED');
   });
   it('rereads current source in a transaction and writes metadata only', async () => {
